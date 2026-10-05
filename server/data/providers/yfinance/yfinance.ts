@@ -13,7 +13,7 @@ import {
   cachedSelectBars,
   streamBars,
 } from "@openchart/server/data/providers/yfinance/datasets/bars";
-import { searchSymbols } from "@openchart/server/data/providers/yfinance/datasets/symbology";
+import { cachedSearchSymbols } from "@openchart/server/data/providers/yfinance/datasets/symbology";
 import { config } from "./config";
 import { feeds } from "@openchart/server/data/providers/yfinance/feed/feed";
 import { makeClient, type YFinanceOptions } from "./client";
@@ -46,7 +46,7 @@ export class YFinanceProvider extends Context.Service<
         stream: (query) => streamBars(options, query, retired),
       });
       const symbology = yield* makeDataset(yfinanceSymbology, {
-        search: (query) => searchSymbols(options, query),
+        search: (yield* cachedSearchSymbols(options)).search,
       });
       return [bars, symbology];
     });

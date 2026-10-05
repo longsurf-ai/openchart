@@ -9,6 +9,8 @@ bindings in `feed/`, and shared transport in `client.ts`.
 - `yfinance.ts` publishes ready Datasets and exports their Feed bindings.
   Adapters match exact Definition identity and acquire no resources at construction.
 - Preserve native DataFrame columns and source identities through adaptation.
+- Search reads each symbol's chart, for its currency, once per activation. When
+  Yahoo's search returns no quotes, the query is read as an exact symbol instead.
 - `errors.ts` maps Yahoo failures to Dataset reasons; Yahoo text stays in
   `cause`. A 400 keeps Yahoo's JSON body as cause because Bars read
   "Data doesn't exist" as an empty window.

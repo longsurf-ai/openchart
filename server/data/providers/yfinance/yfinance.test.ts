@@ -15,7 +15,10 @@ import {
   selectBars,
   streamBars,
 } from "@openchart/server/data/providers/yfinance/datasets/bars";
-import { searchSymbols } from "@openchart/server/data/providers/yfinance/datasets/symbology";
+import {
+  cachedSearchSymbols,
+  searchSymbols,
+} from "@openchart/server/data/providers/yfinance/datasets/symbology";
 
 function chart(
   times: number[],
@@ -807,6 +810,72 @@ describe("Yahoo Finance Provider", () => {
       ),
     );
     expect(data.map(({ symbol }) => symbol)).toEqual(["VOD.L"]);
+  });
+
+  it("reads each symbol's chart once across searches", async () => {
+    const charts: string[] = [];
+    const rows = await Effect.runPromise(
+      Effect.gen(function* () {
+        const { search } = yield* cachedSearchSymbols({
+          fetch: async (input) => {
+            const url = new URL(String(input));
+            if (url.pathname.includes("/search"))
+              return Response.json({
+                quotes: [
+                  {
+                    isYahooFinance: true,
+                    symbol: "VOD.L",
+                    exchange: "LSE",
+                    quoteType: "EQUITY",
+                  },
+                ],
+              });
+            charts.push(url.pathname);
+            return Response.json(chart([1000], [12]));
+          },
+        });
+        yield* search({ query: "VOD.L", limit: 10 });
+        return yield* search({ query: "Vodafone", limit: 10 });
+      }),
+    );
+    expect(rows.map(({ symbol }) => symbol)).toEqual(["VOD.L"]);
+    expect(charts).toEqual(["/v8/finance/chart/VOD.L"]);
+  });
+
+  it("reads an exact ticker from its chart when the search finds no quotes", async () => {
+    const search = (query: string) =>
+      Effect.runPromise(
+        searchSymbols(
+          {
+            fetch: async (input) => {
+              const url = new URL(String(input));
+              if (url.pathname.includes("/search"))
+                return Response.json({ quotes: [] });
+              if (url.pathname.endsWith("/VOD.L")) {
+                const vodafone = chart([1000], [12]);
+                Object.assign(vodafone.chart.result[0]!.meta, {
+                  longName: "Vodafone Group Public Limited Company",
+                  shortName: "VODAFONE GROUP PLC",
+                });
+                return Response.json(vodafone);
+              }
+              return new Response(null, { status: 404 });
+            },
+          },
+          { query, limit: 10 },
+        ),
+      );
+    expect(await search("vod.l")).toEqual([
+      {
+        symbol: "VOD.L",
+        shortname: "VODAFONE GROUP PLC",
+        longname: "Vodafone Group Public Limited Company",
+        exchange: "LSE",
+        quoteType: "EQUITY",
+        currency: "GBp",
+      },
+    ]);
+    expect(await search("no such company")).toEqual([]);
   });
 
   it("cancels an active poll through the fetch signal", async () => {
