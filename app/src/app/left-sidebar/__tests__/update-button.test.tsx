@@ -1,9 +1,13 @@
 // Purpose: Verify the sidebar offers a restart only after Desktop reports a downloaded update.
-import { act, render, screen } from "@testing-library/react";
+import { act, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { expect, test, vi } from "vitest";
 
-import { UpdateButton } from "@openchart/app/app/left-sidebar/update-button";
+import {
+  UpdateButton,
+  useUpdateReady,
+} from "@openchart/app/app/left-sidebar/update-button";
 import {
   SidebarMenu,
   SidebarMenuItem,
@@ -12,34 +16,41 @@ import {
 import { AppHostProvider } from "@openchart/app/lib/host/host";
 import { testAppHost } from "@openchart/app/testing/test-utils";
 
-test("a downloaded update shows one restart button, which asks Desktop to restart", async () => {
+test("an update is ready only once Desktop announces it, and unsubscribes with its owner", () => {
   let announce: (release: string) => void = () => {};
   const unsubscribe = vi.fn();
-  const restartToUpdate = vi.fn(async () => {});
   const host = testAppHost({
     onUpdateReady: (listener) => {
       announce = listener;
       return unsubscribe;
     },
-    restartToUpdate,
   });
-  const view = render(
-    <AppHostProvider value={host}>
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <AppHostProvider value={host}>{children}</AppHostProvider>
+  );
+  const view = renderHook(useUpdateReady, { wrapper });
+  expect(view.result.current).toBeUndefined();
+  act(() => announce("OpenChart 0.1.6"));
+  expect(view.result.current).toBe("OpenChart 0.1.6");
+  view.unmount();
+  expect(unsubscribe).toHaveBeenCalled();
+});
+
+test("the update button names its release and asks Desktop to restart", async () => {
+  const restartToUpdate = vi.fn(async () => {});
+  render(
+    <AppHostProvider value={testAppHost({ restartToUpdate })}>
       <SidebarProvider>
         <SidebarMenu>
           <SidebarMenuItem>
-            <UpdateButton />
+            <UpdateButton release="OpenChart 0.1.6" />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarProvider>
     </AppHostProvider>,
   );
-  expect(screen.queryByRole("button")).not.toBeInTheDocument();
-  act(() => announce("OpenChart 0.1.6"));
   await userEvent.click(
     screen.getByRole("button", { name: "Restart to install OpenChart 0.1.6" }),
   );
   expect(restartToUpdate).toHaveBeenCalledOnce();
-  view.unmount();
-  expect(unsubscribe).toHaveBeenCalled();
 });

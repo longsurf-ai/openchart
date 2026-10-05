@@ -18,7 +18,7 @@ import { NavMain } from "./nav-main";
 import { NavDashboards, type NavDashboardsProps } from "./nav-dashboards";
 import { NavAlerts } from "./nav-alerts";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
-import { UpdateButton } from "./update-button";
+import { UpdateButton, useUpdateReady } from "./update-button";
 import { CommunityLinks } from "./community-links";
 
 /** Keep application navigation outside the routed page. @example <LeftSidebar chats={chats} onCreateChat={newChat} dashboards={dashboards} onCreateDashboard={createDashboard} /> */
@@ -54,18 +54,17 @@ export function LeftSidebar({
       </SidebarContent>
       <SidebarFooter className="px-1">
         <CloudOffer transport={transport} />
-        <AccountButton
-          actions={
-            <>
-              <UpdateButton />
-              <CommunityLinks />
-            </>
-          }
-        />
+        <AccountButton actions={<AccountActions />} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
+}
+
+/** A downloaded update takes the community links' place on the account row until it is installed. */
+function AccountActions() {
+  const release = useUpdateReady();
+  return release ? <UpdateButton release={release} /> : <CommunityLinks />;
 }
 
 /** Billing needs the Cloud key, which arrives in the background after sign-in. */

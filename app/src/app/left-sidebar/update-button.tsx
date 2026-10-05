@@ -11,12 +11,21 @@ import {
 } from "@openchart/app/components/ui/tooltip";
 import { useAppHost } from "@openchart/app/lib/host/host";
 
-/** Hidden until Desktop has downloaded an update; clicking restarts through the normal Quit path. @example <AccountButton actions={<UpdateButton />} /> */
-export function UpdateButton() {
-  const { onUpdateReady, restartToUpdate } = useAppHost();
+/**
+ * The release Desktop has downloaded and is ready to install, or undefined
+ * until it announces one; subscribes while mounted.
+ * @example const release = useUpdateReady();
+ */
+export function useUpdateReady() {
+  const { onUpdateReady } = useAppHost();
   const [release, setRelease] = useState<string>();
   useEffect(() => onUpdateReady(setRelease), [onUpdateReady]);
-  if (!release) return null;
+  return release;
+}
+
+/** Restarts through the normal Quit path to install a downloaded `release`. @example <AccountButton actions={<UpdateButton release="OpenChart 0.1.10" />} /> */
+export function UpdateButton({ release }: { release: string }) {
+  const { restartToUpdate } = useAppHost();
   const label = `Restart to install ${release}`;
   return (
     <Tooltip>
