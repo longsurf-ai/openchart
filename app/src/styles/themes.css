@@ -59,7 +59,7 @@
     --chart-agent-annotation-text: hsl(222 18% 14%);
     --chart-agent-annotation-positive: hsl(142 64% 36%);
     --chart-agent-annotation-negative: hsl(0 60% 44%);
-    --chart-agent-annotation-neutral: hsl(0 0% 100%);
+    --chart-agent-annotation-neutral: hsl(220 8% 42%);
   }
 
   .dark {
