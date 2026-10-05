@@ -271,7 +271,7 @@ export function SetupProgress({
           <Input
             id={`login-code-${providerID}`}
             autoComplete="off"
-            placeholder="Authorization code, if requested"
+            placeholder="Auth Code"
             value={input}
             onChange={(event) => setInput(event.target.value)}
             disabled={write.isPending}
@@ -283,7 +283,7 @@ export function SetupProgress({
             variant="outline"
             disabled={write.isPending}
           >
-            Send code
+            Send
           </Button>
         </form>
       ) : null}

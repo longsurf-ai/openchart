@@ -328,7 +328,7 @@ test("login supports output, manual code input, cancellation, and fresh status",
     screen.getByRole("link", { name: "https://accounts.example/auth?x=1" }),
   ).toHaveAttribute("target", "_blank");
   await user.type(code, "manual-code");
-  await user.click(screen.getByRole("button", { name: "Send code" }));
+  await user.click(screen.getByRole("button", { name: "Send" }));
   expect(rpc.models.writeSetup.mutate).toHaveBeenCalledWith({
     providerID: CODEX,
     id: "login-1",
