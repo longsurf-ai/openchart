@@ -26,6 +26,7 @@ import { expect, test, vi } from "vitest";
 import { WebSocketServer, type VerifyClientCallbackAsync } from "ws";
 import type { BarsSubscription } from "./contract";
 import { OpenChartClient, layer } from "./client";
+import { openchartError } from "./errors";
 import {
   arrow,
   bar,
@@ -104,6 +105,10 @@ async function fixture(timeout = "2 seconds", handshakeStatus?: number) {
     socket.on("message", (data) => {
       const command = JSON.parse(data.toString());
       commands.push(command);
+      if (command.type === "unsubscribe") {
+        socket.send(JSON.stringify({ type: "unsubscribed", id: command.id }));
+        return;
+      }
       if (command.type !== "subscribe") return;
       if (acknowledge)
         socket.send(JSON.stringify({ type: "subscribed", id: command.id }));
@@ -359,6 +364,8 @@ test.each([
   JSON.stringify({ ...wireEvent, listing: 99 }),
   JSON.stringify({ ...wireEvent, resolution: "1d" }),
   JSON.stringify({ ...wireEvent, bar: { ...bar(1000), close: null } }),
+  JSON.stringify({ type: "error", id: "1", code: "unknown" }),
+  JSON.stringify({ type: "unsubscribed", id: "1" }),
 ])(
   "live rejects invalid or mismatched frames inside the client: %s",
   async (frame) => {
@@ -688,53 +695,151 @@ test("concurrent consumers share one socket and one subscription per complete se
     await f.close();
   }
 });
-test("a failed subscription can be replaced without disrupting another series", async () => {
+test("retiring a 1s subscription keeps 5m consumers and another listing live", async () => {
   const f = await fixture();
+  const scopes = await Promise.all(
+    Array.from({ length: 4 }, () => f.runtime.runPromise(Scope.make())),
+  );
+  const queries = [
+    { ...series, resolution: "1s" },
+    { ...series, resolution: "5m" },
+    { ...series, resolution: "5m" },
+    { ...series, listing: 99, resolution: "1d" },
+  ] as const;
   try {
-    await f.runtime.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const first = yield* f.client.subscribeBars(series);
-          const second = yield* f.client.subscribeBars({
-            ...series,
-            listing: 99,
-          });
-          const id = f.commands[0]!.id;
-          for (const socket of f.ws.clients)
-            socket.send(
-              JSON.stringify({ type: "error", id, code: "unavailable" }),
-            );
-          expect(
-            yield* first.pipe(Stream.runDrain, Effect.result),
-          ).toMatchObject({
-            _tag: "Failure",
-            failure: { _tag: "OpenChartResyncRequired" },
-          });
-          yield* f.client.subscribeBars(series);
-          expect(f.sockets).toHaveLength(1);
-          expect(f.commands.filter((c) => c.type === "subscribe")).toHaveLength(
-            3,
-          );
-          expect(f.commands[2]!.id).not.toBe(id);
-          for (const socket of f.ws.clients)
-            socket.send(
-              JSON.stringify({
-                ...wireEvent,
-                id: f.commands[1]!.id,
-                listing: 99,
-                bar: bar(2000),
-              }),
-            );
-          expect(yield* second.pipe(Stream.take(2), Stream.runCollect)).toEqual(
-            [initialEvent, { type: "bar", bar: bar(2000) }],
-          );
-        }),
-      ),
+    const streams = [];
+    for (const [index, query] of queries.entries())
+      streams.push(
+        await f.runtime.runPromise(
+          f.client.subscribeBars(query).pipe(Scope.provide(scopes[index]!)),
+        ),
+      );
+    expect(f.commands.filter((c) => c.type === "subscribe")).toHaveLength(3);
+    await f.runtime.runPromise(Scope.close(scopes[0]!, Exit.void));
+    await vi.waitFor(() =>
+      expect(f.commands).toContainEqual({
+        type: "unsubscribe",
+        id: f.commands[0]!.id,
+      }),
     );
+    // The server sends the cancellation acknowledgement before these bars.
+    for (const command of f.commands.filter(
+      (c) => c.type === "subscribe" && c.series?.resolution !== "1s",
+    ))
+      for (const socket of f.ws.clients)
+        socket.send(
+          JSON.stringify({
+            ...wireEvent,
+            id: command.id,
+            listing: command.series!.listing,
+            resolution: command.series!.resolution,
+            bar: bar(2000),
+          }),
+        );
+    for (const stream of streams.slice(1))
+      expect(
+        await f.runtime.runPromise(
+          stream.pipe(
+            Stream.filter(
+              (event) => event.type === "bar" && event.bar.time === 2000,
+            ),
+            Stream.take(1),
+            Stream.runCollect,
+          ),
+        ),
+      ).toEqual([{ type: "bar", bar: bar(2000) }]);
+    expect(f.sockets).toHaveLength(1);
+    expect(f.ws.clients.size).toBe(1);
   } finally {
+    for (const scope of scopes)
+      await f.runtime.runPromise(Scope.close(scope, Exit.void));
     await f.close();
   }
 });
+
+const liveErrors = [
+  ["invalid_query", { _tag: "Dataset.InvalidQuery" }],
+  ["adjustment_unavailable", { _tag: "Dataset.Unsupported" }],
+  ["busy", { _tag: "Dataset.StreamInterrupted", kind: "resync" }],
+  ["unavailable", { _tag: "Dataset.StreamInterrupted", kind: "resync" }],
+  ["resync_required", { _tag: "Dataset.StreamInterrupted", kind: "resync" }],
+] as const;
+
+test.each(liveErrors)(
+  "live admission failure %s keeps its Dataset reason",
+  async (code, reason) => {
+    const f = await fixture();
+    try {
+      f.setAcknowledge(false);
+      f.setInitialFrame(JSON.stringify({ type: "error", code }));
+      await expect(
+        f.runtime.runPromise(
+          f.client
+            .subscribeBars(series)
+            .pipe(Effect.mapError(openchartError), Effect.scoped),
+        ),
+      ).rejects.toMatchObject({
+        reason,
+        cause: { _tag: "OpenChartLiveError", code },
+      });
+    } finally {
+      await f.close();
+    }
+  },
+);
+
+test.each(liveErrors)(
+  "a failed subscription (%s) can be replaced without disrupting another series",
+  async (code, reason) => {
+    const f = await fixture();
+    try {
+      await f.runtime.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const first = yield* f.client.subscribeBars(series);
+            const second = yield* f.client.subscribeBars({
+              ...series,
+              listing: 99,
+            });
+            const id = f.commands[0]!.id;
+            for (const socket of f.ws.clients)
+              socket.send(JSON.stringify({ type: "error", id, code }));
+            expect(
+              yield* first.pipe(
+                Stream.runDrain,
+                Effect.mapError(openchartError),
+                Effect.result,
+              ),
+            ).toMatchObject({
+              _tag: "Failure",
+              failure: { reason, cause: { _tag: "OpenChartLiveError", code } },
+            });
+            yield* f.client.subscribeBars(series);
+            expect(f.sockets).toHaveLength(1);
+            expect(
+              f.commands.filter((c) => c.type === "subscribe"),
+            ).toHaveLength(3);
+            expect(f.commands[2]!.id).not.toBe(id);
+            for (const socket of f.ws.clients)
+              socket.send(
+                JSON.stringify({
+                  ...wireEvent,
+                  id: f.commands[1]!.id,
+                  listing: 99,
+                  bar: bar(2000),
+                }),
+              );
+            expect(
+              yield* second.pipe(Stream.take(2), Stream.runCollect),
+            ).toEqual([initialEvent, { type: "bar", bar: bar(2000) }]);
+          }),
+        ),
+      );
+    } finally {
+      await f.close();
+    }
+  },
+);
 test("late consumers receive the current open bar and a slow consumer cannot end a shared subscription", async () => {
   const f = await fixture();
   f.setInitialFrame(

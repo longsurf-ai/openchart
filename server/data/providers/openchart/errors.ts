@@ -33,6 +33,25 @@ export class OpenChartResyncRequired extends Schema.TaggedError<OpenChartResyncR
   {},
 ) {}
 
+/**
+ * Cloud rejected or ended one live subscription; other series stay connected.
+ * Query and adjustment failures are terminal. Transient failures request a
+ * fresh history/live handoff through the Dataset owner.
+ * @example new OpenChartLiveError({ code: "resync_required" })
+ */
+export class OpenChartLiveError extends Schema.TaggedError<OpenChartLiveError>()(
+  "OpenChartLiveError",
+  {
+    code: Schema.Literals([
+      "invalid_query",
+      "adjustment_unavailable",
+      "busy",
+      "unavailable",
+      "resync_required",
+    ]),
+  },
+) {}
+
 /** Access cannot authorize this transport operation. @example new CredentialUnavailable({reason: 'missing'}) */
 export class CredentialUnavailable extends Schema.TaggedError<CredentialUnavailable>()(
   "OpenChart.CredentialUnavailable",
@@ -58,6 +77,14 @@ export function openchartError(error: OpenChartError): DatasetFailure {
 
 function reasonFor(error: OpenChartError): DatasetReason {
   switch (error._tag) {
+    case "OpenChartLiveError":
+      if (error.code === "invalid_query")
+        return new DatasetReasons.InvalidQuery({
+          detail: "OpenChart rejected the subscription.",
+        });
+      if (error.code === "adjustment_unavailable")
+        return new DatasetReasons.Unsupported();
+      return new DatasetReasons.StreamInterrupted({ kind: "resync" });
     case "OpenChartRejected":
       switch (error.status) {
         case 400:
@@ -95,4 +122,5 @@ export type OpenChartError =
   | OpenChartInvalidResponse
   | OpenChartRejected
   | OpenChartResyncRequired
+  | OpenChartLiveError
   | CredentialUnavailable;
