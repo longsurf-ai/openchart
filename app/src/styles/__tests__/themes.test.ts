@@ -81,6 +81,13 @@ test("shared theme keeps Gray surfaces and Neutral primary colors", () => {
   expect(foundation.get("--radius-md")).toBe("calc(var(--radius) - 2px)");
 });
 
+test("neutral agent annotation leaders stay visible on the light canvas", () => {
+  const light = declarations(palettes[0]!);
+  expect(light.get("--chart-agent-annotation-neutral")).toBe(
+    light.get("--unchanged"),
+  );
+});
+
 test.each(palettes)(
   "$selector resolves every token without missing values or cycles",
   (palette) => {
