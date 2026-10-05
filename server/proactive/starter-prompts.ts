@@ -6,64 +6,105 @@ export const starterPrompts: readonly PromptSuggestion[] = [
   {
     title:
       "📊  Find the 10 best-performing AI stocks of the past year and alert me to 10% drops",
-    prompt:
-      "Find me the top 10 performing AI-boosted stocks in the past 12 months and alert me if any of them drop by 10%.",
+    prompt: `Find the 10 best-performing AI-related stocks over the trailing 12 calendar months and create their drop alerts now in my current workspace. Proceed without clarification questions; use the defaults below and make any remaining routine choices yourself.
+
+Screen US-listed common stocks and ADRs with market capitalization of at least USD 10 billion and material AI exposure across chips, infrastructure, cloud, software, and applications; exclude funds, leveraged products, OTC listings, and duplicate share classes. Establish a broad candidate universe from current public sources, explain the AI connection, and rank by split-adjusted USD closing-price return, excluding dividends, from the last completed session on or before the start date to the latest completed US session. Require a full year of history. Show the universe, actual dates, prices, returns, and sources; call the result the top 10 within the screened universe rather than claiming an exhaustive market ranking.
+
+For each selected stock, freeze its latest completed regular-session close as the reference price and set the alert threshold to 90% of that price. Use the primary US listing and completed 1-minute regular-session bars; fire on a crossing from above to at or below the threshold, at most once per symbol per trading day, and keep the rule enabled until I disable it. This is a fixed 10% drop from setup, not a daily return or trailing-high drawdown. Attach a native OpenChart desktop notification showing the ticker, reference price, threshold, and observed price; keep events in the app's Feed.
+
+Resolve exact listings with available data tools, inspect existing matching rules to avoid duplicates, and verify the saved rules and notification triggers are enabled. If coverage or live data is unavailable, finish the supported work and report the exact missing coverage or inactive alerts without asking me to select alternatives or claiming they work. Do not place trades. Finish with the ranked table and saved alert references.`,
   },
   {
     title:
       "🧮  Build an indicator comparing beta-adjusted returns of major semiconductor stocks",
-    prompt:
-      "Build me an indicator comparing beta-adjusted relative performances of major semiconductor stocks.",
+    prompt: `Build, save, and display a reusable Tea indicator comparing beta-adjusted returns for NVDA, AMD, AVGO, TSM, ASML, MU, QCOM, and INTC, using their primary US-listed shares or ADRs in USD and SOXX as the benchmark. Use my current workspace. Proceed without clarification questions; use these definitions and choose any remaining presentation details yourself.
+
+Use split-adjusted daily regular-session closes on aligned completed trading dates, with at least 252 sessions of warmup and the latest 12 calendar months as the displayed comparison. For each stock, calculate daily simple returns and rolling beta as the 60-session sample covariance of stock and SOXX returns divided by the 60-session sample variance of SOXX returns. Define the plotted beta-adjusted return as the cumulative sum of daily residual returns: stock return minus the previous session's beta times the same day's SOXX return. Start every line at zero on the same comparison date and display percentage points. Do not divide returns by beta. Missing warmup, zero benchmark variance, or missing prices must produce missing values rather than fabricated prices or zero returns.
+
+Make the beta lookback and common comparison start date editable inputs, label each stock line clearly, and include a zero reference line. Read the in-product Tea documentation and examples, validate with tea_check, run against real daily Bars with tea_run, and verify finite aligned outputs before saving. Create a dashboard named Semiconductor Beta-Adjusted Returns with a daily SOXX chart and attach the indicator in a separate pane; reuse an equivalent existing dashboard instead of duplicating it. Keep SOXX's USD price on its own price pane and plot all eight already-calculated residual-return lines together on one shared linear axis labeled in percentage points, aligned to the same time axis. Do not overlay raw stock prices or the benchmark price on the return axis, assign separate scales to the return lines, or apply another percentage/indexed transformation to them. Verify the saved pane bindings and displayed units. If a listing lacks data, omit it and report it; if a required capability is unavailable, save what can be validated and explain the precise limitation without asking me to redesign it. Finish with the saved chart and indicator references and a concise explanation of the calculation.`,
   },
   {
     title:
       "🪙  Monitor BTC and ETH live, research moves over 2%, and send me a notification",
-    prompt:
-      "Monitor BTC and ETH in real time and whenever they move more than 2%, start an agent to research the reason and send me a notification.",
+    prompt: `Set up persistent live monitoring for Binance spot BTCUSDT and ETHUSDT in my current workspace, using exact available listings. Proceed without clarification questions; use these defaults and choose any remaining routine details yourself.
+
+Evaluate completed 1-minute bars continuously, 24/7. Define a move as 100 times (the latest completed close divided by the completed close 60 minutes earlier minus 1). Trigger separately for upward moves greater than 2% and downward moves less than -2%, only when entering that condition from outside it. Require the full 60-minute history, skip gaps or invalid prices, and limit each symbol and direction to one alert per 60 minutes; rearm only after the condition clears. Keep the monitoring enabled until I disable it.
+
+For each event, attach both a native OpenChart desktop notification with the symbol, direction, measured one-hour change, price, and UTC event time, and an agent action that researches the move using this conversation's model and workspace. The agent should examine public news and market evidence from the preceding six hours, compare BTC and ETH and relevant broader-market moves, cite sources and publication times, distinguish confirmed catalysts from hypotheses, and explicitly say when no reliable catalyst is found. Have it publish one concise Feed post tied to the alert event, with evidence, uncertainty, and the price window; deduplicate by event and do not ask follow-up questions. The immediate notification reports the detected move, and the Feed post contains the subsequent research.
+
+Inspect existing rules and triggers before creating duplicates, validate the alert definitions, and reread the saved resources to verify both rules and actions are enabled. Do not substitute a polling schedule for live alerts. If live data or an action is unavailable, report exactly what is and is not active and complete the supported setup without asking me to choose another provider. Return the saved alert references and explain that desktop monitoring requires the app to remain running.`,
   },
   {
     title:
       "🗓️  Brief me daily on the top 10 market movers, their catalysts and potential opportunities",
-    prompt:
-      "Give me a daily market briefing for the top 10 market movers, explain why they moved and whether there are potential opportunities.",
+    prompt: `Create an enabled daily market-briefing schedule in my current workspace and produce the first briefing now. Run every Monday through Friday at 4:30 PM America/New_York, using this conversation's model and workspace. Proceed without clarification questions and carry all of these defaults into the saved schedule prompt.
+
+Cover US-listed common stocks and ADRs with market capitalization of at least USD 10 billion; exclude ETFs, OTC securities, duplicate share classes, and names without valid closing data. For each run, use the latest completed US regular session and rank the top 10 by absolute split-adjusted close-to-close percentage move, including both gainers and losers. Identify the session date and comparison close explicitly, exclude after-hours changes, and cite the screening source and coverage. On market holidays or when that session has already been covered by this schedule, skip publishing a duplicate; if run before today's close, use the previous completed session.
+
+For every stock, show ticker, company, closing price, percentage move, and a concise catalyst explanation supported by dated public sources. Separate confirmed news, attributed market commentary, and inference; say no verified catalyst when evidence is insufficient. Discuss potential opportunities as conditional watch scenarios with a time horizon, what would confirm or invalidate the idea, and the main risk, without inventing my holdings, risk tolerance, or position sizes. Add a brief index/sector context paragraph and links to the strongest sources.
+
+Publish each briefing as one Feed post and return its reference. If fewer than 10 names can be verified, publish only verified names and state the coverage gap. Reuse an equivalent existing schedule, verify it is saved and enabled, and report its next run with the time zone. Missing data should yield a clear limitation, not a clarification question or invented analysis. Do not place trades.`,
   },
   {
     title: "🚨  Alert me if BTC falls 5% in a day",
-    prompt: "Alert me whenever BTCUSDT falls more than 5% within a day.",
+    prompt: `Create and enable an alert for Binance spot BTCUSDT in my current workspace. Proceed without clarification questions. Define a day as a rolling 24-hour window, not a calendar day: on each completed 1-minute bar, calculate 100 times (close divided by the close exactly 24 hours earlier minus 1). Fire when the return crosses from at least -5% to below -5%. Require valid prices and the complete lookback, skip data gaps, and allow at most one notification in any 24-hour period; rearm after the return recovers to at least -5%.
+
+Attach a native OpenChart desktop notification containing the symbol, rolling 24-hour change, current close, reference close, and UTC event time, with the event retained in the app's Feed. Monitor 24/7 while the desktop app is running and keep the rule enabled until I disable it. Resolve the exact listing, inspect existing matching rules to avoid duplicates, validate the condition, and verify the saved rule and notification trigger are enabled. If live data is unavailable, report the precise inactive component and finish any supported setup without asking me to choose alternatives. Return the saved alert reference and its exact trigger condition; do not claim a notification was delivered merely because the rule was saved.`,
   },
   {
     title: "🧮  Write an indicator that flags RSI divergences",
-    prompt:
-      "Write a custom indicator that marks bullish and bearish RSI divergences, then run it on SPY.",
+    prompt: `Write, validate, save, and display a Tea indicator for regular bullish and bearish RSI divergences on the primary US listing of SPY in my current workspace. Use split-adjusted daily regular-session Bars, RSI(14) with Wilder smoothing of close, and the latest two years of completed sessions plus sufficient warmup. Proceed without clarification questions and choose any unspecified visual details yourself.
+
+Define price pivots using five bars on each side. Compare consecutive confirmed price lows for bullish divergence: price makes a strictly lower low while RSI at those same pivot bars makes a strictly higher low. Compare consecutive confirmed price highs for bearish divergence: price makes a strictly higher high while RSI makes a strictly lower high. Require pivots to be 5 to 60 trading bars apart; equal values and missing RSI values do not qualify. Use price pivots to sample RSI, not independently matched RSI pivots. Exclude hidden divergences and do not require oversold or overbought readings.
+
+Confirm a signal only after the five right-hand bars have closed, and display the marker on the confirmation bar so it cannot be mistaken for a signal known at the earlier pivot. Make the RSI period, pivot widths, and separation bounds editable. Read the Tea documentation, run tea_check and tea_run on real Bars, and inspect the outputs for correct confirmation timing. Create or reuse a dashboard named SPY RSI Divergences and attach the indicator to its daily SPY chart. Keep SPY candles in a USD price pane and the RSI line and divergence markers in a separate oscillator pane with an independent 0-100 scale and 30/70 reference levels; align their time axes. Never put RSI values on SPY's dollar-price axis. Verify the saved pane bindings and return the saved references with a short explanation of the five-bar delay. If data or a rendering feature is unavailable, use supported output styles and explain the limitation without asking follow-up questions. Do not create alerts or place trades.`,
   },
   {
     title: "📉  Find QQQ's biggest drawdowns since 2020",
-    prompt:
-      "Find the five largest drawdowns in QQQ since 2020 and how long each one took to recover.",
+    prompt: `Find the five largest non-overlapping drawdown episodes in the primary US-listed QQQ ETF from January 1, 2020 through the latest completed regular trading session. Use daily split-adjusted closing prices in USD, excluding dividends, and identify the actual data source and cutoff. Proceed without clarification questions.
+
+Start the running high at the first available close in this date range. An episode starts at a running peak, reaches its trough at the lowest subsequent close, and ends at the first later close at or above that original peak. Treat deeper declines before recovery as part of the same episode, not separate drawdowns. Rank episodes by the magnitude of 100 times (trough close divided by peak close minus 1), including an unrecovered current episode if it qualifies. Report peak, trough, and recovery dates, peak/trough prices, maximum decline, peak-to-trough duration, trough-to-recovery duration, and total time underwater in both trading sessions and calendar days.
+
+For an unrecovered episode, show Not recovered as of the cutoff and its elapsed time rather than guessing a recovery date. Return a sourced table, a simple price/drawdown visualization if supported, and a brief explanation of the definition. Put the USD price and percentage drawdown in separate vertically aligned panels with independent labeled y-axes and a shared date axis; do not plot both units on one scale. If fewer than five complete or ongoing episodes qualify, return the actual count. If full history is unavailable, use the available period and state the exact gap without inventing data or asking me to choose another definition. Do not create schedules or alerts.`,
   },
   {
     title: "📈  Build a dashboard for BTC, ETH and SOL",
-    prompt:
-      "Create a dashboard with daily charts for BTCUSDT, ETHUSDT and SOLUSDT.",
+    prompt: `Create a dashboard named Crypto Overview in my current workspace containing exactly one chart widget with the 1x3 chart-grid preset: one row of three equal-sized cells, showing Binance spot BTCUSDT, ETHUSDT, and SOLUSDT from left to right. The widget must reference one Chart resource with three cells; do not create three separate dashboard widgets or three separate Chart resources. Proceed without clarification questions. Resolve exact listings with the available tools; use USDT quotes, standard candlesticks, a 1-day bar resolution, a linear price scale, and UTC dates, initially showing the latest 12 calendar months with live updates enabled where available. Give each cell its own independently autoscaled price axis; do not overlay the three raw prices on one shared scale. Keep their displayed date windows aligned. Include volume in a separate pane within each cell with its own volume scale if supported, clear symbol titles, and otherwise use the app's default chart appearance.
+
+Inspect existing dashboards first. If Crypto Overview already contains these assets, reuse it and ensure they occupy one 1x3 chart widget; consolidate any three separate widgets for these assets into that single grid while preserving their market bindings and unrelated content. If the name belongs to unrelated content, create Crypto Overview 2 rather than overwriting it. Use the supported dashboard/chart creation tools, then verify the saved dashboard has one widget for this grid and its Chart resource has preset 1x3 with exactly three cells and the correct symbol in each. Return the dashboard reference so I can open it. If Binance does not expose a requested spot pair, use an available USD or USDT spot listing for that same asset and label the exchange and quote currency clearly; do not substitute futures. Report any missing asset or unavailable live feed and complete the remaining cells without asking me to choose a layout or provider. Do not add alerts, schedules, or trades.`,
   },
   {
     title: "🌅  Brief me on overnight crypto moves every morning",
-    prompt:
-      "Every weekday at 8:30 AM, brief me on how BTC, ETH and SOL moved overnight.",
+    prompt: `Create an enabled recurring crypto briefing every Monday through Friday at 8:30 AM America/New_York and produce an initial briefing now for the most recent such cutoff. Use my current workspace and this conversation's model. Proceed without clarification questions and include these defaults in the saved schedule prompt.
+
+Cover Binance spot BTCUSDT, ETHUSDT, and SOLUSDT. Define overnight as 4:00 PM on the previous calendar day through 8:30 AM on the briefing date in America/New_York, including on Mondays; honor daylight saving time. Use completed intraday bars and the last close at or before each boundary, record the actual timestamps, and calculate each asset's percentage change, high, low, and traded volume within that window. Separately provide the rolling 24-hour change ending at the same cutoff, clearly labeled. If a boundary price or sufficient history is missing, report the metric as unavailable rather than substituting a different window.
+
+Summarize the strongest and weakest asset, major verified overnight crypto or macro news with dated source links, and known events to watch over the coming day. Distinguish news from possible explanations and say when no reliable catalyst was found. Publish one concise Feed post per briefing date, deduplicate against prior runs of this schedule, and return the initial post reference. Reuse an equivalent schedule, verify it is saved and enabled, and report its next run and time zone. Use Feed delivery without requesting an email address or external channel; report data limitations and continue without follow-up questions.`,
   },
   {
     title: "⚖️  How volatile is TSLA compared to the S&P 500?",
-    prompt:
-      "Compare TSLA's 30-day realized volatility with SPY's over the past year.",
+    prompt: `Compare the 30-trading-day realized volatility of primary US-listed TSLA and SPY over the latest 12 calendar months through the last completed US regular session. Use SPY as the S&P 500 proxy, USD split-adjusted daily closes excluding dividends, and at least 31 prior closes for warmup. Proceed without clarification questions.
+
+Calculate daily log returns and define annualized realized volatility as the sample standard deviation of the latest 30 daily log returns multiplied by the square root of 252, expressed as a percentage. Align both series by trading date, exclude incomplete sessions, and do not forward-fill missing prices. Compare the latest values, the latest TSLA/SPY volatility ratio, each series' median and maximum over the displayed year with peak dates, and the percentage of aligned dates on which TSLA was more volatile.
+
+Provide a two-line comparison chart if supported, a compact metrics table, source links, exact dates, and a plain-language interpretation distinguishing realized from implied volatility. Keep both series on the same scale. If full history or charting is unavailable, return the verified metrics and explain the exact limitation without asking me to choose a method. Do not infer my portfolio, give position sizes, or create alerts or schedules.`,
   },
   {
     title: "🔍  Which sector ETF is leading this quarter?",
-    prompt:
-      "Compare the major SPDR sector ETFs this quarter and tell me which one is leading and why.",
+    prompt: `Compare all 11 US Select Sector SPDR ETFs: XLB, XLC, XLE, XLF, XLI, XLK, XLP, XLRE, XLU, XLV, and XLY. Use SPY as the broad-market benchmark. Proceed without clarification questions. Define this quarter as the current calendar quarter in America/New_York, measured from the last completed regular-session close before the quarter began through the latest completed US regular-session close.
+
+Rank by split-adjusted closing-price percentage return in USD, excluding dividends, with the same start and end dates for every ETF. Show the ticker, sector, quarter-to-date return, and percentage-point excess return over SPY; identify the leader and laggard and visualize the ranked returns if supported. If the quarter has no completed session yet, explicitly say so rather than silently changing the period. Do not forward-fill unavailable prices or mix total returns with price returns.
+
+Research the leading sector's major constituents and relevant earnings, macro, rates, commodity, or policy developments during this quarter. Cite dated sources and distinguish supported explanations from inference; do not present a narrative as proven causation. Add the main risk to continued leadership. If an ETF or source is unavailable, rank the verified subset and state the gap without asking me to select alternatives. Return the sourced comparison directly in this chat; do not create schedules, alerts, or trades.`,
   },
   {
     title: "🗞️  Recap my alerts every Friday after the close",
-    prompt:
-      "Every Friday after the market close, recap which of my alerts fired this week and what the price did afterward.",
+    prompt: `Create an enabled weekly alert recap for Fridays at 4:30 PM America/New_York in my current workspace, using this conversation's model, and produce an initial recap now for the current week through the latest available data. Proceed without clarification questions and preserve all these defaults in the recurring prompt.
+
+At each scheduled run, cover actual saved alert events from Monday 12:00 AM through Friday 4:30 PM America/New_York, across all my alert rules available in this workspace, including inactive or since-deleted rules when their historical events remain readable. Use alert-event history, not the list of configured rules, as evidence that an alert fired. Group repeated events by rule and symbol while showing counts and event times. An alert event does not by itself prove a desktop notification was delivered.
+
+For price-based alerts, show the trigger-time price and subsequent percentage changes at one hour, 24 hours, and the recap cutoff using the same listing. Use the first available completed bar at or after each target time only if it is already available by the recap cutoff; label the actual measurement time, pending horizons, closed markets, and missing data. For non-price alerts, summarize the observed event and mark price follow-up as not applicable. Do not invent prices or future outcomes.
+
+Publish each scheduled Friday recap as one concise Feed post with the event summary, biggest subsequent moves, and data limitations, deduplicating only repeated scheduled runs for that same week. Label the initial recap as a preview; it must not count as Friday's completed report or suppress Friday's run. If no alerts fired, publish a short no-events recap instead of asking me to create alerts. On market holidays, still run at the scheduled time and label the latest available prices. Reuse an equivalent existing schedule, verify it is saved and enabled, and return its reference, next run with time zone, and the initial post reference. Use Feed delivery; do not request an email address or alter my alert rules.`,
   },
 ];
