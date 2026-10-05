@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.1.11",
+    "date": "2026-10-05",
+    "items": [
+      "Saved alerts have an Events tab with each trigger's history and links to the sessions it started.",
+      "Interval, session and adjustment choices your data source lacks now show a lock and offer OpenChart Cloud.",
+      "New installs include two editable example studies in My scripts, and clicking a script opens its file.",
+      "Suggested prompts in new chats now finish their work without stopping for follow-up questions.",
+      "Fixed live Cloud charts stopping after an interval change, and charts that wouldn't reload after panning too far.",
+      "Fixed scripts failing to find Yahoo Finance symbols, and neutral agent annotations hidden in the light theme."
+    ]
+  },
+  {
     "version": "0.1.10",
     "date": "2026-10-05",
     "items": [
