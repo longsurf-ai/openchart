@@ -139,10 +139,12 @@ async function copyOnboardingContent() {
   for (const filename of [
     "onboarding-content-schema.sql",
     "onboarding-content.sql",
+    "studies",
   ])
     await cp(
       join(directory, "src/onboarding/content", filename),
       join(staging, "main", filename),
+      { recursive: true },
     );
 }
 

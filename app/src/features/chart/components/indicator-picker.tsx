@@ -1,7 +1,7 @@
 // Purpose: Discover studies through visual examples and natural-language prompts, with chart-owned attachment actions.
 import { useContext, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowRight, Compass, FileCode2, Library, Plus } from "lucide-react";
+import { ArrowRight, Compass, FileCode2, Library } from "lucide-react";
 import type * as Tea from "@openchart/tea";
 import { Button } from "@openchart/app/components/ui/button";
 import "./indicator-library.css";
@@ -79,7 +79,7 @@ const scopes = [
 type Scope = (typeof scopes)[number]["name"];
 type Study = { source: Tea.WorkspaceSources; entry?: IndicatorCatalogEntry };
 
-/** Browse studies on shared cached history; previews never acquire market data and Add preserves the captured chart cell. The app owns Agent admission. @example <IndicatorLibraryContent transport={transport} chartId={chartId} cellId={cellId} composer={composer} query={query} onClose={close} onUsePrompt={prefill} onModifyScript={modify} /> */
+/** Browse studies on shared cached history; previews never acquire market data and Add preserves the captured chart cell. The app owns Agent admission. @example <IndicatorLibraryContent transport={transport} chartId={chartId} cellId={cellId} composer={composer} query={query} onClose={close} onModifyScript={modify} /> */
 export function IndicatorLibraryContent({
   transport,
   chartId,
@@ -87,7 +87,6 @@ export function IndicatorLibraryContent({
   onClose,
   composer,
   query,
-  onUsePrompt,
   onModifyScript,
 }: {
   transport: AppTransport;
@@ -96,7 +95,6 @@ export function IndicatorLibraryContent({
   onClose: () => void;
   composer: ReactNode;
   query: string;
-  onUsePrompt: (prompt: string, source?: Tea.WorkspaceSources) => void;
   onModifyScript: (source: Tea.WorkspaceSources) => void;
 }) {
   const [scope, setScope] = useState<Scope>("Discover");
@@ -156,30 +154,28 @@ export function IndicatorLibraryContent({
     scope === "Discover" && !needle
       ? (entries.find(({ id }) => id === goal.featured) ?? entries[0])
       : undefined;
-  const files = (
-    home.data && catalog.data ? (workspaces.data ?? []) : []
-  ).flatMap((workspace, index) => {
-    const tree = trees[index]?.data;
-    return tree?.status === "ready"
-      ? tree.entries
-          .filter(
-            ({ path }) =>
-              path.endsWith(".tea") &&
-              !(
-                workspace.id === home.data &&
-                catalog.data?.some(
-                  (entry) =>
-                    path.toLocaleLowerCase() === entry.path.toLocaleLowerCase(),
-                )
-              ),
-          )
-          .map(({ path }) => ({
-            workspaceId: workspace.id,
-            path,
-            root: workspace.root,
-          }))
-      : [];
-  });
+  const files = (home.data ? (workspaces.data ?? []) : []).flatMap(
+    (workspace, index) => {
+      const tree = trees[index]?.data;
+      return tree?.status === "ready"
+        ? tree.entries
+            .filter(
+              ({ path }) =>
+                path.endsWith(".tea") &&
+                // Bundled originals, including the chart's own built-ins, install here.
+                !(
+                  workspace.id === home.data &&
+                  path.toLocaleLowerCase().startsWith("indicators/builtin/")
+                ),
+            )
+            .map(({ path }) => ({
+              workspaceId: workspace.id,
+              path,
+              root: workspace.root,
+            }))
+        : [];
+    },
+  );
   const custom = files.filter((file) =>
     `${file.path} ${file.root}`.toLocaleLowerCase().includes(needle),
   );
@@ -209,11 +205,6 @@ export function IndicatorLibraryContent({
         void tree.refetch();
       });
     }
-  };
-  const prefillPrompt = (prompt: string, source?: Tea.WorkspaceSources) => {
-    setStudy(undefined);
-    setScope("Discover");
-    onUsePrompt(prompt, source);
   };
   const select = (entry: IndicatorCatalogEntry) =>
     opener.mutate({ selection: entry.id, entry });
@@ -407,21 +398,6 @@ export function IndicatorLibraryContent({
                 ) : null}
                 {!loading && personal ? (
                   <>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm text-muted-foreground">
-                        Your studies, from all registered Workspaces.
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          prefillPrompt("Create an indicator that ")
-                        }
-                      >
-                        <Plus className="size-4" /> Create a study
-                      </Button>
-                    </div>
                     {custom.length ? (
                       <ScriptRows
                         files={custom}

@@ -14,6 +14,7 @@ Core owns generic series, coordinates, primitive lifecycle, painting and hits.
   Segments deduplicate endpoints; zones retain the latest geometry per start.
   Geometry hover dates describe anchors, not inferred confirmation.
 - Inline labels avoid visible series and other labels, without background plates.
+  A zone output's text is instead one right-edge tag on its latest visible zone.
   When text cannot fit, preserve the marker and hover description.
 - Indicator defaults use `indicator-output-style.ts`'s distinct role palette;
   explicit user overrides and authored Tea styles take precedence.

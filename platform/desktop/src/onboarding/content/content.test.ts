@@ -1,6 +1,12 @@
 // Purpose: Keep the shipped historical snapshot usable through ordinary migrations and services.
 
-import { readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { starterWorkflow } from "@openchart/app/app/trellis/workflows/starter/workflow";
@@ -35,7 +41,10 @@ test("concurrent first launches publish exactly one complete snapshot", async ()
     prepareOnboardingContent(home),
   ]);
   expect(results.filter(Boolean)).toHaveLength(1);
-  expect(await readdir(home)).toEqual(["openchart.sqlite3"]);
+  expect((await readdir(home)).sort()).toEqual([
+    "openchart.sqlite3",
+    "workspaces",
+  ]);
   const database = new DatabaseSync(join(home, "openchart.sqlite3"));
   try {
     expect(database.prepare("PRAGMA integrity_check").all()).toEqual([
@@ -50,6 +59,62 @@ test("concurrent first launches publish exactly one complete snapshot", async ()
   expect(await prepareOnboardingContent(home)).toBeUndefined();
   expect(await readFile(join(home, "openchart.sqlite3"))).toEqual(bytes);
 });
+
+test("a new profile owns editable starter studies that compile without market data", async () => {
+  const home = temporaryHome();
+  const studies = join(home, "workspaces", "default", "studies");
+  await mkdir(studies, { recursive: true });
+  await writeFile(join(studies, "sector-rotation.tea"), "// edited");
+  await prepareOnboardingContent(home);
+  expect((await readdir(studies)).sort()).toEqual([
+    "sector-rotation.tea",
+    "semiconductor-leaders.tea",
+  ]);
+  // A file the user already has is never replaced.
+  expect(await readFile(join(studies, "sector-rotation.tea"), "utf8")).toBe(
+    "// edited",
+  );
+  const runtime = makeRuntime({
+    home: temporaryHome(),
+    databasePath: ":memory:",
+    config: ConfigProvider.fromUnknown({}),
+    models: { fetchEnabled: false },
+  });
+  try {
+    const targets = await runtime.runPromise(
+      Effect.forEach(
+        ["semiconductor-leaders.tea", "sector-rotation.tea"],
+        (name) =>
+          Effect.gen(function* () {
+            const tea = yield* Tea.Service;
+            const source = yield* Effect.promise(() =>
+              readFile(join(import.meta.dirname, "studies", name), "utf8"),
+            );
+            const node = yield* tea.compile({
+              entry: name,
+              sources: { [name]: source },
+            });
+            yield* tea.dispose({ id: node.id });
+            return Object.values(node.definition.requests).map(
+              ({ target }) => target?.symbol,
+            );
+          }),
+      ),
+    );
+    expect(targets[0]).toHaveLength(22);
+    expect(targets[0]).toEqual(
+      expect.arrayContaining(["yfinance:SMH", "yfinance:NVDA", "yfinance:TER"]),
+    );
+    expect(targets[1]).toEqual([
+      "yfinance:SPY",
+      ...["XLI", "XLK", "XLF", "XLP", "XLV", "XLE", "SMH", "QQQ", "IGV"].map(
+        (symbol) => `yfinance:${symbol}`,
+      ),
+    ]);
+  } finally {
+    await runtime.dispose();
+  }
+}, 30_000);
 
 test("an interrupted import leaves no database and can retry", async () => {
   const home = temporaryHome();

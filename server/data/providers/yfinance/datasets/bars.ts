@@ -64,6 +64,8 @@ const Metadata = Schema.Struct({
   currency: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
   exchangeName: Schema.String.check(Schema.isMinLength(1)),
   instrumentType: Schema.String.check(Schema.isMinLength(1)),
+  longName: Schema.optionalKey(Schema.String),
+  shortName: Schema.optionalKey(Schema.String),
   firstTradeDate: Schema.optionalKey(Schema.NullOr(Schema.Finite)),
   dataGranularity: Schema.String,
   exchangeTimezoneName: Schema.optionalKey(Schema.String),

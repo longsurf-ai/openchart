@@ -194,6 +194,36 @@ it("zone revisions replace matching start identities without accumulating opacit
   expect(primitive.paneViews()).toEqual([]);
 });
 
+it("a zone output tags its latest zone once at the right edge", () => {
+  const zone = (start: number, top: number, bottom: number) =>
+    decodeIndicatorVisual(
+      {
+        id: "row",
+        start_time: start,
+        end_time: start + 1000,
+        top,
+        bottom,
+        color: red,
+        text: "Row",
+        force_overlay: false,
+      },
+      "zone",
+    )!;
+  const ctx = paint(
+    createIndicatorPrimitive({
+      id: "row",
+      kind: "zone",
+      rows: [
+        { time: 2, value: zone(1000, 70, 40) },
+        { time: 4, value: zone(3000, 30, 20) },
+      ],
+    }),
+  );
+  // Fallback text width is 6px per character plus 8px of padding.
+  expect(ctx.fillText).toHaveBeenCalledExactlyOnceWith("Row", 178, 75);
+  expect(ctx.fillRect).toHaveBeenLastCalledWith(174, 67, 26, 16);
+});
+
 it.each([
   "shape",
   "character",

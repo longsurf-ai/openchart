@@ -282,7 +282,6 @@ function setupLibrary(
   client.setQueryData(chartDetail(transport, resource.id).queryKey, resource);
   const openFile = vi.fn();
   const close = vi.fn();
-  const usePrompt = vi.fn();
   const modifyScript = vi.fn();
   function Fixture() {
     const [query, setQuery] = useState("");
@@ -300,7 +299,6 @@ function setupLibrary(
             onChange={(event) => setQuery(event.target.value)}
           />
         }
-        onUsePrompt={usePrompt}
         onModifyScript={modifyScript}
       />
     );
@@ -318,7 +316,6 @@ function setupLibrary(
     cell,
     openFile,
     close,
-    usePrompt,
     view,
     client,
     transport,
@@ -443,7 +440,7 @@ it("discovers by purpose and searches prompts and explanations without adding a 
 });
 
 it("offers one prompt-copy action and opens its exact source beside Add without attaching it", async () => {
-  const { rpc, usePrompt, openFile, close } = setupLibrary();
+  const { rpc, openFile, close } = setupLibrary();
   fireEvent.click(await screen.findByRole("button", { name: "SMA" }));
   expect(
     await screen.findByRole("button", { name: "Copy prompt" }),
@@ -451,7 +448,6 @@ it("offers one prompt-copy action and opens its exact source beside Add without 
   expect(
     screen.queryByRole("button", { name: "Use this prompt" }),
   ).not.toBeInTheDocument();
-  expect(usePrompt).not.toHaveBeenCalled();
   expect(close).not.toHaveBeenCalled();
   const open = screen.getByRole("button", { name: "Open source" });
   const actions = screen.getAllByRole("button");
@@ -589,15 +585,23 @@ it.each([
   "opens $workspaceId/$path from My scripts directly in Workspace",
   async ({ workspaceId, path, name }) => {
     const { rpc, openFile, close } = setupLibrary(
-      ["indicators/builtin/sma.tea", "research/averages/saved.tea"],
+      [
+        "indicators/builtin/sma.tea",
+        "indicators/builtin/volume-profile-range.tea",
+        "research/averages/saved.tea",
+      ],
       ["indicators/builtin/sma.tea"],
     );
     navigate("My scripts");
     await screen.findByRole("button", { name: /^sma\.tea/ });
-    // Only the other Workspace's file remains; the default original is excluded.
+    // Only the other Workspace's file remains; default originals, including
+    // the chart's own built-ins, are excluded.
     expect(screen.getAllByRole("button", { name: /^sma\.tea/ })).toHaveLength(
       1,
     );
+    expect(
+      screen.queryByRole("button", { name: /^volume-profile-range\.tea/ }),
+    ).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name }));
     expect(openFile).toHaveBeenCalledExactlyOnceWith({ workspaceId, path });
     expect(close).toHaveBeenCalledOnce();

@@ -1,10 +1,13 @@
 // Purpose: Install a frozen, portable database template before the application opens it.
 
+import { constants } from "node:fs";
 import {
+  copyFile,
   link,
   lstat,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -21,9 +24,11 @@ export interface OnboardingContentView {
 
 /**
  * Installs the bundled snapshot only when the profile has no application database.
- * Builds and closes a temporary database before publishing it with an exclusive,
- * atomic hard link. Existing files (including empty databases) are never opened
- * or replaced. Failures leave the destination absent and can be retried.
+ * Builds and closes a temporary database, copies the starter studies into the
+ * default workspace's `studies/` folder, then publishes the database with an
+ * exclusive, atomic hard link. Existing files (including empty databases and
+ * studies of the same name) are never opened or replaced. Failures leave the
+ * database absent and can be retried.
  *
  * The application subsequently owns this file and runs its ordinary migrations;
  * this installer imports no application services or current schema definitions.
@@ -46,6 +51,7 @@ export async function prepareOnboardingContent(
       throw cause;
   }
 
+  const workspace = join(root, "workspaces", "default");
   const directory = await mkdtemp(join(root, ".onboarding-content-"));
   try {
     const [schema, content] = await Promise.all([
@@ -58,15 +64,31 @@ export async function prepareOnboardingContent(
     const filename = join(directory, "openchart.sqlite3");
     const database = new DatabaseSync(filename);
     try {
-      database.function("onboarding_workspace_root", () =>
-        join(root, "workspaces", "default"),
-      );
+      database.function("onboarding_workspace_root", () => workspace);
       database.exec(
         `PRAGMA foreign_keys = ON; BEGIN;\n${schema}\n${content}\nCOMMIT;`,
       );
     } finally {
       database.close();
     }
+    // Starter studies belong to the user from the start: editable, never reinstalled.
+    const studies = join(workspace, "studies");
+    await mkdir(studies, { recursive: true });
+    for (const name of await readdir(join(import.meta.dirname, "studies")))
+      try {
+        await copyFile(
+          join(import.meta.dirname, "studies", name),
+          join(studies, name),
+          constants.COPYFILE_EXCL,
+        );
+      } catch (cause) {
+        if (!(
+          cause instanceof Error &&
+          "code" in cause &&
+          cause.code === "EEXIST"
+        ))
+          throw cause;
+      }
     try {
       await link(filename, destination);
     } catch (cause) {

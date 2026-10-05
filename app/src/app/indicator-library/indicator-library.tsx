@@ -166,7 +166,6 @@ function IndicatorLibraryModal({
                     }
                   : undefined
               }
-              onUsePrompt={prefill}
               onModifyScript={(file) =>
                 prefill(`Modify the indicator in @${file.path}: `, file)
               }
@@ -183,14 +182,12 @@ function LibraryLanding({
   target,
   onClose,
   workspaceRetry,
-  onUsePrompt,
   onModifyScript,
 }: {
   transport: AppTransport;
   target: IndicatorLibraryTarget;
   onClose: () => void;
   workspaceRetry?: () => void;
-  onUsePrompt: (prompt: string, source?: Tea.WorkspaceSources) => void;
   onModifyScript: (source: Tea.WorkspaceSources) => void;
 }) {
   const query = useAuiState((state) => state.composer.text);
@@ -201,7 +198,6 @@ function LibraryLanding({
       cellId={target.cellId}
       onClose={onClose}
       query={query}
-      onUsePrompt={onUsePrompt}
       onModifyScript={onModifyScript}
       composer={
         <div className="space-y-2">
