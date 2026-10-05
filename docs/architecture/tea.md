@@ -563,8 +563,11 @@ again.
 TeaService rejects out-of-order inputs and revisions to committed steps through
 the observation's error channel. It does not reorder, rewind or restart an
 execution automatically. A current uncommitted child may be refined even when
-its higher-timeframe opening timestamp precedes a committed parent timestamp;
-a newly arriving child step belonging to an already-consumed window is rejected.
+its higher-timeframe opening timestamp precedes a committed parent timestamp.
+Scalar requests also accept new child steps that arrive behind the parent's
+progress; they affect only subsequent parent attempts, never published output.
+Collect requests reject new child steps belonging to an already-consumed window.
+Both policies preserve the child's own timestamp ordering and finality.
 
 Native Feed finality is preserved. Without a finality flag, a live tail stays
 provisional until the next bucket arrives; the adapter does not guess exchange
