@@ -1,0 +1,10 @@
+indicator("Fisher Transform", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+bottom = ta.lowest(hl2, length)
+top = ta.highest(hl2, length)
+var float normalized = 0
+normalized := top == bottom ? 0 : math.max(-0.999, math.min(0.999, 0.66 * ((hl2 - bottom) / (top - bottom) - 0.5) + 0.67 * nz(normalized[1])))
+var float fisher = 0
+fisher := 0.5 * math.log((1 + normalized) / (1 - normalized)) + 0.5 * nz(fisher[1])
+plot("fisher", fisher, "Fisher")
+plot("signal", fisher[1], "Signal")

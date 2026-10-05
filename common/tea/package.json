@@ -1,0 +1,19 @@
+{
+  "name": "@openchart/tea",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@openchart/feed": "workspace:*",
+    "@openchart/market": "workspace:*",
+    "@openchart/timeseries": "workspace:*",
+    "apache-arrow": "21.2.0",
+    "effect": "4.0.0-rc.112"
+  }
+}

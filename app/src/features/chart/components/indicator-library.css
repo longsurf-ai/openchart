@@ -1,0 +1,49 @@
+/* Purpose: Reflow the library by its available content width using shared size tokens. */
+.indicator-library-frame {
+  container: library-frame / inline-size;
+}
+
+.indicator-library-content {
+  container: library / inline-size;
+}
+
+.indicator-library-sidebar {
+  display: none;
+}
+
+@container library-frame (min-width: theme(screens.md)) {
+  .indicator-library-sidebar {
+    display: flex;
+  }
+
+  .indicator-library-compact-nav {
+    display: none;
+  }
+}
+
+@container library (min-width: theme(maxWidth.md)) {
+  .indicator-library-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container library (min-width: theme(maxWidth.xl)) {
+  .indicator-library-featured {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .indicator-library-featured > .indicator-library-card-preview {
+    border-bottom: 0;
+    border-right-width: 1px;
+  }
+}
+
+@container library (min-width: theme(maxWidth.2xl)) {
+  .indicator-library-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .indicator-library-detail-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

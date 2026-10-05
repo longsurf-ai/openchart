@@ -1,0 +1,13 @@
+{
+  "path": "/app/dashboards/dsh_88JOx0yX7TH65p",
+  "localStorage": {
+    "local:chart:ccl_muglcbdx": {
+      "state": {
+        "viewport": { "from": 1727740800000, "to": 1791158400000 },
+        "paneHeights": [3, 1]
+      },
+      "version": 1
+    },
+    "local:onboarding": { "state": { "workflow": "starter" }, "version": 1 }
+  }
+}

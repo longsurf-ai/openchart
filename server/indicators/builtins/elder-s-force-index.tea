@@ -1,0 +1,3 @@
+indicator("Elder's Force Index", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+plot("value", ta.ema(ta.change(close) * volume, length), "Value")

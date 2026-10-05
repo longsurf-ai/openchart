@@ -1,0 +1,17 @@
+indicator("Relative Volume Breakout", overlay = false)
+length = input.int(20, "Prior volume lookback", minval = 2, maxval = 500)
+threshold = input.float(2.0, "Unusual volume multiple", minval = 1)
+averageVolume = ta.sma(volume, length)
+baseline = averageVolume[1]
+ratio = baseline > 0 ? volume / baseline : na
+unusual = ratio >= threshold
+shade = unusual ? (close >= open ? #65CFB2 : #EA927B) : color.new(#97A8B7, 45)
+plot("relative_volume", ratio, "Volume / prior average", color=shade, style=plot.style_columns)
+hline("average", 1, "Typical volume", color=#8D98A6, linestyle=hline.style_dotted)
+hline("threshold", threshold, "Unusual volume", color=#D8B771, linestyle=hline.style_dashed)
+rangeHigh = ta.highest(high, length)
+rangeLow = ta.lowest(low, length)
+up = barstate.isconfirmed and unusual and close > rangeHigh[1]
+down = barstate.isconfirmed and unusual and close < rangeLow[1]
+plotshape("volume_breakout", up, "Above previous range on unusual volume", style=shape.triangleup, location=location.belowbar, color=#65CFB2, text="Volume breakout", textcolor=#65CFB2, size=size.tiny, force_overlay=true)
+plotshape("volume_breakdown", down, "Below previous range on unusual volume", style=shape.triangledown, color=#EA927B, text="Volume breakdown", textcolor=#EA927B, size=size.tiny, force_overlay=true)

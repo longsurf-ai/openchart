@@ -1,0 +1,6 @@
+indicator("McGinley Dynamic", overlay = true)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 1, maxval = 500)
+var float value = na
+value := na(value) ? source : value == 0 ? source : value + (source - value) / (length * math.pow(source / value, 4))
+plot("value", value, "Value")

@@ -1,0 +1,60 @@
+/* Purpose: The Cloud plan card's type scale and backdrop wash; color roles live in themes.css. */
+
+/* Four sizes for the whole card. Hierarchy comes from weight (400 or 600),
+   color and spacing, never extra sizes. */
+.plan-display {
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.plan-figure {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-text {
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.plan-caption {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.plan-ink {
+  color: var(--plan-ink);
+}
+
+.plan-ink-muted {
+  color: var(--plan-ink-muted);
+}
+
+/* Light behind the content column, clear over the sailboat on the right. */
+.plan-wash {
+  background: linear-gradient(
+    90deg,
+    var(--plan-wash) 0%,
+    color-mix(in srgb, var(--plan-wash) 88%, transparent) 42%,
+    color-mix(in srgb, var(--plan-wash) 55%, transparent) 58%,
+    transparent 76%
+  );
+}
+
+/* Narrow cards stack everything over the sea, so the wash covers it all. */
+@container (width < 36rem) {
+  .plan-wash {
+    background: color-mix(in srgb, var(--plan-wash) 86%, transparent);
+  }
+}
+
+/* The dialog's own close button sits over the bright sky. */
+.plan-dialog > button {
+  color: var(--plan-ink);
+  top: 1.25rem;
+  right: 1.25rem;
+}

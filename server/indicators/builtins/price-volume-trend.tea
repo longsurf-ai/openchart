@@ -1,0 +1,3 @@
+indicator("Price Volume Trend", overlay = false)
+value = ta.cum(na(close[1]) or close[1] == 0 ? 0 : (close - close[1]) / close[1] * volume)
+plot("value", value, "Value")

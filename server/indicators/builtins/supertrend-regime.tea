@@ -1,0 +1,13 @@
+indicator("Supertrend Regime", overlay = true)
+length = input.int(10, "ATR length", minval = 1, maxval = 500)
+factor = input.float(3.0, "ATR multiplier", minval = 0.1)
+[trend, direction] = ta.supertrend(factor, length)
+ready = not na(ta.atr(length))
+bull = direction < 0
+up = plot("up", ready and bull ? trend : na, "Rising trend", color=#38BFA7, linewidth=2, style=plot.style_linebr)
+down = plot("down", ready and not bull ? trend : na, "Falling trend", color=#EC766D, linewidth=2, style=plot.style_linebr)
+price = plot("midpoint", hl2, "Price midpoint", display=display.none)
+fill("up_cloud", price, up, color=color.new(#38BFA7, 86))
+fill("down_cloud", price, down, color=color.new(#EC766D, 87))
+plotshape("turn_up", barstate.isconfirmed and ready and direction < 0 and direction[1] > 0, "Trend turned up", style=shape.triangleup, location=location.belowbar, color=#38BFA7, text="Trend up", textcolor=#38BFA7, size=size.tiny)
+plotshape("turn_down", barstate.isconfirmed and ready and direction > 0 and direction[1] < 0, "Trend turned down", style=shape.triangledown, color=#EC766D, text="Trend down", textcolor=#EC766D, size=size.tiny)

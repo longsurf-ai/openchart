@@ -1,0 +1,6 @@
+indicator("Relative Vigor Index", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+denominator = ta.sma(ta.swma(high - low), length)
+rvi = denominator == 0 ? na : ta.sma(ta.swma(close - open), length) / denominator
+plot("rvi", rvi, "Rvi")
+plot("signal", ta.swma(rvi), "Signal")

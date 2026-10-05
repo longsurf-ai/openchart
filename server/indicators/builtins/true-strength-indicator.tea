@@ -1,0 +1,3 @@
+indicator("True Strength Indicator", overlay = false)
+source = input.source(close, "Source")
+plot("value", ta.tsi(source, 13, 25), "Value")

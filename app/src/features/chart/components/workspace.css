@@ -1,0 +1,34 @@
+/* Purpose: Chart selectors Tailwind cannot express: maximized slots and tool-glyph masks. */
+.chart-grid-slot:has(.chart-cell-maximized) {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  grid-area: 1 / 1 / -1 / -1 !important;
+}
+.chart-grid:has(.chart-cell-maximized) > .chart-grid-divider {
+  visibility: hidden;
+}
+.chart-grid:has(.chart-cell-maximized)
+  > .chart-grid-slot:not(:has(.chart-cell-maximized)) {
+  visibility: hidden;
+}
+.chart-drawing-rail {
+  --tool-icon-bg: var(--background);
+}
+.chart-drawing-menu {
+  --tool-icon-bg: var(--popover);
+}
+
+/* Narrow panes retain all actions in the shared placement menu. */
+@container (max-width: 240px) {
+  [data-legend-action="visibility"],
+  [data-legend-action="remove"] {
+    display: none;
+  }
+}
+
+@container (max-width: 160px) {
+  [data-legend-action="settings"] {
+    display: none;
+  }
+}

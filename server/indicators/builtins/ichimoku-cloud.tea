@@ -1,0 +1,19 @@
+indicator("Ichimoku Cloud", overlay = true)
+conversionLength = input.int(9, "Conversion length", minval = 1, maxval = 500)
+baseLength = input.int(26, "Base length", minval = 1, maxval = 500)
+spanLength = input.int(52, "Cloud length", minval = 1, maxval = 500)
+displacement = input.int(26, "Displacement", minval = 1, maxval = 100)
+conversion = (ta.highest(high, conversionLength) + ta.lowest(low, conversionLength)) / 2
+base = (ta.highest(high, baseLength) + ta.lowest(low, baseLength)) / 2
+spanA = (conversion + base) / 2
+spanB = (ta.highest(high, spanLength) + ta.lowest(low, spanLength)) / 2
+plot("conversion", conversion, "Conversion", color=#49AFAF)
+plot("base", base, "Base", color=#C9975B)
+a = plot("span_a", spanA, "Leading span A", color=color.new(#43B8A5, 40), offset=displacement)
+b = plot("span_b", spanB, "Leading span B", color=color.new(#D48392, 40), offset=displacement)
+fill("cloud", a, b, color=spanA >= spanB ? color.new(#43B8A5, 78) : color.new(#D48392, 78))
+plot("lagging", close, "Lagging close", color=color.new(#A497D1, 55), offset=-displacement)
+ceiling = math.max(spanA[displacement], spanB[displacement])
+floor = math.min(spanA[displacement], spanB[displacement])
+plotshape("above_cloud", barstate.isconfirmed and ta.crossover(close, ceiling), "Close crossed above cloud", style=shape.triangleup, location=location.belowbar, color=#43B8A5, text="Above cloud", textcolor=#43B8A5, size=size.tiny)
+plotshape("below_cloud", barstate.isconfirmed and ta.crossunder(close, floor), "Close crossed below cloud", style=shape.triangledown, color=#D48392, text="Below cloud", textcolor=#D48392, size=size.tiny)

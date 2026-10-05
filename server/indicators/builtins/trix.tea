@@ -1,0 +1,4 @@
+indicator("TRIX", overlay = false)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 1, maxval = 500)
+plot("value", ta.roc(ta.ema(ta.ema(ta.ema(source, length), length), length), 1), "Value")

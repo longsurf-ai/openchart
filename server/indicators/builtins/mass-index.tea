@@ -1,0 +1,4 @@
+indicator("Mass Index", overlay = false)
+e = ta.ema(high - low, 9)
+d = ta.ema(e, 9)
+plot("value", ta.sma(d == 0 ? na : e / d, 25) * 25, "Value")

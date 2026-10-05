@@ -1,0 +1,63 @@
+indicator("RSI Divergence", overlay = false)
+length = input.int(14, "Momentum length", minval = 2, maxval = 500)
+strength = input.int(5, "Pivot confirmation bars", minval = 1, maxval = 30)
+maximumGap = input.int(100, "Maximum pivot distance", minval = 10, maxval = 500)
+value = ta.rsi(close, length)
+plot("value", value, "RSI", color=#AF9AD8, linewidth=2)
+u = hline("upper", 70, "Upper threshold", color=color.new(#D88D99, 35), linestyle=hline.style_dashed)
+l = hline("lower", 30, "Lower threshold", color=color.new(#70C1AE, 35), linestyle=hline.style_dashed)
+fill("neutral_zone", u, l, color=color.new(#AF9AD8, 94))
+ph = ta.pivothigh(high, strength, strength)
+pl = ta.pivotlow(low, strength, strength)
+var float previousHigh = na
+var float previousHighValue = na
+var int previousHighTime = na
+var int previousHighBar = na
+var float previousLow = na
+var float previousLowValue = na
+var int previousLowTime = na
+var int previousLowBar = na
+bearish = barstate.isconfirmed and not na(ph) and not na(value[strength]) and ph > previousHigh and value[strength] < previousHighValue and bar_index - strength - previousHighBar <= maximumGap
+bullish = barstate.isconfirmed and not na(pl) and not na(value[strength]) and pl < previousLow and value[strength] > previousLowValue and bar_index - strength - previousLowBar <= maximumGap
+var int bearStart = na
+var int bearEnd = na
+var float bearPriceStart = na
+var float bearPriceEnd = na
+var float bearValueStart = na
+var float bearValueEnd = na
+var int bullStart = na
+var int bullEnd = na
+var float bullPriceStart = na
+var float bullPriceEnd = na
+var float bullValueStart = na
+var float bullValueEnd = na
+if bearish
+    bearStart := previousHighTime
+    bearEnd := time[strength]
+    bearPriceStart := previousHigh
+    bearPriceEnd := ph
+    bearValueStart := previousHighValue
+    bearValueEnd := value[strength]
+if bullish
+    bullStart := previousLowTime
+    bullEnd := time[strength]
+    bullPriceStart := previousLow
+    bullPriceEnd := pl
+    bullValueStart := previousLowValue
+    bullValueEnd := value[strength]
+if barstate.isconfirmed and not na(ph)
+    previousHigh := ph
+    previousHighValue := value[strength]
+    previousHighTime := time[strength]
+    previousHighBar := bar_index - strength
+if barstate.isconfirmed and not na(pl)
+    previousLow := pl
+    previousLowValue := value[strength]
+    previousLowTime := time[strength]
+    previousLowBar := bar_index - strength
+plotsegment("bear_momentum", bearStart, bearValueStart, bearEnd, bearValueEnd, color=#E68C98, linewidth=2, text="Bearish divergence")
+plotsegment("bear_price", bearStart, bearPriceStart, bearEnd, bearPriceEnd, color=#E68C98, linewidth=2, text="Higher price high", force_overlay=true)
+plotsegment("bull_momentum", bullStart, bullValueStart, bullEnd, bullValueEnd, color=#69C8B2, linewidth=2, text="Bullish divergence")
+plotsegment("bull_price", bullStart, bullPriceStart, bullEnd, bullPriceEnd, color=#69C8B2, linewidth=2, text="Lower price low", force_overlay=true)
+plotshape("bear_confirmed", bearish, "Bearish divergence confirmed after right-hand pivot bars", style=shape.triangledown, color=#E68C98, text="Divergence confirmed", textcolor=#E68C98, size=size.tiny, force_overlay=true)
+plotshape("bull_confirmed", bullish, "Bullish divergence confirmed after right-hand pivot bars", style=shape.triangleup, location=location.belowbar, color=#69C8B2, text="Divergence confirmed", textcolor=#69C8B2, size=size.tiny, force_overlay=true)

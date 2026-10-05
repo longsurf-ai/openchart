@@ -1,0 +1,12 @@
+indicator("Donchian Breakout", overlay = true)
+length = input.int(20, "Channel length", minval = 2, maxval = 500)
+currentUpper = ta.highest(high, length)
+currentLower = ta.lowest(low, length)
+upper = currentUpper[1]
+lower = currentLower[1]
+u = plot("upper", upper, "Previous channel high", color=#57BEAD, style=plot.style_stepline)
+l = plot("lower", lower, "Previous channel low", color=#CB9781, style=plot.style_stepline)
+plot("midpoint", (upper + lower) / 2, "Channel midpoint", color=color.new(#B5B5BB, 45))
+fill("channel", u, l, color=color.new(#699EAE, 92))
+plotshape("break_up", barstate.isconfirmed and ta.crossover(close, upper), "Close above previous range", style=shape.triangleup, location=location.belowbar, color=#57BEAD, text="Range breakout", textcolor=#57BEAD, size=size.tiny)
+plotshape("break_down", barstate.isconfirmed and ta.crossunder(close, lower), "Close below previous range", style=shape.triangledown, color=#CB9781, text="Range breakdown", textcolor=#CB9781, size=size.tiny)

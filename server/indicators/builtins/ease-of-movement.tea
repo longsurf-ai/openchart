@@ -1,0 +1,4 @@
+indicator("Ease of Movement", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+value = volume == 0 ? na : (hl2 - hl2[1]) * (high - low) / volume
+plot("value", ta.sma(value, length), "Value")

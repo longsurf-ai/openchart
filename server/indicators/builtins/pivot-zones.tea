@@ -1,0 +1,34 @@
+indicator("Confirmed Pivot Zones", overlay = true)
+strength = input.int(5, "Pivot confirmation bars", minval = 1, maxval = 30)
+width = input.float(0.3, "Zone half-width in ATR", minval = 0.05, maxval = 3)
+atr = ta.atr(14)
+ph = ta.pivothigh(high, strength, strength)
+pl = ta.pivotlow(low, strength, strength)
+var int resistanceTime = na
+var int supportTime = na
+var float resistance = na
+var float support = na
+var float resistanceWidth = na
+var float supportWidth = na
+var bool resistanceActive = false
+var bool supportActive = false
+if barstate.isconfirmed and close > resistance + resistanceWidth
+    resistanceActive := false
+if barstate.isconfirmed and close < support - supportWidth
+    supportActive := false
+if barstate.isconfirmed and not na(ph)
+    resistanceTime := time
+    resistance := ph
+    resistanceWidth := atr[strength] * width
+    resistanceActive := true
+if barstate.isconfirmed and not na(pl)
+    supportTime := time
+    support := pl
+    supportWidth := atr[strength] * width
+    supportActive := true
+plotzone("resistance", resistanceTime, time, resistance + resistanceWidth, resistance - resistanceWidth, color=resistanceActive ? color.new(#D09AAC, 80) : na, text="Confirmed resistance")
+plotzone("support", supportTime, time, support + supportWidth, support - supportWidth, color=supportActive ? color.new(#74C3B3, 80) : na, text="Confirmed support")
+resistanceTouch = resistanceActive and high >= resistance - resistanceWidth and low <= resistance + resistanceWidth
+supportTouch = supportActive and high >= support - supportWidth and low <= support + supportWidth
+plotshape("resistance_touch", barstate.isconfirmed and resistanceTouch and not resistanceTouch[1], "Price touched tracked resistance zone", style=shape.circle, color=#D09AAC, text="Resistance test", textcolor=#D09AAC, size=size.tiny)
+plotshape("support_touch", barstate.isconfirmed and supportTouch and not supportTouch[1], "Price touched tracked support zone", style=shape.circle, location=location.belowbar, color=#74C3B3, text="Support test", textcolor=#74C3B3, size=size.tiny)

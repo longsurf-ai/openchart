@@ -1,0 +1,5 @@
+indicator("Price Oscillator", overlay = false)
+source = input.source(close, "Source")
+fast = ta.ema(source, 12)
+slow = ta.ema(source, 26)
+plot("value", slow == 0 ? na : 100 * (fast - slow) / slow, "Value")

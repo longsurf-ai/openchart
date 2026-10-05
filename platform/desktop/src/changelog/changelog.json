@@ -1,0 +1,69 @@
+[
+  {
+    "version": "0.1.10",
+    "date": "2026-10-05",
+    "items": [
+      "OpenChart Cloud adds US stock, ETF and crypto data; subscribe or redeem an invite in Settings → Subscription.",
+      "The indicator library previews every study on real market history, with how to read it and its inputs.",
+      "Add Volume Profile from the chart menu and Session Volume Profile from the library, with their own bars and colors.",
+      "Antigravity joins Claude Code and Codex as a model provider, and the model picker offers Sonnet 5.5 and Sol 6.1.",
+      "New installs start with a short tour, and new chats suggest prompts to start from.",
+      "Fixed symbol search hiding exact matches, and error messages hidden behind open dialogs."
+    ]
+  },
+  {
+    "version": "0.1.9",
+    "date": "2026-09-28",
+    "items": [
+      "Feed posts show attachments in a carousel, with live read-only charts opened at the alert.",
+      "Give an agent a new instruction from any Feed post and follow its reply in Copilot.",
+      "The Feed loads older posts as you scroll, and links in agent posts open the rule or dashboard.",
+      "Chats show a blue dot when a finished run hasn't been read yet.",
+      "New installs open a sample Bitcoin dashboard with alerts.",
+      "Fixed Copy buttons in the desktop app and chart errors when Yahoo has no data for older dates."
+    ]
+  },
+  {
+    "version": "0.1.8",
+    "date": "2026-09-27",
+    "items": [
+      "Build dashboards from chart, workspace and alert widgets, with Copilot aware of what you're viewing.",
+      "Create alerts on chart indicators, open their code beside charts, and reload edits when ready.",
+      "Existing chart indicators must be added again after this update.",
+      "Alerts show monitoring interruptions and notify you after 60 seconds while the app is running.",
+      "Workflows are editable Workspace files, and large workspaces load faster.",
+      "Fixed link previews appearing behind Copilot and MACD bars using the same color above and below zero."
+    ]
+  },
+  {
+    "version": "0.1.7",
+    "date": "2026-09-24",
+    "items": [
+      "Create alerts from the sidebar and edit conditions, code, notifications and Agent actions.",
+      "Chart drawing alerts support channels, Fibonacci levels, curves and freehand paths.",
+      "Feed brings alert events and Agent posts together, including images, audio and video.",
+      "View schedules on a calendar and create alerts or schedules with your Copilot.",
+      "Run research workflows and ask Agents to explain chart selections using real market data.",
+      "Preview cited links, sort sidebar lists and choose alert notification sounds in Settings."
+    ]
+  },
+  {
+    "version": "0.1.6",
+    "date": "2026-09-23",
+    "items": [
+      "Error messages now close on their own after a few seconds instead of piling up.",
+      "A ready update now appears as a button beside your account instead of a dialog.",
+      "Settings → Changelog lists what changed in each release."
+    ]
+  },
+  {
+    "version": "0.1.5",
+    "date": "2026-09-23",
+    "items": [
+      "Settings → Models installs Codex and Claude Code for you and walks through signing in.",
+      "Codex and Claude Code follow the new Permissions setting: Ask, Auto, or Always allow (the default).",
+      "GPT-6 Sol and Luna are available, and Claude models now show full names such as Opus 5.5.",
+      "Fixed a dark band above the message box when content scrolled beneath it."
+    ]
+  }
+]

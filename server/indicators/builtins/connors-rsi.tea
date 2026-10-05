@@ -1,0 +1,5 @@
+indicator("Connors RSI", overlay = false)
+var float streak = 0
+streak := close > close[1] ? math.max(nz(streak[1]), 0) + 1 : close < close[1] ? math.min(nz(streak[1]), 0) - 1 : 0
+value = (ta.rsi(close, 3) + ta.rsi(streak, 2) + ta.percentrank(ta.roc(close, 1), 100)) / 3
+plot("value", value, "Value")

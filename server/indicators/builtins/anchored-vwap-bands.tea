@@ -1,0 +1,23 @@
+indicator("Volume-Anchored VWAP Bands", overlay = true)
+lookback = input.int(63, "Volume-peak lookback", minval = 2, maxval = 500)
+multiplier = input.float(1.5, "Weighted deviations", minval = 0.1)
+highestVolume = ta.highest(volume, lookback)
+anchor = volume > highestVolume[1]
+var float totalVolume = 0
+var float weightedPrice = 0
+var float weightedSquare = 0
+if anchor
+    totalVolume := 0
+    weightedPrice := 0
+    weightedSquare := 0
+totalVolume += volume
+weightedPrice += hlc3 * volume
+weightedSquare += hlc3 * hlc3 * volume
+average = totalVolume > 0 ? weightedPrice / totalVolume : na
+variance = totalVolume > 0 ? math.max(0, weightedSquare / totalVolume - average * average) : na
+width = multiplier * math.sqrt(variance)
+plot("vwap", average, "Anchored VWAP", color=#D9B66F, linewidth=2)
+u = plot("upper", average + width, "Upper weighted deviation", color=color.new(#B7A0D5, 25))
+l = plot("lower", average - width, "Lower weighted deviation", color=color.new(#B7A0D5, 25))
+fill("value_area", u, l, color=color.new(#B7A0D5, 86))
+plotshape("anchor", barstate.isconfirmed and anchor, "Volume exceeded every previous lookback bar; VWAP restarted", style=shape.diamond, location=location.belowbar, color=#D9B66F, text="Volume anchor", textcolor=#D9B66F, size=size.tiny)

@@ -1,0 +1,10 @@
+indicator("Chandelier Exit", overlay = true)
+length = input.int(22, "Lookback", minval = 2, maxval = 500)
+multiplier = input.float(3.0, "ATR multiplier", minval = 0.1)
+a = ta.atr(length)
+longExit = ta.highest(high, length) - multiplier * a
+shortExit = ta.lowest(low, length) + multiplier * a
+plot("long_exit", longExit, "Long exit level", color=#DAAE65, linewidth=2, style=plot.style_stepline)
+plot("short_exit", shortExit, "Short exit level", color=#B28ACE, linewidth=2, style=plot.style_stepline)
+plotshape("long_cross", barstate.isconfirmed and ta.crossunder(close, longExit), "Close below long exit level", style=shape.triangledown, color=#DAAE65, text="Long exit crossed", textcolor=#DAAE65, size=size.tiny)
+plotshape("short_cross", barstate.isconfirmed and ta.crossover(close, shortExit), "Close above short exit level", style=shape.triangleup, location=location.belowbar, color=#B28ACE, text="Short exit crossed", textcolor=#B28ACE, size=size.tiny)

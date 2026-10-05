@@ -1,0 +1,5 @@
+indicator("Parabolic SAR", overlay = true)
+start = input.float(0.02, "Start", minval = 0)
+increment = input.float(0.02, "Increment", minval = 0)
+maximum = input.float(0.2, "Maximum", minval = 0)
+plot("sar", ta.sar(start, increment, maximum), "Sar")

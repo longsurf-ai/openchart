@@ -1,0 +1,6 @@
+indicator("Relative Volatility Index", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+deviation = ta.stdev(close, length)
+up = ta.ema(close > close[1] ? deviation : 0, length)
+down = ta.ema(close < close[1] ? deviation : 0, length)
+plot("value", up + down == 0 ? na : 100 * up / (up + down), "Value")

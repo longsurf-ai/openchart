@@ -1,0 +1,4 @@
+indicator("Triple EMA", overlay = true)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 1, maxval = 500)
+plot("value", 3 * ta.ema(source, length) - 3 * ta.ema(ta.ema(source, length), length) + ta.ema(ta.ema(ta.ema(source, length), length), length), "Value")

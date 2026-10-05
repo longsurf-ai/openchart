@@ -1,0 +1,6 @@
+indicator("Directional Movement", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+[plus, minus, adx] = ta.dmi(length, length)
+plot("plus_di", plus, "Plus Di")
+plot("minus_di", minus, "Minus Di")
+plot("adx", adx, "Adx")

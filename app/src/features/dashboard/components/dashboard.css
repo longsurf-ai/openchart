@@ -1,0 +1,56 @@
+/* Dashboard RGL owns placement geometry; theme tokens own its surfaces and feedback. */
+.dashboard-grid .react-grid-item.react-grid-placeholder {
+  @apply rounded-lg bg-accent opacity-30;
+}
+
+.dashboard-grid .react-grid-item > .react-resizable-handle {
+  @apply z-[3] opacity-50;
+}
+
+.dashboard-grid .react-grid-item:hover > .react-resizable-handle,
+.dashboard-grid .react-grid-item:has(:focus-visible) > .react-resizable-handle {
+  @apply opacity-100;
+}
+
+.dashboard-grid .react-resizable-handle::after {
+  @apply border-muted-foreground;
+}
+
+.dashboard-grid .react-grid-item:has(.widget-card:hover),
+.dashboard-grid .react-grid-item:has(:focus-visible),
+.dashboard-grid .react-grid-item:has([data-controls-held]) {
+  z-index: 10;
+}
+
+/* The visible outline is the placement boundary, above opaque canvases. */
+.widget-card::after {
+  content: "";
+  @apply pointer-events-none absolute inset-0 z-[2] rounded-lg border border-border;
+}
+
+.widget-card > :not(.widget-controls) {
+  @apply relative z-[1];
+}
+
+.widget-controls {
+  @apply pointer-events-none opacity-0 transition-opacity duration-150;
+}
+
+.widget-card:hover .widget-controls,
+.widget-card:has(:focus-visible) .widget-controls,
+.widget-card[data-controls-held] .widget-controls {
+  @apply pointer-events-auto opacity-100;
+}
+
+@media (hover: none) {
+  .widget-controls {
+    @apply pointer-events-auto opacity-100;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-grid .react-grid-item,
+  .widget-controls {
+    @apply transition-none;
+  }
+}

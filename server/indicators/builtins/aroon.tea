@@ -1,0 +1,4 @@
+indicator("Aroon", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+plot("up", 100 * (length + ta.highestbars(high, length + 1)) / length, "Up")
+plot("down", 100 * (length + ta.lowestbars(low, length + 1)) / length, "Down")

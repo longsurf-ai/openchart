@@ -1,0 +1,5 @@
+indicator("Chaikin Money Flow", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+flow = high == low ? 0 : ((close - low) - (high - close)) / (high - low) * volume
+ad = ta.cum(flow)
+plot("value", ta.sma(volume, length) == 0 ? na : ta.sma(flow, length) / ta.sma(volume, length), "Value")

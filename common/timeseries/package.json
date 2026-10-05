@@ -1,0 +1,17 @@
+{
+  "name": "@openchart/timeseries",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json && vitest run",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "apache-arrow": "21.2.0",
+    "effect": "4.0.0-rc.112"
+  }
+}

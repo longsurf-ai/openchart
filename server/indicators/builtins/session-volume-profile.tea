@@ -1,0 +1,58 @@
+indicator("Session Volume Profile", overlay = true, timeframe = "auto")
+// One profile per day, week or month, counted on finer bars than the chart's
+// when the provider offers them (timeframe = "auto"). Period boundaries come
+// from the market's own period bars, so they match its sessions without a
+// timezone or trading calendar. By default, the range follows the chart:
+// days below 4h, weeks at 4h, months on daily and coarser charts, so each
+// profile spans several of its bars.
+profileRange = input.string(chart.timeframe == "240" ? "Weekly" : chart.timeframe == "D" or chart.timeframe == "W" or chart.timeframe == "M" ? "Monthly" : "Daily", "Profile time range", options = ["Daily", "Weekly", "Monthly"])
+rows = input.int(24, "Number of volume bars", minval = 1, maxval = 100)
+
+period = profileRange == "Weekly" ? "W" : profileRange == "Monthly" ? "M" : "D"
+periodStart = request.security(syminfo.tickerid, period, time, fill = "carry")
+// Each bar adds its own price range and volume.
+highs = array.from(high)
+lows = array.from(low)
+volumes = array.from(volume)
+rising = array.from(close >= open)
+
+// Where the current and the previous period start.
+newPeriod = barstate.isfirst or periodStart != periodStart[1]
+var int start = na
+var int previousStart = na
+if newPeriod
+    previousStart := start
+    start := time
+
+// The chart draws the last profile written for each start, so a period's
+// profile is written once, on the next period's first bar, where the reset
+// returns it, and the running profile only on the newest bar: the last
+// history bar, even when final, and a live bar while it is still forming. A
+// live bar's final attempt writes none, as its row stays and the next bar
+// writes the profile again. A newest bar that starts a period writes the one
+// that ended. Every other bar only adds its volume.
+finished = newPeriod and not barstate.isfirst
+forming = barstate.islast and not finished and (barstate.ishistory or not barstate.isconfirmed)
+shown = ta.volumeProfile(highs, lows, volumes, rising, newPeriod, rows, compute = finished or forming)
+
+// Each part's color is a default that the chart's Style settings can change.
+profileRows(p) =>
+    result = array.new<ProfileRow>()
+    rowCount = p.up.size()
+    if rowCount > 0
+        for k = 0 to rowCount - 1
+            up = ProfileSegment.new(p.up.get(k), color.new(color.teal, 40), "Up volume")
+            down = ProfileSegment.new(p.down.get(k), color.new(color.red, 40), "Down volume")
+            result.push(ProfileRow.new(p.low + k * p.step, p.low + (k + 1) * p.step, array.from(up, down)))
+    result
+
+profileLevels(p) =>
+    result = array.new<ProfileLevel>()
+    if p.up.size() > 0
+        result.push(ProfileLevel.new(p.low + (p.poc + 0.5) * p.step, color.orange, "Point of control"))
+    result
+
+// A finished period's box ends where the next one starts; a forming one, a bar after this bar opened.
+barLength = nz(time - time[1], 60000)
+if finished or forming
+    verticalProfile("profile", finished ? previousStart : start, finished ? time : time + barLength, profileRows(shown), profileLevels(shown), "Volume profile")

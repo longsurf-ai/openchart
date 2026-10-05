@@ -1,0 +1,8 @@
+indicator("Envelopes", overlay = true)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 1, maxval = 500)
+percent = input.float(2.5, "Percent", minval = 0)
+basis = ta.sma(source, length)
+plot("basis", basis, "Basis")
+plot("upper", basis * (1 + percent / 100), "Upper")
+plot("lower", basis * (1 - percent / 100), "Lower")

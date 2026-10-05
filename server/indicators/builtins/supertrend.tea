@@ -1,0 +1,5 @@
+indicator("SuperTrend", overlay = true)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+factor = input.float(3.0, "Factor", minval = 0)
+[trend, direction] = ta.supertrend(factor, length)
+plot("trend", trend, "Trend")

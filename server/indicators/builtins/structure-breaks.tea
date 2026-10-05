@@ -1,0 +1,42 @@
+indicator("Structure Breaks", overlay = true)
+strength = input.int(5, "Pivot confirmation bars", minval = 1, maxval = 30)
+ph = ta.pivothigh(high, strength, strength)
+pl = ta.pivotlow(low, strength, strength)
+var float resistance = na
+var float support = na
+var int resistanceTime = na
+var int supportTime = na
+var bool highBroken = false
+var bool lowBroken = false
+breakUp = barstate.isconfirmed and not highBroken and close > resistance and close[1] <= resistance
+breakDown = barstate.isconfirmed and not lowBroken and close < support and close[1] >= support
+var int upStart = na
+var int upEnd = na
+var float upLevel = na
+var int downStart = na
+var int downEnd = na
+var float downLevel = na
+if breakUp
+    upStart := resistanceTime
+    upEnd := time
+    upLevel := resistance
+    highBroken := true
+if breakDown
+    downStart := supportTime
+    downEnd := time
+    downLevel := support
+    lowBroken := true
+if barstate.isconfirmed and not na(ph)
+    resistance := ph
+    resistanceTime := time[strength]
+    highBroken := false
+if barstate.isconfirmed and not na(pl)
+    support := pl
+    supportTime := time[strength]
+    lowBroken := false
+plot("resistance", highBroken ? na : resistance, "Confirmed swing high", color=color.new(#76C8B5, 35), style=plot.style_stepline)
+plot("support", lowBroken ? na : support, "Confirmed swing low", color=color.new(#D99AAB, 35), style=plot.style_stepline)
+plotsegment("break_up", upStart, upLevel, upEnd, upLevel, color=#76C8B5, linewidth=2, text="Structure break up")
+plotsegment("break_down", downStart, downLevel, downEnd, downLevel, color=#D99AAB, linewidth=2, text="Structure break down")
+plotshape("up_confirmed", breakUp, "First close above confirmed swing high", style=shape.triangleup, location=location.belowbar, color=#76C8B5, text="Break confirmed", textcolor=#76C8B5, size=size.tiny)
+plotshape("down_confirmed", breakDown, "First close below confirmed swing low", style=shape.triangledown, color=#D99AAB, text="Break confirmed", textcolor=#D99AAB, size=size.tiny)

@@ -1,0 +1,13 @@
+indicator("Squeeze Momentum", overlay = false)
+length = input.int(20, "Length", minval = 2, maxval = 500)
+[bbMiddle, bbUpper, bbLower] = ta.bb(close, length, 2.0)
+kcMiddle = ta.ema(close, length)
+kcRange = ta.atr(length) * 1.5
+squeezed = bbUpper < kcMiddle + kcRange and bbLower > kcMiddle - kcRange
+center = ((ta.highest(high, length) + ta.lowest(low, length)) / 2 + ta.sma(close, length)) / 2
+momentum = ta.linreg(close - center, length, 0)
+shade = momentum >= 0 ? (momentum > momentum[1] ? #48CDB3 : #377F79) : (momentum < momentum[1] ? #EF887A : #995F65)
+plot("momentum", momentum, "Regression momentum", color=shade, style=plot.style_columns)
+hline("zero", 0, "Zero", color=color.new(#A0A0A8, 60))
+bgcolor("squeeze", squeezed ? color.new(#C6AB78, 91) : na)
+plotshape("squeeze_release", barstate.isconfirmed and squeezed[1] and not squeezed, "Bollinger bands left Keltner channel", style=shape.diamond, location=location.bottom, color=#D8BA76, text="Squeeze released", textcolor=#D8BA76, size=size.tiny)

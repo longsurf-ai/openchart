@@ -1,0 +1,4 @@
+indicator("Hull Moving Average", overlay = true)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 2, maxval = 500)
+plot("value", ta.hma(source, length), "Value")

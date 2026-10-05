@@ -1,0 +1,14 @@
+indicator("SMI Extremes", overlay = false)
+length = input.int(10, "Range length", minval = 2, maxval = 500)
+smoothing = input.int(3, "Double smoothing", minval = 1, maxval = 100)
+top = ta.highest(high, length)
+bottom = ta.lowest(low, length)
+relative = close - (top + bottom) / 2
+width = ta.ema(ta.ema(top - bottom, smoothing), smoothing)
+value = width == 0 ? 0 : 200 * ta.ema(ta.ema(relative, smoothing), smoothing) / width
+plot("value", value, "SMI", color=value >= 0 ? #75BDCC : #C299CC, linewidth=2, style=plot.style_area)
+plot("signal", ta.ema(value, 3), "SMI signal", color=#D2B777)
+hline("zero", 0, "Midpoint", color=color.new(#A0A0A8, 65))
+hline("upper", 40, "Upper zone", color=#75BDCC, linestyle=hline.style_dashed)
+hline("lower", -40, "Lower zone", color=#C299CC, linestyle=hline.style_dashed)
+plotshape("lower_return", barstate.isconfirmed and ta.crossover(value, -40), "SMI returned above lower threshold", style=shape.triangleup, location=location.bottom, color=#C299CC, text="Leaving lower zone", textcolor=#C299CC, size=size.tiny)

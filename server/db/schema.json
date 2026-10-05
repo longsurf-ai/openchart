@@ -1,0 +1,3874 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "500fe1e4-d15f-4557-8214-e3401f223483",
+  "prevIds": ["750fa4f0-6505-4848-b3d1-e7a526291db4"],
+  "ddl": [
+    {
+      "name": "agent_permission_grants",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_messages",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_parts",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_permissions",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_run",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_session_bindings",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_sessions",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_todos",
+      "entityType": "tables"
+    },
+    {
+      "name": "credential",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_schedule_occurrence",
+      "entityType": "tables"
+    },
+    {
+      "name": "agent_schedule",
+      "entityType": "tables"
+    },
+    {
+      "name": "alert_event",
+      "entityType": "tables"
+    },
+    {
+      "name": "alert_rule",
+      "entityType": "tables"
+    },
+    {
+      "name": "chart_cell",
+      "entityType": "tables"
+    },
+    {
+      "name": "chart_link",
+      "entityType": "tables"
+    },
+    {
+      "name": "chart_market_source",
+      "entityType": "tables"
+    },
+    {
+      "name": "chart_pane",
+      "entityType": "tables"
+    },
+    {
+      "name": "chart_series",
+      "entityType": "tables"
+    },
+    {
+      "name": "chart",
+      "entityType": "tables"
+    },
+    {
+      "name": "dashboard",
+      "entityType": "tables"
+    },
+    {
+      "name": "dashboard_widget",
+      "entityType": "tables"
+    },
+    {
+      "name": "drawing",
+      "entityType": "tables"
+    },
+    {
+      "name": "indicator",
+      "entityType": "tables"
+    },
+    {
+      "name": "post_media",
+      "entityType": "tables"
+    },
+    {
+      "name": "post",
+      "entityType": "tables"
+    },
+    {
+      "name": "symbology",
+      "entityType": "tables"
+    },
+    {
+      "name": "trigger",
+      "entityType": "tables"
+    },
+    {
+      "name": "workspace",
+      "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_permission_grants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "action",
+      "entityType": "columns",
+      "table": "agent_permission_grants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resource",
+      "entityType": "columns",
+      "table": "agent_permission_grants"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_permission_grants"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_permission_grants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "agent_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "role",
+      "entityType": "columns",
+      "table": "agent_messages"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "data",
+      "entityType": "columns",
+      "table": "agent_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_messages"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_messages"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_parts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "agent_parts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "data",
+      "entityType": "columns",
+      "table": "agent_parts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_parts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_parts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "table": "agent_permissions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "data",
+      "entityType": "columns",
+      "table": "agent_permissions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_permissions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_permissions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_intent_id",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'queued'",
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "queue_position",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "finished_at",
+      "entityType": "columns",
+      "table": "agent_run"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_session_bindings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key",
+      "entityType": "columns",
+      "table": "agent_session_bindings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_session_bindings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_session_bindings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_id",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "binding_id",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "anchors",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "compacting_at",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "archived_at",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_read_run_id",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_sessions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "priority",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_todos"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "integration_id",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "value",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "connector_id",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "method_id",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "active",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "schedule_id",
+      "entityType": "columns",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_run_id",
+      "entityType": "columns",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fire_at",
+      "entityType": "columns",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "enabled",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_json",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recurrence",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "next_fire_at",
+      "entityType": "columns",
+      "table": "agent_schedule"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rule_id",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "condition",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "detail_json",
+      "entityType": "columns",
+      "table": "alert_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "enabled",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "repeat",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "alertable_json",
+      "entityType": "columns",
+      "table": "alert_rule"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "chart_cell"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "chart_id",
+      "entityType": "columns",
+      "table": "chart_cell"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "chart_cell"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'1d'",
+      "generated": null,
+      "name": "resolution",
+      "entityType": "columns",
+      "table": "chart_cell"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'extended'",
+      "generated": null,
+      "name": "session",
+      "entityType": "columns",
+      "table": "chart_cell"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'raw'",
+      "generated": null,
+      "name": "adjustment",
+      "entityType": "columns",
+      "table": "chart_cell"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "chart_link"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "chart_id",
+      "entityType": "columns",
+      "table": "chart_link"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_cell_id",
+      "entityType": "columns",
+      "table": "chart_link"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to_cell_id",
+      "entityType": "columns",
+      "table": "chart_link"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "sync_listing",
+      "entityType": "columns",
+      "table": "chart_link"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "sync_crosshair",
+      "entityType": "columns",
+      "table": "chart_link"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "chart_market_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cell_id",
+      "entityType": "columns",
+      "table": "chart_market_source"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "chart_market_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "chart_market_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing",
+      "entityType": "columns",
+      "table": "chart_market_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "chart_pane"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cell_id",
+      "entityType": "columns",
+      "table": "chart_pane"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "chart_pane"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cell_id",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pane_id",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'normal'",
+      "generated": null,
+      "name": "role",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "market_source_id",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "indicator_id",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "output",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "profile_resolution",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "profile_rows",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "chart"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "chart"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "chart"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "chart"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "dashboard_id",
+      "entityType": "columns",
+      "table": "chart"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'1'",
+      "generated": null,
+      "name": "preset",
+      "entityType": "columns",
+      "table": "chart"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "dashboard"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "dashboard"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "dashboard"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "dashboard"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "dashboard"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "favorite",
+      "entityType": "columns",
+      "table": "dashboard"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "dashboard_id",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resource_id",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "x",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "y",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "w",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "h",
+      "entityType": "columns",
+      "table": "dashboard_widget"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "dashboard_id",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "data",
+      "entityType": "columns",
+      "table": "drawing"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "chart_id",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cell_id",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "script_path",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snapshot",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parameter_overrides",
+      "entityType": "columns",
+      "table": "indicator"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "post_media"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "post_id",
+      "entityType": "columns",
+      "table": "post_media"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "mime",
+      "entityType": "columns",
+      "table": "post_media"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "filename",
+      "entityType": "columns",
+      "table": "post_media"
+    },
+    {
+      "type": "blob",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bytes",
+      "entityType": "columns",
+      "table": "post_media"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "author_json",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "origin_json",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_json",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "quoted_post_id",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "publication_key",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "publication_hash",
+      "entityType": "columns",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "symbology"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "symbology"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "symbology"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "symbology"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "symbology"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing",
+      "entityType": "columns",
+      "table": "symbology"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": {
+        "as": "(json_array(json_extract(listing, '$.symbol'), json_extract(listing, '$.venue')))",
+        "type": "stored"
+      },
+      "name": "listing_key",
+      "entityType": "columns",
+      "table": "symbology"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "enabled",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "event_json",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_json",
+      "entityType": "columns",
+      "table": "trigger"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "workspace"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "workspace"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "workspace"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "workspace"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "root",
+      "entityType": "columns",
+      "table": "workspace"
+    },
+    {
+      "columns": ["session_id"],
+      "tableTo": "agent_sessions",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_agent_messages_session_id_agent_sessions_id_fk",
+      "entityType": "fks",
+      "table": "agent_messages"
+    },
+    {
+      "columns": ["message_id"],
+      "tableTo": "agent_messages",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_agent_parts_message_id_agent_messages_id_fk",
+      "entityType": "fks",
+      "table": "agent_parts"
+    },
+    {
+      "columns": ["session_id"],
+      "tableTo": "agent_sessions",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_agent_run_session_id_agent_sessions_id_fk",
+      "entityType": "fks",
+      "table": "agent_run"
+    },
+    {
+      "columns": ["binding_id"],
+      "tableTo": "agent_session_bindings",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_agent_sessions_binding_id_agent_session_bindings_id_fk",
+      "entityType": "fks",
+      "table": "agent_sessions"
+    },
+    {
+      "columns": ["last_read_run_id"],
+      "tableTo": "agent_run",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_agent_sessions_last_read_run_id_agent_run_id_fk",
+      "entityType": "fks",
+      "table": "agent_sessions"
+    },
+    {
+      "columns": ["session_id"],
+      "tableTo": "agent_sessions",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_agent_todos_session_id_agent_sessions_id_fk",
+      "entityType": "fks",
+      "table": "agent_todos"
+    },
+    {
+      "columns": ["schedule_id"],
+      "tableTo": "agent_schedule",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_agent_schedule_occurrence_schedule_id_agent_schedule_id_fk",
+      "entityType": "fks",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "columns": ["agent_run_id"],
+      "tableTo": "agent_run",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_agent_schedule_occurrences_agent_run_id_agent_run_id_fk",
+      "entityType": "fks",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "columns": ["rule_id"],
+      "tableTo": "alert_rule",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_alert_event_rule_id_alert_rule_id_fk",
+      "entityType": "fks",
+      "table": "alert_event"
+    },
+    {
+      "columns": ["chart_id"],
+      "tableTo": "chart",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_chart_cell_chart_id_chart_id_fk",
+      "entityType": "fks",
+      "table": "chart_cell"
+    },
+    {
+      "columns": ["chart_id"],
+      "tableTo": "chart",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_chart_link_chart_id_chart_id_fk",
+      "entityType": "fks",
+      "table": "chart_link"
+    },
+    {
+      "columns": ["chart_id", "from_cell_id"],
+      "tableTo": "chart_cell",
+      "columnsTo": ["chart_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": true,
+      "name": "chart_link_from_cell_fk",
+      "entityType": "fks",
+      "table": "chart_link"
+    },
+    {
+      "columns": ["chart_id", "to_cell_id"],
+      "tableTo": "chart_cell",
+      "columnsTo": ["chart_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": true,
+      "name": "chart_link_to_cell_fk",
+      "entityType": "fks",
+      "table": "chart_link"
+    },
+    {
+      "columns": ["cell_id"],
+      "tableTo": "chart_cell",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_chart_market_source_cell_id_chart_cell_id_fk",
+      "entityType": "fks",
+      "table": "chart_market_source"
+    },
+    {
+      "columns": ["cell_id"],
+      "tableTo": "chart_cell",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_chart_pane_cell_id_chart_cell_id_fk",
+      "entityType": "fks",
+      "table": "chart_pane"
+    },
+    {
+      "columns": ["cell_id", "pane_id"],
+      "tableTo": "chart_pane",
+      "columnsTo": ["cell_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": true,
+      "name": "chart_series_pane_fk",
+      "entityType": "fks",
+      "table": "chart_series"
+    },
+    {
+      "columns": ["cell_id", "market_source_id"],
+      "tableTo": "chart_market_source",
+      "columnsTo": ["cell_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": true,
+      "name": "chart_series_market_source_fk",
+      "entityType": "fks",
+      "table": "chart_series"
+    },
+    {
+      "columns": ["dashboard_id"],
+      "tableTo": "dashboard",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_chart_dashboard_id_dashboard_id_fk",
+      "entityType": "fks",
+      "table": "chart"
+    },
+    {
+      "columns": ["dashboard_id"],
+      "tableTo": "dashboard",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_dashboard_widget_dashboard_id_dashboard_id_fk",
+      "entityType": "fks",
+      "table": "dashboard_widget"
+    },
+    {
+      "columns": ["dashboard_id"],
+      "tableTo": "dashboard",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_drawing_dashboard_id_dashboard_id_fk",
+      "entityType": "fks",
+      "table": "drawing"
+    },
+    {
+      "columns": ["chart_id"],
+      "tableTo": "chart",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_indicator_chart_id_chart_id_fk",
+      "entityType": "fks",
+      "table": "indicator"
+    },
+    {
+      "columns": ["post_id"],
+      "tableTo": "post",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_post_media_post_id_post_id_fk",
+      "entityType": "fks",
+      "table": "post_media"
+    },
+    {
+      "columns": ["session_id", "id"],
+      "nameExplicit": false,
+      "name": "agent_todos_pk",
+      "entityType": "pks",
+      "table": "agent_todos"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_permission_grants_pk",
+      "table": "agent_permission_grants",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_messages_pk",
+      "table": "agent_messages",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_parts_pk",
+      "table": "agent_parts",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["user_id"],
+      "nameExplicit": false,
+      "name": "agent_permissions_pk",
+      "table": "agent_permissions",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_run_pk",
+      "table": "agent_run",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_session_bindings_pk",
+      "table": "agent_session_bindings",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_sessions_pk",
+      "table": "agent_sessions",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "credential_pk",
+      "table": "credential",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_schedule_occurrences_pk",
+      "table": "agent_schedule_occurrence",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_schedule_pk",
+      "table": "agent_schedule",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "alert_event_pk",
+      "table": "alert_event",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "alert_rule_pk",
+      "table": "alert_rule",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "chart_cell_pk",
+      "table": "chart_cell",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "chart_link_pk",
+      "table": "chart_link",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "chart_market_source_pk",
+      "table": "chart_market_source",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "chart_pane_pk",
+      "table": "chart_pane",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "chart_series_pk",
+      "table": "chart_series",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "chart_pk",
+      "table": "chart",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "dashboard_pk",
+      "table": "dashboard",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "dashboard_widget_pk",
+      "table": "dashboard_widget",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "drawing_pk",
+      "table": "drawing",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "indicator_pk",
+      "table": "indicator",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "post_media_pk",
+      "table": "post_media",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "post_pk",
+      "table": "post",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "symbology_pk",
+      "table": "symbology",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "trigger_pk",
+      "table": "trigger",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "workspace_pk",
+      "table": "workspace",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "action",
+          "isExpression": false
+        },
+        {
+          "value": "resource",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "uniq_agent_permission_grants_action_resource",
+      "entityType": "indexes",
+      "table": "agent_permission_grants"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "created_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_agent_messages_session_created",
+      "entityType": "indexes",
+      "table": "agent_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_agent_messages_session_canonical_id",
+      "entityType": "indexes",
+      "table": "agent_messages"
+    },
+    {
+      "columns": [
+        {
+          "value": "message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_agent_parts_message",
+      "entityType": "indexes",
+      "table": "agent_parts"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_intent_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "agent_run_session_intent_idx",
+      "entityType": "indexes",
+      "table": "agent_run"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "agent_run_session_id_idx",
+      "entityType": "indexes",
+      "table": "agent_run"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"agent_run\".\"status\" = 'running'",
+      "origin": "manual",
+      "name": "agent_run_session_running_idx",
+      "entityType": "indexes",
+      "table": "agent_run"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "queue_position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "\"agent_run\".\"status\" = 'queued'",
+      "origin": "manual",
+      "name": "agent_run_session_queue_idx",
+      "entityType": "indexes",
+      "table": "agent_run"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "queue_position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"agent_run\".\"status\" = 'queued'",
+      "origin": "manual",
+      "name": "agent_run_session_queue_position_idx",
+      "entityType": "indexes",
+      "table": "agent_run"
+    },
+    {
+      "columns": [
+        {
+          "value": "key",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "uniq_agent_session_bindings_key",
+      "entityType": "indexes",
+      "table": "agent_session_bindings"
+    },
+    {
+      "columns": [
+        {
+          "value": "updated_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_agent_sessions_updated",
+      "entityType": "indexes",
+      "table": "agent_sessions"
+    },
+    {
+      "columns": [
+        {
+          "value": "parent_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_agent_sessions_parent",
+      "entityType": "indexes",
+      "table": "agent_sessions"
+    },
+    {
+      "columns": [
+        {
+          "value": "binding_id",
+          "isExpression": false
+        },
+        {
+          "value": "created_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_agent_sessions_binding",
+      "entityType": "indexes",
+      "table": "agent_sessions"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "uniq_agent_todos_position",
+      "entityType": "indexes",
+      "table": "agent_todos"
+    },
+    {
+      "columns": [
+        {
+          "value": "schedule_id",
+          "isExpression": false
+        },
+        {
+          "value": "fire_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "uq_agent_schedule_occurrences_slot",
+      "entityType": "indexes",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "columns": [
+        {
+          "value": "agent_run_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "uq_agent_schedule_occurrences_run",
+      "entityType": "indexes",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "columns": [
+        {
+          "value": "next_fire_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "\"agent_schedule\".\"enabled\" = 1",
+      "origin": "manual",
+      "name": "idx_agent_schedules_due",
+      "entityType": "indexes",
+      "table": "agent_schedule"
+    },
+    {
+      "columns": [
+        {
+          "value": "\"updated_at\" desc",
+          "isExpression": true
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_agent_schedules_updated",
+      "entityType": "indexes",
+      "table": "agent_schedule"
+    },
+    {
+      "columns": [
+        {
+          "value": "\"created_at\" desc",
+          "isExpression": true
+        },
+        {
+          "value": "\"id\" desc",
+          "isExpression": true
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_alert_events_created",
+      "entityType": "indexes",
+      "table": "alert_event"
+    },
+    {
+      "columns": [
+        {
+          "value": "rule_id",
+          "isExpression": false
+        },
+        {
+          "value": "created_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_alert_events_rule",
+      "entityType": "indexes",
+      "table": "alert_event"
+    },
+    {
+      "columns": [
+        {
+          "value": "chart_id",
+          "isExpression": false
+        },
+        {
+          "value": "to_cell_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "chart_link_target_index",
+      "entityType": "indexes",
+      "table": "chart_link"
+    },
+    {
+      "columns": [
+        {
+          "value": "cell_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"chart_series\".\"role\" = 'main'",
+      "origin": "manual",
+      "name": "chart_series_main_unique",
+      "entityType": "indexes",
+      "table": "chart_series"
+    },
+    {
+      "columns": [
+        {
+          "value": "cell_id",
+          "isExpression": false
+        },
+        {
+          "value": "market_source_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "chart_series_market_source_index",
+      "entityType": "indexes",
+      "table": "chart_series"
+    },
+    {
+      "columns": [
+        {
+          "value": "cell_id",
+          "isExpression": false
+        },
+        {
+          "value": "indicator_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "chart_series_indicator_index",
+      "entityType": "indexes",
+      "table": "chart_series"
+    },
+    {
+      "columns": [
+        {
+          "value": "dashboard_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "chart_dashboard_index",
+      "entityType": "indexes",
+      "table": "chart"
+    },
+    {
+      "columns": [
+        {
+          "value": "dashboard_id",
+          "isExpression": false
+        },
+        {
+          "value": "provider",
+          "isExpression": false
+        },
+        {
+          "value": "json_array(json_extract(\"listing\", '$.symbol'), json_extract(\"listing\", '$.venue'), json_extract(\"listing\", '$.currency'))",
+          "isExpression": true
+        },
+        {
+          "value": "json_extract(\"data\", '$.id')",
+          "isExpression": true
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "drawing_scope_gesture_unique",
+      "entityType": "indexes",
+      "table": "drawing"
+    },
+    {
+      "columns": [
+        {
+          "value": "dashboard_id",
+          "isExpression": false
+        },
+        {
+          "value": "provider",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "drawing_dashboard_provider_index",
+      "entityType": "indexes",
+      "table": "drawing"
+    },
+    {
+      "columns": [
+        {
+          "value": "chart_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "indicator_chart_index",
+      "entityType": "indexes",
+      "table": "indicator"
+    },
+    {
+      "columns": [
+        {
+          "value": "post_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_post_media_owner",
+      "entityType": "indexes",
+      "table": "post_media"
+    },
+    {
+      "columns": [
+        {
+          "value": "publication_key",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "uq_post_publication",
+      "entityType": "indexes",
+      "table": "post"
+    },
+    {
+      "columns": [
+        {
+          "value": "\"created_at\" desc",
+          "isExpression": true
+        },
+        {
+          "value": "\"id\" desc",
+          "isExpression": true
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_post_created",
+      "entityType": "indexes",
+      "table": "post"
+    },
+    {
+      "columns": [
+        {
+          "value": "provider",
+          "isExpression": false
+        },
+        {
+          "value": "listing_key",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "symbology_provider_listing_unique",
+      "entityType": "indexes",
+      "table": "symbology"
+    },
+    {
+      "columns": [
+        {
+          "value": "created_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "symbology_created_id_index",
+      "entityType": "indexes",
+      "table": "symbology"
+    },
+    {
+      "columns": ["chart_id", "position"],
+      "nameExplicit": true,
+      "name": "chart_cell_position_unique",
+      "entityType": "uniques",
+      "table": "chart_cell"
+    },
+    {
+      "columns": ["chart_id", "id"],
+      "nameExplicit": true,
+      "name": "chart_cell_chart_id_unique",
+      "entityType": "uniques",
+      "table": "chart_cell"
+    },
+    {
+      "columns": ["chart_id", "from_cell_id", "to_cell_id"],
+      "nameExplicit": true,
+      "name": "chart_link_endpoints_unique",
+      "entityType": "uniques",
+      "table": "chart_link"
+    },
+    {
+      "columns": ["cell_id", "position"],
+      "nameExplicit": true,
+      "name": "chart_market_source_position_unique",
+      "entityType": "uniques",
+      "table": "chart_market_source"
+    },
+    {
+      "columns": ["cell_id", "id"],
+      "nameExplicit": true,
+      "name": "chart_market_source_cell_id_unique",
+      "entityType": "uniques",
+      "table": "chart_market_source"
+    },
+    {
+      "columns": ["cell_id", "position"],
+      "nameExplicit": true,
+      "name": "chart_pane_position_unique",
+      "entityType": "uniques",
+      "table": "chart_pane"
+    },
+    {
+      "columns": ["cell_id", "id"],
+      "nameExplicit": true,
+      "name": "chart_pane_cell_id_unique",
+      "entityType": "uniques",
+      "table": "chart_pane"
+    },
+    {
+      "columns": ["pane_id", "position"],
+      "nameExplicit": true,
+      "name": "chart_series_position_unique",
+      "entityType": "uniques",
+      "table": "chart_series"
+    },
+    {
+      "columns": ["dashboard_id", "position"],
+      "nameExplicit": true,
+      "name": "dashboard_widget_position_unique",
+      "entityType": "uniques",
+      "table": "dashboard_widget"
+    },
+    {
+      "columns": ["root"],
+      "nameExplicit": false,
+      "name": "workspace_root_unique",
+      "entityType": "uniques",
+      "table": "workspace"
+    },
+    {
+      "value": "\"role\" IN ('user', 'assistant')",
+      "name": "chk_agent_messages_role",
+      "entityType": "checks",
+      "table": "agent_messages"
+    },
+    {
+      "value": "\n      json_valid(\"data\") AND json_type(\"data\") = 'object'\n      AND json_type(\"data\", '$.id') IS NULL\n      AND json_type(\"data\", '$.sessionID') IS NULL\n      AND json_type(\"data\", '$.role') IS NULL\n    ",
+      "name": "chk_agent_messages_data_columns",
+      "entityType": "checks",
+      "table": "agent_messages"
+    },
+    {
+      "value": "\n      json_valid(\"data\") AND json_type(\"data\") = 'object'\n      AND json_type(\"data\", '$.id') IS NULL\n      AND json_type(\"data\", '$.messageID') IS NULL\n      AND json_type(\"data\", '$.sessionID') IS NULL\n    ",
+      "name": "chk_agent_parts_data_columns",
+      "entityType": "checks",
+      "table": "agent_parts"
+    },
+    {
+      "value": "\"status\" IN ('queued', 'running', 'completed', 'stop', 'failed')",
+      "name": "agent_run_status_check",
+      "entityType": "checks",
+      "table": "agent_run"
+    },
+    {
+      "value": "(\n        \"status\" = 'queued'\n        AND \"queue_position\" IS NOT NULL\n        AND \"started_at\" IS NULL\n        AND \"finished_at\" IS NULL\n      ) OR (\n        \"status\" = 'running'\n        AND \"queue_position\" IS NULL\n        AND \"started_at\" IS NOT NULL\n        AND \"finished_at\" IS NULL\n      ) OR (\n        \"status\" IN ('completed', 'stop', 'failed')\n        AND \"queue_position\" IS NULL\n        AND \"started_at\" IS NOT NULL\n        AND \"finished_at\" IS NOT NULL\n      )",
+      "name": "agent_run_lifecycle_check",
+      "entityType": "checks",
+      "table": "agent_run"
+    },
+    {
+      "value": "json_valid(\"input\")\n        AND json_type(\"input\") = 'object'\n        AND NULLIF(json_extract(\"input\", '$.agent'), '') IS NOT NULL\n        AND NULLIF(\n          json_extract(\"input\", '$.model.providerID'),\n          ''\n        ) IS NOT NULL\n        AND NULLIF(\n          json_extract(\"input\", '$.model.modelID'),\n          ''\n        ) IS NOT NULL\n        AND json_type(\"input\", '$.parts') = 'array'\n        AND json_array_length(\"input\", '$.parts') > 0",
+      "name": "agent_run_input_check",
+      "entityType": "checks",
+      "table": "agent_run"
+    },
+    {
+      "value": "trim(\"key\") <> ''",
+      "name": "chk_agent_session_bindings_key",
+      "entityType": "checks",
+      "table": "agent_session_bindings"
+    },
+    {
+      "value": "\"kind\" in ('chat', 'delegate', 'dig_in', 'alert', 'scheduled', 'chart_explain')",
+      "name": "agent_sessions_kind_check",
+      "entityType": "checks",
+      "table": "agent_sessions"
+    },
+    {
+      "value": "\"active\" IN (0, 1)",
+      "name": "credential_active_boolean",
+      "entityType": "checks",
+      "table": "credential"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "agent_schedule_occurrence_id_check",
+      "entityType": "checks",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "agent_schedule_occurrence_revision_check",
+      "entityType": "checks",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "agent_schedule_occurrence_created_at_check",
+      "entityType": "checks",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "agent_schedule_occurrence_updated_at_check",
+      "entityType": "checks",
+      "table": "agent_schedule_occurrence"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "agent_schedule_id_check",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "agent_schedule_revision_check",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "agent_schedule_created_at_check",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "agent_schedule_updated_at_check",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "length(trim(\"name\")) BETWEEN 1 AND 160",
+      "name": "chk_agent_schedules_name",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "json_type(\"target_json\") = 'object'",
+      "name": "chk_agent_schedules_target_object",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "COALESCE(\n        json_type(\"target_json\", '$.prompt.model') = 'object'\n        AND json_type(\"target_json\", '$.prompt.model.providerID') = 'text'\n        AND length(json_extract(\"target_json\", '$.prompt.model.providerID')) > 0\n        AND json_extract(\"target_json\", '$.prompt.model.providerID') <> 'unknown'\n        AND json_type(\"target_json\", '$.prompt.model.modelID') = 'text'\n        AND length(json_extract(\"target_json\", '$.prompt.model.modelID')) > 0\n        AND json_extract(\"target_json\", '$.prompt.model.modelID') <> 'unknown'\n        AND (\n          json_type(\"target_json\", '$.prompt.model.selectedVariant') IS NULL\n          OR (\n            json_type(\"target_json\", '$.prompt.model.selectedVariant') = 'text'\n            AND length(json_extract(\"target_json\", '$.prompt.model.selectedVariant')) > 0\n          )\n        )\n        AND json(json_remove(\n          json_extract(\"target_json\", '$.prompt.model'),\n          '$.providerID',\n          '$.modelID',\n          '$.selectedVariant'\n        )) = '{}',\n        0\n      )",
+      "name": "chk_agent_schedules_model",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "COALESCE(\n        (\n          json_extract(\"recurrence\", '$.kind') = 'cron'\n          AND length(\n              trim(json_extract(\"recurrence\", '$.expression'))\n            ) > 0\n          AND length(\n              trim(json_extract(\"recurrence\", '$.timeZone'))\n            ) > 0\n        ) OR (\n          json_extract(\"recurrence\", '$.kind') = 'once'\n          AND json_type(\"recurrence\", '$.fireAt') = 'text'\n          AND length(\n              trim(json_extract(\"recurrence\", '$.fireAt'))\n            ) > 0\n        ),\n        0\n      )",
+      "name": "chk_agent_schedules_recurrence_shape",
+      "entityType": "checks",
+      "table": "agent_schedule"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "alert_event_id_check",
+      "entityType": "checks",
+      "table": "alert_event"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "alert_event_revision_check",
+      "entityType": "checks",
+      "table": "alert_event"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "alert_event_created_at_check",
+      "entityType": "checks",
+      "table": "alert_event"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "alert_event_updated_at_check",
+      "entityType": "checks",
+      "table": "alert_event"
+    },
+    {
+      "value": "length(\"condition\") >= 1",
+      "name": "chk_alert_events_condition",
+      "entityType": "checks",
+      "table": "alert_event"
+    },
+    {
+      "value": "\"time\" >= 0",
+      "name": "chk_alert_events_time",
+      "entityType": "checks",
+      "table": "alert_event"
+    },
+    {
+      "value": "json_type(\"detail_json\") = 'object'",
+      "name": "chk_alert_events_detail_object",
+      "entityType": "checks",
+      "table": "alert_event"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "alert_rule_id_check",
+      "entityType": "checks",
+      "table": "alert_rule"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "alert_rule_revision_check",
+      "entityType": "checks",
+      "table": "alert_rule"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "alert_rule_created_at_check",
+      "entityType": "checks",
+      "table": "alert_rule"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "alert_rule_updated_at_check",
+      "entityType": "checks",
+      "table": "alert_rule"
+    },
+    {
+      "value": "length(trim(\"name\")) BETWEEN 1 AND 160",
+      "name": "chk_alert_rules_name",
+      "entityType": "checks",
+      "table": "alert_rule"
+    },
+    {
+      "value": "json_valid(\"alertable_json\") AND json_type(\"alertable_json\") IS 'object'\n        AND ((json_extract(\"alertable_json\", '$.kind') IS 'tea'\n        AND json_type(\"alertable_json\", '$.source') IS 'text'\n        AND length(json_extract(\"alertable_json\", '$.source')) BETWEEN 1 AND 65536\n        AND json_type(\"alertable_json\", '$.config') IS 'object')\n        OR (json_extract(\"alertable_json\", '$.kind') IS 'drawing'\n        AND json_type(\"alertable_json\", '$.drawingId') IS 'text'\n        AND substr(json_extract(\"alertable_json\", '$.drawingId'), 1, 4) = 'drw_'\n        AND json_type(\"alertable_json\", '$.operator') IS 'text'\n        AND json_extract(\"alertable_json\", '$.operator') IN ('crossing', 'crossing_up', 'crossing_down', 'entering_channel', 'exiting_channel', 'inside_channel', 'outside_channel', 'touching')\n        AND json_type(\"alertable_json\", '$.inputs') IS 'object'\n        AND json_type(\"alertable_json\", '$.inputs.provider') IS 'text'\n        AND length(json_extract(\"alertable_json\", '$.inputs.provider')) > 0\n        AND json_type(\"alertable_json\", '$.inputs.listing') IS 'object'\n        AND json_type(\"alertable_json\", '$.inputs.listing.symbol') IS 'text'\n        AND json_type(\"alertable_json\", '$.inputs.listing.currency') IS 'text'\n        AND json_type(\"alertable_json\", '$.inputs.resolution') IS 'text'\n        AND json_extract(\"alertable_json\", '$.inputs.resolution') IN ('1s', '1m', '5m', '15m', '30m', '1h', '4h', '1d', '1W', '1M')\n        AND json_type(\"alertable_json\", '$.inputs.session') IS 'text'\n        AND json_extract(\"alertable_json\", '$.inputs.session') in ('regular', 'extended', '24h')\n        AND json_type(\"alertable_json\", '$.inputs.adjustment') IS 'text'\n        AND json_extract(\"alertable_json\", '$.inputs.adjustment') IN ('raw', 'split', 'split_dividend')))",
+      "name": "chk_alert_rules_alertable",
+      "entityType": "checks",
+      "table": "alert_rule"
+    },
+    {
+      "value": "\"id\" IS NOT NULL AND length(\"id\") > 0",
+      "name": "chart_cell_id_check",
+      "entityType": "checks",
+      "table": "chart_cell"
+    },
+    {
+      "value": "typeof(\"position\") = 'integer' AND \"position\" >= 0",
+      "name": "chart_cell_position_check",
+      "entityType": "checks",
+      "table": "chart_cell"
+    },
+    {
+      "value": "\"resolution\" in ('1s', '1m', '5m', '15m', '30m', '1h', '4h', '1d', '1W', '1M')",
+      "name": "chart_cell_resolution_check",
+      "entityType": "checks",
+      "table": "chart_cell"
+    },
+    {
+      "value": "\"session\" in ('regular', 'extended', '24h')",
+      "name": "chart_cell_session_check",
+      "entityType": "checks",
+      "table": "chart_cell"
+    },
+    {
+      "value": "\"adjustment\" in ('raw', 'split', 'split_dividend')",
+      "name": "chart_cell_adjustment_check",
+      "entityType": "checks",
+      "table": "chart_cell"
+    },
+    {
+      "value": "\"id\" IS NOT NULL AND length(\"id\") > 0",
+      "name": "chart_link_id_check",
+      "entityType": "checks",
+      "table": "chart_link"
+    },
+    {
+      "value": "\"from_cell_id\" <> \"to_cell_id\"",
+      "name": "chart_link_distinct_cells_check",
+      "entityType": "checks",
+      "table": "chart_link"
+    },
+    {
+      "value": "\"sync_listing\" IN (0, 1)",
+      "name": "chart_link_sync_listing_check",
+      "entityType": "checks",
+      "table": "chart_link"
+    },
+    {
+      "value": "\"sync_crosshair\" IN (0, 1)",
+      "name": "chart_link_sync_crosshair_check",
+      "entityType": "checks",
+      "table": "chart_link"
+    },
+    {
+      "value": "\"id\" IS NOT NULL AND length(\"id\") > 0",
+      "name": "chart_market_source_id_check",
+      "entityType": "checks",
+      "table": "chart_market_source"
+    },
+    {
+      "value": "typeof(\"position\") = 'integer' AND \"position\" >= 0",
+      "name": "chart_market_source_position_check",
+      "entityType": "checks",
+      "table": "chart_market_source"
+    },
+    {
+      "value": "length(\"provider\") > 0",
+      "name": "chart_market_source_provider_check",
+      "entityType": "checks",
+      "table": "chart_market_source"
+    },
+    {
+      "value": "COALESCE(\n        json_type(\"listing\") = 'object'\n        AND json_type(\"listing\", '$.symbol') = 'text'\n        AND json_type(\"listing\", '$.currency') = 'text',\n        0\n      )",
+      "name": "chart_market_source_listing_check",
+      "entityType": "checks",
+      "table": "chart_market_source"
+    },
+    {
+      "value": "\"id\" IS NOT NULL AND length(\"id\") > 0",
+      "name": "chart_pane_id_check",
+      "entityType": "checks",
+      "table": "chart_pane"
+    },
+    {
+      "value": "typeof(\"position\") = 'integer' AND \"position\" >= 0",
+      "name": "chart_pane_position_check",
+      "entityType": "checks",
+      "table": "chart_pane"
+    },
+    {
+      "value": "\"id\" IS NOT NULL AND length(\"id\") > 0",
+      "name": "chart_series_id_check",
+      "entityType": "checks",
+      "table": "chart_series"
+    },
+    {
+      "value": "typeof(\"position\") = 'integer' AND \"position\" >= 0",
+      "name": "chart_series_position_check",
+      "entityType": "checks",
+      "table": "chart_series"
+    },
+    {
+      "value": "\"role\" in ('main', 'normal')",
+      "name": "chart_series_role_check",
+      "entityType": "checks",
+      "table": "chart_series"
+    },
+    {
+      "value": "(\"profile_resolution\" IS NULL AND \"profile_rows\" IS NULL) OR (\n        \"market_source_id\" IS NOT NULL AND \"output\" = 'volumeProfile'\n        AND (\"profile_resolution\" IS NULL OR \"profile_resolution\" in ('1s', '1m', '5m', '15m', '30m', '1h', '4h', '1d', '1W', '1M'))\n        AND (\"profile_rows\" IS NULL OR \"profile_rows\" BETWEEN 1 AND 100)\n      )",
+      "name": "chart_series_profile_check",
+      "entityType": "checks",
+      "table": "chart_series"
+    },
+    {
+      "value": "(\n        \"market_source_id\" IS NOT NULL AND \"indicator_id\" IS NULL\n        AND \"output\" in ('price', 'volume', 'volumeProfile')\n      ) OR (\n        \"market_source_id\" IS NULL AND \"indicator_id\" IS NOT NULL\n        AND length(\"output\") > 0\n      )",
+      "name": "chart_series_source_check",
+      "entityType": "checks",
+      "table": "chart_series"
+    },
+    {
+      "value": "\"role\" <> 'main' OR (\n        \"market_source_id\" IS NOT NULL AND \"output\" = 'price'\n      )",
+      "name": "chart_series_main_market_check",
+      "entityType": "checks",
+      "table": "chart_series"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "chart_id_check",
+      "entityType": "checks",
+      "table": "chart"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "chart_revision_check",
+      "entityType": "checks",
+      "table": "chart"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "chart_created_at_check",
+      "entityType": "checks",
+      "table": "chart"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "chart_updated_at_check",
+      "entityType": "checks",
+      "table": "chart"
+    },
+    {
+      "value": "\"preset\" in ('1', '1x2', '1x3', '1x4', '2x1', '2x2', '2x3', '2x4', '3x1', '3x2', '3x3', '3x4', '4x1', '4x2', '4x3', '4x4')",
+      "name": "chart_preset_check",
+      "entityType": "checks",
+      "table": "chart"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "dashboard_id_check",
+      "entityType": "checks",
+      "table": "dashboard"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "dashboard_revision_check",
+      "entityType": "checks",
+      "table": "dashboard"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "dashboard_created_at_check",
+      "entityType": "checks",
+      "table": "dashboard"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "dashboard_updated_at_check",
+      "entityType": "checks",
+      "table": "dashboard"
+    },
+    {
+      "value": "length(\"name\") BETWEEN 1 AND 200",
+      "name": "dashboard_name_check",
+      "entityType": "checks",
+      "table": "dashboard"
+    },
+    {
+      "value": "\"favorite\" IN (0, 1)",
+      "name": "dashboard_favorite_check",
+      "entityType": "checks",
+      "table": "dashboard"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "dashboard_widget_id_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "\"position\" >= 0",
+      "name": "dashboard_widget_position_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "length(\"kind\") > 0",
+      "name": "dashboard_widget_kind_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "\"resource_id\" IS NULL OR length(\"resource_id\") > 0",
+      "name": "dashboard_widget_resource_id_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "typeof(\"x\") = 'integer' AND \"x\" >= 0",
+      "name": "dashboard_widget_x_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "typeof(\"y\") = 'integer' AND \"y\" >= 0",
+      "name": "dashboard_widget_y_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "typeof(\"w\") = 'integer' AND \"w\" >= 1",
+      "name": "dashboard_widget_w_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "typeof(\"h\") = 'integer' AND \"h\" >= 1",
+      "name": "dashboard_widget_h_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "\"x\" + \"w\" <= 12",
+      "name": "dashboard_widget_width_check",
+      "entityType": "checks",
+      "table": "dashboard_widget"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "drawing_id_check",
+      "entityType": "checks",
+      "table": "drawing"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "drawing_revision_check",
+      "entityType": "checks",
+      "table": "drawing"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "drawing_created_at_check",
+      "entityType": "checks",
+      "table": "drawing"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "drawing_updated_at_check",
+      "entityType": "checks",
+      "table": "drawing"
+    },
+    {
+      "value": "length(\"provider\") > 0",
+      "name": "drawing_provider_check",
+      "entityType": "checks",
+      "table": "drawing"
+    },
+    {
+      "value": "json_valid(\"listing\")",
+      "name": "drawing_listing_check",
+      "entityType": "checks",
+      "table": "drawing"
+    },
+    {
+      "value": "json_valid(\"data\")",
+      "name": "drawing_data_check",
+      "entityType": "checks",
+      "table": "drawing"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "indicator_id_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "indicator_revision_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "indicator_created_at_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "indicator_updated_at_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "length(\"cell_id\") > 0",
+      "name": "indicator_cell_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "length(\"workspace_id\") > 0",
+      "name": "indicator_workspace_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "length(\"script_path\") > 0 AND substr(\"script_path\", -4) = '.tea'",
+      "name": "indicator_path_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "json_valid(\"snapshot\") AND json_type(\"snapshot\") = 'object'",
+      "name": "indicator_snapshot_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "json_valid(\"parameter_overrides\") AND json_type(\"parameter_overrides\") = 'object'",
+      "name": "indicator_overrides_check",
+      "entityType": "checks",
+      "table": "indicator"
+    },
+    {
+      "value": "length(\"bytes\") BETWEEN 1 AND 33554432",
+      "name": "chk_post_media_size",
+      "entityType": "checks",
+      "table": "post_media"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "post_id_check",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "post_revision_check",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "post_created_at_check",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "post_updated_at_check",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "json_valid(\"author_json\") AND json_type(\"author_json\") = 'object' AND json_extract(\"author_json\", '$.kind') IN ('provider','rule')",
+      "name": "chk_post_author",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "json_valid(\"origin_json\") AND json_type(\"origin_json\") = 'object' AND json_extract(\"origin_json\", '$.kind') IN ('alert_event','agent_run')",
+      "name": "chk_post_origin",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "(json_extract(\"origin_json\", '$.kind') IS 'alert_event' AND json_extract(\"author_json\", '$.kind') IS 'rule' AND json_extract(\"author_json\", '$.ruleId') IS json_extract(\"origin_json\", '$.ruleId')) OR (json_extract(\"origin_json\", '$.kind') IS 'agent_run' AND json_extract(\"author_json\", '$.kind') IS 'provider')",
+      "name": "chk_post_author_origin",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "json_valid(\"content_json\") AND json_type(\"content_json\") = 'array' AND json_array_length(\"content_json\") > 0",
+      "name": "chk_post_content",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "length(trim(\"publication_key\")) > 0 AND length(\"publication_hash\") = 64",
+      "name": "chk_post_publication",
+      "entityType": "checks",
+      "table": "post"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "symbology_id_check",
+      "entityType": "checks",
+      "table": "symbology"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "symbology_revision_check",
+      "entityType": "checks",
+      "table": "symbology"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "symbology_created_at_check",
+      "entityType": "checks",
+      "table": "symbology"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "symbology_updated_at_check",
+      "entityType": "checks",
+      "table": "symbology"
+    },
+    {
+      "value": "length(\"provider\") > 0",
+      "name": "symbology_provider_check",
+      "entityType": "checks",
+      "table": "symbology"
+    },
+    {
+      "value": "json_valid(\"listing\") AND json_type(\"listing\") = 'object'",
+      "name": "symbology_listing_check",
+      "entityType": "checks",
+      "table": "symbology"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "trigger_id_check",
+      "entityType": "checks",
+      "table": "trigger"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "trigger_revision_check",
+      "entityType": "checks",
+      "table": "trigger"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "trigger_created_at_check",
+      "entityType": "checks",
+      "table": "trigger"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "trigger_updated_at_check",
+      "entityType": "checks",
+      "table": "trigger"
+    },
+    {
+      "value": "length(trim(\"name\")) BETWEEN 1 AND 160",
+      "name": "chk_triggers_name",
+      "entityType": "checks",
+      "table": "trigger"
+    },
+    {
+      "value": "json_type(\"event_json\") = 'object'",
+      "name": "chk_triggers_event_object",
+      "entityType": "checks",
+      "table": "trigger"
+    },
+    {
+      "value": "json_type(\"target_json\") = 'object'",
+      "name": "chk_triggers_target_object",
+      "entityType": "checks",
+      "table": "trigger"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "workspace_id_check",
+      "entityType": "checks",
+      "table": "workspace"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "workspace_revision_check",
+      "entityType": "checks",
+      "table": "workspace"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "workspace_created_at_check",
+      "entityType": "checks",
+      "table": "workspace"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "workspace_updated_at_check",
+      "entityType": "checks",
+      "table": "workspace"
+    },
+    {
+      "value": "length(\"root\") > 0",
+      "name": "workspace_root_check",
+      "entityType": "checks",
+      "table": "workspace"
+    }
+  ],
+  "renames": []
+}

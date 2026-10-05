@@ -1,0 +1,5 @@
+indicator("Stochastic", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+k = ta.sma(ta.stoch(close, high, low, length), 3)
+plot("k", k, "K")
+plot("d", ta.sma(k, 3), "D")

@@ -1,0 +1,7 @@
+indicator("Donchian Channels", overlay = true)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+upper = ta.highest(high, length)
+lower = ta.lowest(low, length)
+plot("upper", upper, "Upper")
+plot("basis", (upper + lower) / 2, "Basis")
+plot("lower", lower, "Lower")

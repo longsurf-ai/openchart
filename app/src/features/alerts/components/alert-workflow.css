@@ -1,0 +1,134 @@
+/* Thread layout: full width, then 4/5 and 4/6 centered.
+ * Query the pane outside its scroll area so disclosure cannot change breakpoints. */
+.alert-rule-page {
+  padding-top: theme("spacing.6");
+}
+@container section-content (min-width: theme('screens.md')) {
+  .alert-rule-page .alert-rule-page-content {
+    width: 80%;
+  }
+}
+@container section-content (min-width: theme('screens.xl')) {
+  .alert-rule-page .alert-rule-page-content {
+    width: calc(100% * 2 / 3);
+  }
+}
+
+/* Compact If/Then layout; shared typography and control tokens own its scale. */
+.alert-workflow {
+  --step-icon-size: var(--control-h-lg);
+  --step-gap: theme("spacing.8");
+  --step-line-width: theme("borderWidth.2");
+  container: alert-workflow / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--step-gap);
+}
+.alert-workflow-step {
+  display: grid;
+  grid-template-columns: theme("spacing.10") var(--step-icon-size) minmax(
+      0,
+      1fr
+    );
+  column-gap: theme("spacing.6");
+}
+.alert-workflow-label,
+.alert-workflow-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: var(--leading-base);
+  padding-top: calc((var(--step-icon-size) - 1lh) / 2);
+}
+.alert-workflow-label {
+  align-self: start;
+}
+.alert-workflow-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.alert-workflow-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: theme("spacing.4");
+}
+.alert-workflow-frequency {
+  flex-shrink: 0;
+  padding-top: calc((var(--step-icon-size) - var(--control-h)) / 2);
+}
+.alert-workflow-rail {
+  position: relative;
+}
+.alert-workflow-icon {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--step-icon-size);
+  height: var(--step-icon-size);
+  border-radius: var(--radius-lg);
+}
+.alert-workflow-icon svg {
+  width: var(--icon-size-xl);
+  height: var(--icon-size-xl);
+}
+.alert-workflow-step:not(:last-child) .alert-workflow-rail::after {
+  content: "";
+  position: absolute;
+  left: calc((100% - var(--step-line-width)) / 2);
+  width: var(--step-line-width);
+  top: var(--step-icon-size);
+  bottom: calc(-1 * var(--step-gap));
+  background: var(--border);
+}
+@container alert-workflow (max-width: theme("screens.sm")) {
+  .alert-workflow-step {
+    grid-template-columns: theme("spacing.10") var(--step-icon-size) minmax(
+        0,
+        1fr
+      );
+    column-gap: theme("spacing.4");
+  }
+  .alert-conditions .ruleGroup .ruleGroup {
+    margin-left: 0;
+    padding-left: theme("spacing.3");
+  }
+  .alert-workflow-heading {
+    flex-wrap: wrap;
+    gap: theme("spacing.2");
+  }
+}
+
+/* Replace the provider mark on intent without moving the node or its connector. */
+.alert-workflow-remove-icon {
+  display: none;
+}
+.alert-workflow-remove:hover .alert-workflow-action-icon,
+.alert-workflow-remove:focus-visible .alert-workflow-action-icon {
+  display: none;
+}
+.alert-workflow-remove:hover .alert-workflow-remove-icon,
+.alert-workflow-remove:focus-visible .alert-workflow-remove-icon {
+  display: block;
+}
+@media (hover: none) {
+  .alert-workflow-remove .alert-workflow-remove-icon {
+    display: block;
+    position: absolute;
+    width: var(--icon-size-sm);
+    height: var(--icon-size-sm);
+    top: 0;
+    right: 0;
+    background: var(--background);
+    border-radius: var(--radius-sm);
+  }
+}
+
+.alert-drawing-fields {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, theme("spacing.32")), 1fr)
+  );
+}

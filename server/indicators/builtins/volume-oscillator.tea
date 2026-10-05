@@ -1,0 +1,5 @@
+indicator("Volume Oscillator", overlay = false)
+fast = input.int(5, "Fast length", minval = 1)
+slow = input.int(10, "Slow length", minval = 1)
+slowAverage = ta.ema(volume, slow)
+plot("value", slowAverage == 0 ? na : 100 * (ta.ema(volume, fast) - slowAverage) / slowAverage, "Value")

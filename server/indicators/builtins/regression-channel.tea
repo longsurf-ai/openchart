@@ -1,0 +1,16 @@
+indicator("Regression Channel", overlay = true)
+length = input.int(50, "Regression length", minval = 3, maxval = 500)
+multiplier = input.float(2, "Residual deviations", minval = 0.1)
+end = ta.linreg(close, length, 0)
+previous = ta.linreg(close, length, 1)
+slope = end - previous
+float squared = 0
+for i = 0 to length - 1
+    residual = close[i] - (end - slope * i)
+    squared += residual * residual
+width = multiplier * math.sqrt(squared / length)
+u = plot("upper", end + width, "Rolling upper residual band", color=#86B6D0)
+l = plot("lower", end - width, "Rolling lower residual band", color=#86B6D0)
+plot("regression", end, "Regression endpoint", color=#CDB274, linewidth=2)
+fill("channel", u, l, color=color.new(#86B6D0, 89))
+plotshape("deviation", barstate.isconfirmed and ta.crossover(close, end + width), "Close above regression residual envelope", style=shape.circle, color=#CDB274, text="Above channel", textcolor=#CDB274, size=size.tiny)

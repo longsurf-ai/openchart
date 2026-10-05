@@ -1,0 +1,5 @@
+indicator("Vortex Indicator", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+tr = ta.sma(ta.tr(true), length)
+plot("plus", tr == 0 ? na : ta.sma(math.abs(high - low[1]), length) / tr, "Plus")
+plot("minus", tr == 0 ? na : ta.sma(math.abs(low - high[1]), length) / tr, "Minus")

@@ -1,0 +1,12 @@
+indicator("Money Flow Pressure", overlay = false)
+length = input.int(21, "Flow length", minval = 2, maxval = 500)
+threshold = input.float(0.05, "Pressure threshold", minval = 0.01, maxval = 1)
+flow = high == low ? 0 : ((close - low) - (high - close)) / (high - low) * volume
+averageVolume = ta.sma(volume, length)
+value = averageVolume > 0 ? ta.sma(flow, length) / averageVolume : 0
+plot("flow", value, "Chaikin money flow", color=value >= 0 ? #4CC2B4 : #CE8BB1, linewidth=2, style=plot.style_area)
+hline("zero", 0, "Balance", color=color.new(#A0A0A8, 60))
+hline("upper", threshold, "Positive pressure", color=color.new(#4CC2B4, 50), linestyle=hline.style_dashed)
+hline("lower", -threshold, "Negative pressure", color=color.new(#CE8BB1, 50), linestyle=hline.style_dashed)
+plotshape("positive", barstate.isconfirmed and ta.crossover(value, threshold), "CMF crossed above positive pressure threshold", style=shape.triangleup, location=location.bottom, color=#4CC2B4, text="Positive flow", textcolor=#4CC2B4, size=size.tiny)
+plotshape("negative", barstate.isconfirmed and ta.crossunder(value, -threshold), "CMF crossed below negative pressure threshold", style=shape.triangledown, location=location.top, color=#CE8BB1, text="Negative flow", textcolor=#CE8BB1, size=size.tiny)

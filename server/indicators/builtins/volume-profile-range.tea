@@ -1,0 +1,49 @@
+indicator("Volume Profile Range", overlay = true)
+// The profile of the bars that open from rangeStart up to rangeEnd. The chart
+// runs it for its visible range and for fixed-range drawings; by default it
+// covers every bar.
+rangeStart = input.time(0, "Start")
+rangeEnd = input.time(32503680000000, "End")
+rows = input.int(24, "Number of volume bars", minval = 1, maxval = 100)
+
+// Each bar adds its own price range and volume.
+highs = array.from(high)
+lows = array.from(low)
+volumes = array.from(volume)
+rising = array.from(close >= open)
+
+// Bars outside the range add nothing.
+inRange = time >= rangeStart and time < rangeEnd
+var int count = 0
+if inRange
+    count += 1
+noPrices = array.new<float>()
+
+// The profile is written on the first bar after the range, or, while the
+// range reaches the newest bar, on that bar: the last history bar, even when
+// final, and a live bar while it is still forming. A live bar's final attempt
+// writes none, as its row stays and the next bar writes the profile again.
+// Every other bar only adds its volume.
+finished = time >= rangeEnd and time[1] < rangeEnd and count > 0
+forming = inRange and barstate.islast and (barstate.ishistory or not barstate.isconfirmed)
+shown = ta.volumeProfile(inRange ? highs : noPrices, inRange ? lows : noPrices, inRange ? volumes : noPrices, inRange ? rising : array.new<bool>(), false, rows, compute = finished or forming)
+
+// Each part's color is a default that the chart's Style settings can change.
+profileRows(p) =>
+    result = array.new<ProfileRow>()
+    rowCount = p.up.size()
+    if rowCount > 0
+        for k = 0 to rowCount - 1
+            up = ProfileSegment.new(p.up.get(k), color.new(color.teal, 40), "Up volume")
+            down = ProfileSegment.new(p.down.get(k), color.new(color.red, 40), "Down volume")
+            result.push(ProfileRow.new(p.low + k * p.step, p.low + (k + 1) * p.step, array.from(up, down)))
+    result
+
+profileLevels(p) =>
+    result = array.new<ProfileLevel>()
+    if p.up.size() > 0
+        result.push(ProfileLevel.new(p.low + (p.poc + 0.5) * p.step, color.orange, "Point of control"))
+    result
+
+if finished or forming
+    verticalProfile("profile", rangeStart, rangeEnd, profileRows(shown), profileLevels(shown), "Volume profile")

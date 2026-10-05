@@ -1,0 +1,4 @@
+indicator("VWAP (cumulative)", overlay = true)
+// Cumulative over the available execution history, including warmup.
+totalVolume = ta.cum(volume)
+plot("value", totalVolume == 0 ? na : ta.cum(hlc3 * volume) / totalVolume, "Value")

@@ -1,0 +1,13 @@
+indicator("Fisher Turns", overlay = false)
+length = input.int(14, "Range length", minval = 2, maxval = 500)
+bottom = ta.lowest(hl2, length)
+top = ta.highest(hl2, length)
+var float normalized = 0
+normalized := top == bottom ? 0 : math.max(-0.999, math.min(0.999, 0.66 * ((hl2 - bottom) / (top - bottom) - 0.5) + 0.67 * nz(normalized[1])))
+var float fisher = 0
+fisher := 0.5 * math.log((1 + normalized) / (1 - normalized)) + 0.5 * nz(fisher[1])
+plot("fisher", fisher, "Fisher", color=fisher >= 0 ? #C4AD72 : #A88EC6, linewidth=2, style=plot.style_area)
+plot("signal", fisher[1], "Previous Fisher", color=color.new(#B7B7C0, 35))
+hline("zero", 0, "Zero", color=color.new(#A0A0A8, 65))
+plotshape("up_turn", barstate.isconfirmed and fisher > fisher[1] and fisher[1] < fisher[2] and fisher[1] < -1.5, "Fisher turned upward from below -1.5", style=shape.triangleup, location=location.bottom, color=#A88EC6, text="Fisher turns up", textcolor=#A88EC6, size=size.tiny)
+plotshape("down_turn", barstate.isconfirmed and fisher < fisher[1] and fisher[1] > fisher[2] and fisher[1] > 1.5, "Fisher turned downward from above 1.5", style=shape.triangledown, location=location.top, color=#C4AD72, text="Fisher turns down", textcolor=#C4AD72, size=size.tiny)

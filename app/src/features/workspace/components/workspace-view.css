@@ -1,0 +1,67 @@
+/* Dockview owns tab geometry; map its public theme variables to the shared theme palette. */
+.workspace-files {
+  --dv-background-color: var(--background);
+  --dv-group-view-background-color: var(--background);
+  --dv-tabs-and-actions-container-background-color: var(--sidebar);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--sidebar);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--sidebar);
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted-foreground);
+  --dv-tab-divider-color: var(--border);
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-tabs-and-actions-container-height: 36px;
+  --dv-tab-font-size: 13px;
+}
+
+/* Adapt the shared cmdk input to the explorer's compact, expanding toolbar. */
+.workspace-file-search-field {
+  transition: width 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.workspace-file-search-field [data-slot="command-input-wrapper"] {
+  @apply h-7 gap-0 border-0 px-0;
+}
+
+.workspace-file-search-field [data-slot="command-input-wrapper"] > svg {
+  display: none;
+}
+
+.workspace-file-search-field input {
+  visibility: hidden;
+}
+
+.workspace-file-search-field:focus-within,
+.workspace-file-search-field[data-query="true"] {
+  width: 100%;
+}
+
+.workspace-file-search-field:focus-within {
+  @apply ring-1 ring-sidebar-ring;
+  transition: none;
+}
+
+.workspace-file-search-field:focus-within input,
+.workspace-file-search-field[data-query="true"] input {
+  visibility: visible;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .workspace-file-search-field:hover {
+    width: 100%;
+  }
+
+  .workspace-file-search-field:hover input {
+    visibility: visible;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-file-search-field {
+    transition: none;
+  }
+}

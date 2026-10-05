@@ -1,0 +1,8 @@
+indicator("Bollinger Bands", overlay = true)
+source = input.source(close, "Source")
+length = input.int(20, "Length", minval = 1)
+multiplier = input.float(2.0, "Multiplier", minval = 0)
+[basis, upper, lower] = ta.bb(source, length, multiplier)
+plot("basis", basis, "Basis")
+plot("upper", upper, "Upper")
+plot("lower", lower, "Lower")

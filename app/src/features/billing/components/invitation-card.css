@@ -1,0 +1,61 @@
+/* Purpose: Shape the invitation paper and perforated stub; color roles live in themes.css. */
+.invitation-ticket {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  border-radius: 1.25rem;
+  color: var(--invitation-ink);
+  background: linear-gradient(
+    110deg,
+    var(--invitation-mint),
+    var(--invitation-lime) 24%,
+    var(--invitation-pink) 57%,
+    var(--invitation-lilac)
+  );
+  mask-image:
+    radial-gradient(circle at 2.25rem 0, transparent 6px, black 6.5px),
+    radial-gradient(circle at 2.25rem 100%, transparent 6px, black 6.5px);
+  mask-composite: intersect;
+}
+
+.invitation-ticket[data-redeemed="true"] {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.invitation-ticket-stub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding-block: 1rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  border-left: 1px dashed currentColor;
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.invitation-ticket-stub svg {
+  transform: rotate(180deg);
+}
+
+.invitation-ticket .invitation-ticket-copy {
+  color: inherit;
+  border-color: color-mix(in srgb, currentColor 24%, transparent);
+  background: color-mix(in srgb, var(--invitation-paper) 55%, transparent);
+}
+
+.invitation-ticket .invitation-ticket-copy:hover {
+  color: inherit;
+  background: color-mix(in srgb, var(--invitation-paper) 80%, transparent);
+}
+
+.invitation-ticket .invitation-ticket-copy:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.invitation-ticket .invitation-ticket-copy:disabled {
+  background: transparent;
+  opacity: 1;
+}

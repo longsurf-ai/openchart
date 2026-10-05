@@ -1,0 +1,36 @@
+indicator("Swing Fibonacci", overlay = true)
+strength = input.int(8, "Pivot confirmation bars", minval = 1, maxval = 30)
+ph = ta.pivothigh(high, strength, strength)
+pl = ta.pivotlow(low, strength, strength)
+var float previous = na
+var int previousTime = na
+var bool previousWasHigh = false
+var float start = na
+var float end = na
+var int startTime = na
+if barstate.isconfirmed and not na(ph) and na(pl)
+    if not previousWasHigh and not na(previous)
+        start := previous
+        end := ph
+        startTime := previousTime
+    previous := ph
+    previousTime := time[strength]
+    previousWasHigh := true
+if barstate.isconfirmed and not na(pl) and na(ph)
+    if previousWasHigh and not na(previous)
+        start := previous
+        end := pl
+        startTime := previousTime
+    previous := pl
+    previousTime := time[strength]
+    previousWasHigh := false
+range = end - start
+f38 = end - range * 0.382
+f50 = end - range * 0.5
+f62 = end - range * 0.618
+plotsegment("origin", startTime, start, time, start, color=color.new(#A6A2B4, 50), text="100%")
+plotsegment("end", startTime, end, time, end, color=color.new(#A6A2B4, 50), text="0%")
+plotsegment("level_38", startTime, f38, time, f38, color=#83BFB9, text="38.2%")
+plotsegment("level_50", startTime, f50, time, f50, color=#C7AE76, text="50%")
+plotsegment("level_62", startTime, f62, time, f62, color=#B39BCC, text="61.8%")
+plotzone("retracement_zone", startTime, time, math.max(f38, f62), math.min(f38, f62), color=color.new(#B39BCC, 87), text="Confirmed swing retracement")

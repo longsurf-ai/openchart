@@ -1,0 +1,4 @@
+indicator("Linear Regression Curve", overlay = true)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 1, maxval = 500)
+plot("value", ta.linreg(source, length, 0), "Value")

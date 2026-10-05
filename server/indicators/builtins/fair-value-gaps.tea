@@ -1,0 +1,42 @@
+indicator("Fair Value Gap Zones", overlay = true)
+minimumAtr = input.float(0.15, "Minimum gap in ATR", minval = 0, maxval = 5)
+width = ta.atr(14) * minimumAtr
+bullGap = barstate.isconfirmed and low > high[2] and low - high[2] >= width
+bearGap = barstate.isconfirmed and high < low[2] and low[2] - high >= width
+var int bullStart = na
+var int bullEnd = na
+var float bullTop = na
+var float bullBottom = na
+var bool bullActive = false
+var int bearStart = na
+var int bearEnd = na
+var float bearTop = na
+var float bearBottom = na
+var bool bearActive = false
+bullFilled = barstate.isconfirmed and bullActive and low <= bullBottom
+bearFilled = barstate.isconfirmed and bearActive and high >= bearTop
+if bullActive
+    bullEnd := time
+if bearActive
+    bearEnd := time
+if bullFilled
+    bullActive := false
+if bearFilled
+    bearActive := false
+if bullGap
+    bullStart := time[2]
+    bullEnd := time
+    bullTop := low
+    bullBottom := high[2]
+    bullActive := true
+if bearGap
+    bearStart := time[2]
+    bearEnd := time
+    bearTop := low[2]
+    bearBottom := high
+    bearActive := true
+plotzone("bull_gap", bullStart, bullEnd, bullTop, bullBottom, color=bullActive ? color.new(#67C9B0, 78) : color.new(#67C9B0, 93), text="Upward gap")
+plotzone("bear_gap", bearStart, bearEnd, bearTop, bearBottom, color=bearActive ? color.new(#CD90BB, 78) : color.new(#CD90BB, 93), text="Downward gap")
+plotshape("bull_formed", bullGap, "Three-bar upward gap confirmed", style=shape.diamond, location=location.belowbar, color=#67C9B0, text="Gap formed", textcolor=#67C9B0, size=size.tiny)
+plotshape("bear_formed", bearGap, "Three-bar downward gap confirmed", style=shape.diamond, color=#CD90BB, text="Gap formed", textcolor=#CD90BB, size=size.tiny)
+plotshape("filled", bullFilled or bearFilled, "Price reached the far edge of the tracked gap", style=shape.circle, color=#C6B48A, text="Gap filled", textcolor=#C6B48A, size=size.tiny)

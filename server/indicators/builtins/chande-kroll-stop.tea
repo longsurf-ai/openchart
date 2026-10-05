@@ -1,0 +1,7 @@
+indicator("Chande Kroll Stop", overlay = true)
+length = input.int(10, "ATR length", minval = 1)
+stopLength = input.int(9, "Stop length", minval = 1)
+factor = input.float(1.0, "Factor", minval = 0)
+atr = ta.atr(length)
+plot("long_stop", ta.highest(ta.highest(high, length) - factor * atr, stopLength), "Long Stop")
+plot("short_stop", ta.lowest(ta.lowest(low, length) + factor * atr, stopLength), "Short Stop")

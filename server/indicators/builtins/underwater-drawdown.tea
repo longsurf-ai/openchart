@@ -1,0 +1,9 @@
+indicator("Underwater Drawdown", overlay = false)
+length = input.int(252, "Peak lookback", minval = 2, maxval = 2000)
+threshold = input.float(10, "Drawdown threshold (%)", minval = 0.1)
+peak = ta.highest(close, length)
+value = peak > 0 ? 100 * (close / peak - 1) : 0
+plot("drawdown", value, "Close below rolling peak (%)", color=value < -threshold ? #D28CA2 : #AB9BCD, style=plot.style_area, linewidth=2)
+hline("peak", 0, "Rolling peak", color=#A8A8B2)
+hline("threshold", -threshold, "Drawdown threshold", color=#D28CA2, linestyle=hline.style_dashed)
+plotshape("new_low", barstate.isconfirmed and ta.crossunder(value, -threshold), "Drawdown crossed threshold", style=shape.triangledown, location=location.bottom, color=#D28CA2, text="Drawdown deepens", textcolor=#D28CA2, size=size.tiny)

@@ -1,0 +1,125 @@
+diff --git a/dist/cjs/index.js b/dist/cjs/index.js
+index 42df91d204c1e941656c720a636748b1671a978d..3b962357ab94d90bd60662c3bc849719e65fb90c 100644
+--- a/dist/cjs/index.js
++++ b/dist/cjs/index.js
+@@ -62,6 +62,8 @@ function assertExternalOAuthUrl(url) {
+ }
+ function setupOAuthTransportIpcHandlers(options) {
+ 	const redirectUrl = buildRedirectUrl(options);
++	const browserRedirectUrl = options.oauthRedirectUrl ?? redirectUrl;
++	if (options.oauthRedirectUrl && new URL(browserRedirectUrl).protocol !== "https:") throw new TypeError("Clerk: OAuth browser redirects must use HTTPS.");
+ 	let pendingOAuthFlow = null;
+ 	const disposePendingOAuthFlow = (reason) => {
+ 		if (!pendingOAuthFlow) return;
+@@ -86,12 +88,12 @@ function setupOAuthTransportIpcHandlers(options) {
+ 		const callbackUrl = findMatchingCallbackUrl(argv, redirectUrl);
+ 		if (callbackUrl) handleCallbackUrl(callbackUrl);
+ 	};
+-	electron.app.setAsDefaultProtocolClient(options.renderer.scheme);
++	if (electron.app.isPackaged) electron.app.setAsDefaultProtocolClient(options.renderer.scheme);
+ 	electron.app.on("open-url", openUrlListener);
+ 	electron.app.on("second-instance", secondInstanceListener);
+ 	electron.ipcMain.handle(require_ipc.OAUTH_TRANSPORT_CHANNELS.getRedirectUrl, (event) => {
+ 		if (!isMainFrameEvent(event)) throw new Error("Clerk: OAuth request did not originate from a window's main frame.");
+-		return redirectUrl;
++		return browserRedirectUrl;
+ 	});
+ 	electron.ipcMain.handle(require_ipc.OAUTH_TRANSPORT_CHANNELS.open, async (event, url) => {
+ 		if (!isMainFrameEvent(event)) throw new Error("Clerk: OAuth request did not originate from a window's main frame.");
+@@ -302,7 +304,7 @@ function createClerkBridge(options) {
+ 					...options.renderer.privileges
+ 				}
+ 			}]);
+-			teardowns.push(setupOAuthTransportIpcHandlers({ renderer: options.renderer }));
++			teardowns.push(setupOAuthTransportIpcHandlers({ renderer: options.renderer, oauthRedirectUrl: options.oauthRedirectUrl }));
+ 		}
+ 		return {
+ 			isPrimaryInstance: true,
+diff --git a/dist/cjs/react/index.js b/dist/cjs/react/index.js
+index 2e7f870e6a1de3a7e96c28dc8fc0bbed1a8121c3..4fddc0160b21e9e0dda5f4bc7de9232c98388fc8 100644
+--- a/dist/cjs/react/index.js
++++ b/dist/cjs/react/index.js
+@@ -30,7 +30,7 @@ function createClerkInstance(publishableKey, passkeys) {
+ 		const token = await window.__clerk_internal_electron?.tokenCache.getToken(CLERK_CLIENT_JWT_KEY);
+ 		if (token) {
+ 			const headers = new Headers(request.headers);
+-			headers.set("Authorization", `Bearer ${token}`);
++			if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+ 			request.headers = headers;
+ 		}
+ 	});
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 3068cc844564b8c4391348245cb7a9ecaaad6c7d..414b8324e9495cdb1640068d69f8f367dbb3b48a 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -61,6 +61,8 @@ function assertExternalOAuthUrl(url) {
+ }
+ function setupOAuthTransportIpcHandlers(options) {
+ 	const redirectUrl = buildRedirectUrl(options);
++	const browserRedirectUrl = options.oauthRedirectUrl ?? redirectUrl;
++	if (options.oauthRedirectUrl && new URL(browserRedirectUrl).protocol !== "https:") throw new TypeError("Clerk: OAuth browser redirects must use HTTPS.");
+ 	let pendingOAuthFlow = null;
+ 	const disposePendingOAuthFlow = (reason) => {
+ 		if (!pendingOAuthFlow) return;
+@@ -85,12 +87,12 @@ function setupOAuthTransportIpcHandlers(options) {
+ 		const callbackUrl = findMatchingCallbackUrl(argv, redirectUrl);
+ 		if (callbackUrl) handleCallbackUrl(callbackUrl);
+ 	};
+-	app.setAsDefaultProtocolClient(options.renderer.scheme);
++	if (app.isPackaged) app.setAsDefaultProtocolClient(options.renderer.scheme);
+ 	app.on("open-url", openUrlListener);
+ 	app.on("second-instance", secondInstanceListener);
+ 	ipcMain.handle(OAUTH_TRANSPORT_CHANNELS.getRedirectUrl, (event) => {
+ 		if (!isMainFrameEvent(event)) throw new Error("Clerk: OAuth request did not originate from a window's main frame.");
+-		return redirectUrl;
++		return browserRedirectUrl;
+ 	});
+ 	ipcMain.handle(OAUTH_TRANSPORT_CHANNELS.open, async (event, url) => {
+ 		if (!isMainFrameEvent(event)) throw new Error("Clerk: OAuth request did not originate from a window's main frame.");
+@@ -301,7 +303,7 @@ function createClerkBridge(options) {
+ 					...options.renderer.privileges
+ 				}
+ 			}]);
+-			teardowns.push(setupOAuthTransportIpcHandlers({ renderer: options.renderer }));
++			teardowns.push(setupOAuthTransportIpcHandlers({ renderer: options.renderer, oauthRedirectUrl: options.oauthRedirectUrl }));
+ 		}
+ 		return {
+ 			isPrimaryInstance: true,
+diff --git a/dist/esm/react/index.js b/dist/esm/react/index.js
+index 66afdb08f99813ff1294ddd873c466418ebe1ba9..bc5ef027bb1b34e7481a70d72660462b67cde6bb 100644
+--- a/dist/esm/react/index.js
++++ b/dist/esm/react/index.js
+@@ -31,7 +31,7 @@ function createClerkInstance(publishableKey, passkeys) {
+ 		const token = await window.__clerk_internal_electron?.tokenCache.getToken(CLERK_CLIENT_JWT_KEY);
+ 		if (token) {
+ 			const headers = new Headers(request.headers);
+-			headers.set("Authorization", `Bearer ${token}`);
++			if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+ 			request.headers = headers;
+ 		}
+ 	});
+diff --git a/dist/types/main/oauth-transport.d.ts b/dist/types/main/oauth-transport.d.ts
+index 79b8c49bcbc70f81c86cd3321a15794bcd7dafc9..e9fccf44dc7eef0fb122edbf9d44788b9445fe45 100644
+--- a/dist/types/main/oauth-transport.d.ts
++++ b/dist/types/main/oauth-transport.d.ts
+@@ -1,6 +1,7 @@
+ import type { RendererSchemeOptions } from '../shared/types';
+ type OAuthTransportOptions = {
+     renderer: RendererSchemeOptions;
++    oauthRedirectUrl?: string;
+ };
+ export declare function setupOAuthTransportIpcHandlers(options: OAuthTransportOptions): () => void;
+ export {};
+diff --git a/dist/types/shared/types.d.ts b/dist/types/shared/types.d.ts
+index ed127cc9e02808600b7f51dd71b278e223180534..5e1fc89deb76ba553bbfa61ee6f6707a3bd79629 100644
+--- a/dist/types/shared/types.d.ts
++++ b/dist/types/shared/types.d.ts
+@@ -14,6 +14,8 @@ export type CreateClerkBridgeOptions = {
+      * Registers the custom scheme used to serve the Electron renderer from a stable origin.
+      */
+     renderer?: RendererSchemeOptions;
++    /** Optional allowlisted HTTPS browser handoff page. Native callback matching still uses renderer. */
++    oauthRedirectUrl?: string;
+     /**
+      * Whether Clerk should acquire and release Electron's process-wide single-instance lock for OAuth
+      * deep links. Set this to `false` when the application manages the lock itself. Ignored on macOS,

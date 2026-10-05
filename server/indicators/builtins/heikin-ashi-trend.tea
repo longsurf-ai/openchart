@@ -1,0 +1,11 @@
+indicator("Heikin-Ashi Trend", overlay = false)
+haClose = (open + high + low + close) / 4
+var float haOpen = na
+haOpen := na(haOpen[1]) ? (open + close) / 2 : (haOpen[1] + haClose[1]) / 2
+haHigh = math.max(high, math.max(haOpen, haClose))
+haLow = math.min(low, math.min(haOpen, haClose))
+bull = haClose >= haOpen
+shade = bull ? #51C5B0 : #D986A4
+plotcandle("averaged_candles", haOpen, haHigh, haLow, haClose, "Heikin-Ashi average prices", color=shade, wickcolor=shade, bordercolor=shade)
+plotshape("turn_up", barstate.isconfirmed and bull and not bull[1], "Average candle turned upward", style=shape.triangleup, location=location.bottom, color=#51C5B0, text="Average turns up", textcolor=#51C5B0, size=size.tiny)
+plotshape("turn_down", barstate.isconfirmed and not bull and bull[1], "Average candle turned downward", style=shape.triangledown, location=location.top, color=#D986A4, text="Average turns down", textcolor=#D986A4, size=size.tiny)

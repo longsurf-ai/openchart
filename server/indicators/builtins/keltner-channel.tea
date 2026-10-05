@@ -1,0 +1,8 @@
+indicator("Keltner Channel", overlay = true)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 1, maxval = 500)
+multiplier = input.float(2.0, "Multiplier", minval = 0)
+[basis, upper, lower] = ta.kc(source, length, multiplier)
+plot("basis", basis, "Basis")
+plot("upper", upper, "Upper")
+plot("lower", lower, "Lower")

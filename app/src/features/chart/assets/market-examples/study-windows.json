@@ -1,0 +1,26 @@
+{
+  "supertrend-regime": {
+    "exampleId": "ethusdt-2024-1d",
+    "endTime": 1723680000000
+  },
+  "bollinger-squeeze": {
+    "exampleId": "tsla-2022-1d",
+    "endTime": 1669611600000
+  },
+  "rsi-divergence": {
+    "exampleId": "ba-2022-1d",
+    "endTime": 1657166400000
+  },
+  "anchored-vwap-bands": {
+    "exampleId": "btcusdt-2024-1d",
+    "endTime": 1710979200000
+  },
+  "money-flow-pressure": {
+    "exampleId": "meta-2022-1d",
+    "endTime": 1670562000000
+  },
+  "confirmed-swing-map": {
+    "exampleId": "amd-2024-1d",
+    "endTime": 1730433600000
+  }
+}

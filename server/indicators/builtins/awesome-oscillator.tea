@@ -1,0 +1,3 @@
+indicator("Awesome Oscillator", overlay = false)
+ao = ta.sma(hl2, 5) - ta.sma(hl2, 34)
+plot("histogram", ao, "Histogram", style = "histogram")

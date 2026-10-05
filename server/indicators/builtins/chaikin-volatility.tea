@@ -1,0 +1,3 @@
+indicator("Chaikin Volatility", overlay = false)
+length = input.int(14, "Length", minval = 1, maxval = 500)
+plot("value", ta.roc(ta.ema(high - low, length), length), "Value")

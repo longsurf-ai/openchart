@@ -1,0 +1,41 @@
+{
+  "name": "@openchart/desktop",
+  "version": "0.1.10",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types scripts/tooling.ts dev",
+    "build": "node --experimental-strip-types scripts/tooling.ts build",
+    "package": "node --experimental-strip-types scripts/tooling.ts package",
+    "release": "node --experimental-strip-types scripts/tooling.ts release production",
+    "smoke": "node --experimental-strip-types tests/smoke.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@clerk/electron": "0.0.42",
+    "electron-store": "8.2.0",
+    "update-electron-app": "3.3.0",
+    "@anthropic-ai/claude-agent-sdk": "0.3.284",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.112",
+    "react": "^18.3.1",
+    "@openchart/server": "workspace:*",
+    "undici": "7.29.1",
+    "ws": "^8.18.3",
+    "zod": "^4.1.5",
+    "@openchart/models": "workspace:*",
+    "@openchart/notification": "workspace:*"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@openchart/app": "workspace:*",
+    "@playwright/test": "^1.49.1",
+    "electron": "44.2.0",
+    "vite": "7.3.6",
+    "@types/react": "^18.3.1"
+  },
+  "exports": {
+    "./package.json": "./package.json"
+  }
+}

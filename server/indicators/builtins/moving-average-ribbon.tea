@@ -1,0 +1,6 @@
+indicator("Moving Average Ribbon", overlay = true)
+source = input.source(close, "Source")
+plot("ma10", ta.sma(source, 10), "Ma10")
+plot("ma20", ta.sma(source, 20), "Ma20")
+plot("ma50", ta.sma(source, 50), "Ma50")
+plot("ma100", ta.sma(source, 100), "Ma100")

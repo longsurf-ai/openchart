@@ -1,0 +1,53 @@
+/* React Query Builder layout uses the same theme tokens as shared controls. */
+.alert-conditions {
+  --rqb-background-color: transparent;
+  --rqb-border-color: var(--border);
+  --rqb-border-width: 0;
+  --rqb-spacing: 1rem;
+}
+.alert-conditions .ruleGroup {
+  padding: 0;
+  min-width: 0;
+}
+.alert-conditions .ruleGroup .ruleGroup {
+  margin-left: 0.75rem;
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+}
+.alert-conditions .ruleGroup-header {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.alert-conditions .ruleGroup-body {
+  min-width: 0;
+}
+.alert-conditions .ruleGroup-combinators {
+  min-width: min(100%, theme("spacing.28"));
+  max-width: 100%;
+  background: var(--secondary);
+}
+.alert-conditions .ruleGroup-addRule {
+  margin-left: auto;
+}
+.alert-conditions .rule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.alert-conditions .rule-fields {
+  min-width: min(100%, theme("spacing.28"));
+  max-width: 100%;
+  flex: 1;
+}
+.alert-conditions .rule-operators {
+  min-width: min(100%, theme("spacing.36"));
+  max-width: 100%;
+  flex: 1;
+}
+.alert-conditions .rule-remove,
+.alert-conditions .ruleGroup-remove {
+  padding: 0;
+  width: 2rem;
+  color: var(--muted-foreground);
+}

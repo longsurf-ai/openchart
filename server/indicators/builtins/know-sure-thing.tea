@@ -1,0 +1,4 @@
+indicator("Know Sure Thing", overlay = false)
+kst = ta.sma(ta.roc(close, 10), 10) + 2 * ta.sma(ta.roc(close, 15), 10) + 3 * ta.sma(ta.roc(close, 20), 10) + 4 * ta.sma(ta.roc(close, 30), 15)
+plot("kst", kst, "Kst")
+plot("signal", ta.sma(kst, 9), "Signal")

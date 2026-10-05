@@ -1,0 +1,23 @@
+title = "OpenChart public source credential scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Clerk publishable client configuration, never Clerk secret keys"
+condition = "AND"
+paths = ['''^app/\.env\.(development|production)$''']
+regexTarget = "match"
+regexes = ['''VITE_APP_CLERK_PUBLISHABLE_KEY=pk_(test|live)_[A-Za-z0-9+/=]+''']
+
+[[allowlists]]
+description = "Renderer rejection test uses a publishable example.com key"
+condition = "AND"
+paths = ['''^platform/desktop/src/__tests__/renderer-config\.test\.ts$''']
+regexes = ['''^pk_live_ZXhhbXBsZS5jb20k$''']
+
+[[allowlists]]
+description = "RFC 6455 public WebSocket handshake example nonce"
+condition = "AND"
+paths = ['''^server/index\.test\.ts$''']
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']

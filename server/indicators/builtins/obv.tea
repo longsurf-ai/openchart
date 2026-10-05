@@ -1,0 +1,3 @@
+indicator("OBV", overlay = false)
+value = ta.cum(close > close[1] ? volume : close < close[1] ? -volume : 0)
+plot("value", value, "Value")

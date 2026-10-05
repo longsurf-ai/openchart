@@ -1,0 +1,7 @@
+indicator("Stochastic RSI", overlay = false)
+source = input.source(close, "Source")
+length = input.int(14, "Length", minval = 1, maxval = 500)
+r = ta.rsi(source, length)
+k = ta.sma(ta.stoch(r, r, r, length), 3)
+plot("k", k, "K")
+plot("d", ta.sma(k, 3), "D")

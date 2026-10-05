@@ -1,0 +1,438 @@
+{
+  "source": "https://www.ishares.com/us/products/239723/ishares-s-p-100-etf/latest-holdings.csv",
+  "asOf": "2026-09-24",
+  "symbols": [
+    "NVDA",
+    "AAPL",
+    "MSFT",
+    "AMZN",
+    "GOOGL",
+    "META",
+    "AVGO",
+    "GOOG",
+    "MU",
+    "TSLA",
+    "AMD",
+    "LLY",
+    "BRK-B",
+    "JPM",
+    "XOM",
+    "JNJ",
+    "INTC",
+    "V",
+    "WMT",
+    "ABBV",
+    "MA",
+    "PLTR",
+    "CSCO",
+    "CVX",
+    "COST",
+    "LRCX",
+    "AMAT",
+    "CAT",
+    "MRK",
+    "BAC",
+    "KO",
+    "PG",
+    "UNH",
+    "GE",
+    "PANW",
+    "NFLX",
+    "PM",
+    "HD",
+    "GS",
+    "SNDK",
+    "GEV",
+    "RTX",
+    "TMO",
+    "WFC",
+    "TXN",
+    "ORCL",
+    "MS",
+    "C",
+    "AMGN",
+    "LIN",
+    "ANET",
+    "IBM",
+    "QCOM",
+    "VZ",
+    "CRM",
+    "GILD",
+    "DIS",
+    "PEP",
+    "ABT",
+    "DE",
+    "T",
+    "MCD",
+    "UNP",
+    "DELL",
+    "PFE",
+    "SCHW",
+    "AXP",
+    "NEE",
+    "BA",
+    "COP",
+    "BLK",
+    "NOW",
+    "UBER",
+    "ISRG",
+    "DHR",
+    "BMY",
+    "COF",
+    "BKNG",
+    "MO",
+    "MDT",
+    "CVS",
+    "ACN",
+    "SBUX",
+    "LMT",
+    "LOW",
+    "BNY",
+    "SO",
+    "ADBE",
+    "USB",
+    "DUK",
+    "EMR",
+    "MMM",
+    "GD",
+    "TMUS",
+    "CMCSA",
+    "AMT",
+    "MDLZ",
+    "INTU",
+    "GM",
+    "UPS",
+    "FDX"
+  ],
+  "international": {
+    "source": "https://www.ishares.com/us/products/239600/ishares-msci-acwi-etf/latest-holdings.csv",
+    "asOf": "2026-09-23",
+    "listings": [
+      {
+        "symbol": "2330",
+        "exchange": "TWSE",
+        "name": "TAIWAN SEMICONDUCTOR MANUFACTURING"
+      },
+      {
+        "symbol": "005930",
+        "exchange": "KRX",
+        "name": "SAMSUNG ELECTRONICS LTD"
+      },
+      {
+        "symbol": "000660",
+        "exchange": "KRX",
+        "name": "SK HYNIX"
+      },
+      {
+        "symbol": "ASML",
+        "exchange": "AMS",
+        "name": "ASML HOLDING"
+      },
+      {
+        "symbol": "HSBA",
+        "exchange": "LSE",
+        "name": "HSBC HOLDINGS PLC"
+      },
+      {
+        "symbol": "700",
+        "exchange": "HKEX",
+        "name": "TENCENT HOLDINGS"
+      },
+      {
+        "symbol": "ROP",
+        "exchange": "SIX",
+        "name": "ROCHE PS PAR AG"
+      },
+      {
+        "symbol": "RY",
+        "exchange": "TSX",
+        "name": "ROYAL BANK OF CANADA"
+      },
+      {
+        "symbol": "SHEL",
+        "exchange": "LSE",
+        "name": "SHELL"
+      },
+      {
+        "symbol": "NOVN",
+        "exchange": "SIX",
+        "name": "NOVARTIS AG"
+      },
+      {
+        "symbol": "AZN",
+        "exchange": "LSE",
+        "name": "ASTRAZENECA PLC"
+      },
+      {
+        "symbol": "8306",
+        "exchange": "TSE",
+        "name": "MITSUBISHI UFJ FINANCIAL GROUP"
+      },
+      {
+        "symbol": "NESN",
+        "exchange": "SIX",
+        "name": "NESTLE SA"
+      },
+      {
+        "symbol": "2454",
+        "exchange": "TWSE",
+        "name": "MEDIATEK"
+      },
+      {
+        "symbol": "9988",
+        "exchange": "HKEX",
+        "name": "ALIBABA GROUP HOLDING"
+      },
+      {
+        "symbol": "SIE",
+        "exchange": "XETRA",
+        "name": "SIEMENS N AG"
+      },
+      {
+        "symbol": "BHP",
+        "exchange": "ASX",
+        "name": "BHP GROUP LTD"
+      },
+      {
+        "symbol": "SAP",
+        "exchange": "XETRA",
+        "name": "SAP"
+      },
+      {
+        "symbol": "SAN",
+        "exchange": "BME",
+        "name": "BANCO SANTANDER"
+      },
+      {
+        "symbol": "TD",
+        "exchange": "TSX",
+        "name": "TORONTO DOMINION"
+      },
+      {
+        "symbol": "SU",
+        "exchange": "PAR",
+        "name": "SCHNEIDER ELECTRIC"
+      },
+      {
+        "symbol": "7203",
+        "exchange": "TSE",
+        "name": "TOYOTA MOTOR"
+      },
+      {
+        "symbol": "ALV",
+        "exchange": "XETRA",
+        "name": "ALLIANZ"
+      },
+      {
+        "symbol": "CBA",
+        "exchange": "ASX",
+        "name": "COMMONWEALTH BANK OF AUSTRALIA"
+      },
+      {
+        "symbol": "TTE",
+        "exchange": "PAR",
+        "name": "TOTALENERGIES"
+      },
+      {
+        "symbol": "SHOP",
+        "exchange": "TSX",
+        "name": "SHOPIFY SUBORDINATE VOTING CLASS A"
+      },
+      {
+        "symbol": "RR.",
+        "exchange": "LSE",
+        "name": "ROLLS-ROYCE HOLDINGS PLC"
+      },
+      {
+        "symbol": "BBVA",
+        "exchange": "BME",
+        "name": "BANCO BILBAO VIZCAYA ARGENTARIA SA"
+      },
+      {
+        "symbol": "8316",
+        "exchange": "TSE",
+        "name": "SUMITOMO MITSUI FINANCIAL GROUP"
+      },
+      {
+        "symbol": "ABBN",
+        "exchange": "SIX",
+        "name": "ABB LTD"
+      },
+      {
+        "symbol": "6501",
+        "exchange": "TSE",
+        "name": "HITACHI"
+      },
+      {
+        "symbol": "UBSG",
+        "exchange": "SIX",
+        "name": "UBS GROUP AG"
+      },
+      {
+        "symbol": "8035",
+        "exchange": "TSE",
+        "name": "TOKYO ELECTRON"
+      },
+      {
+        "symbol": "6857",
+        "exchange": "TSE",
+        "name": "ADVANTEST"
+      },
+      {
+        "symbol": "9984",
+        "exchange": "TSE",
+        "name": "SOFTBANK GROUP"
+      },
+      {
+        "symbol": "6098",
+        "exchange": "TSE",
+        "name": "RECRUIT HOLDINGS LTD"
+      },
+      {
+        "symbol": "IBE",
+        "exchange": "BME",
+        "name": "IBERDROLA"
+      },
+      {
+        "symbol": "005935",
+        "exchange": "KRX",
+        "name": "SAMSUNG ELECTRONICS NON VOTING PRE"
+      },
+      {
+        "symbol": "6758",
+        "exchange": "TSE",
+        "name": "SONY GROUP"
+      },
+      {
+        "symbol": "SAF",
+        "exchange": "PAR",
+        "name": "SAFRAN SA"
+      },
+      {
+        "symbol": "285A",
+        "exchange": "TSE",
+        "name": "KIOXIA HOLDINGS"
+      },
+      {
+        "symbol": "AIR",
+        "exchange": "PAR",
+        "name": "AIRBUS GROUP"
+      },
+      {
+        "symbol": "ULVR",
+        "exchange": "LSE",
+        "name": "UNILEVER PLC"
+      },
+      {
+        "symbol": "UCG",
+        "exchange": "MIL",
+        "name": "UNICREDIT"
+      },
+      {
+        "symbol": "ENR",
+        "exchange": "XETRA",
+        "name": "SIEMENS ENERGY N AG"
+      },
+      {
+        "symbol": "D05",
+        "exchange": "SGX",
+        "name": "DBS GROUP HOLDINGS LTD"
+      },
+      {
+        "symbol": "8411",
+        "exchange": "TSE",
+        "name": "MIZUHO FINANCIAL GROUP"
+      },
+      {
+        "symbol": "NOVO B",
+        "exchange": "CPH",
+        "name": "NOVO NORDISK CLASS B"
+      },
+      {
+        "symbol": "AI",
+        "exchange": "PAR",
+        "name": "LAIR LIQUIDE SOCIETE ANONYME POUR"
+      },
+      {
+        "symbol": "2308",
+        "exchange": "TWSE",
+        "name": "DELTA ELECTRONICS"
+      },
+      {
+        "symbol": "BMO",
+        "exchange": "TSX",
+        "name": "BANK OF MONTREAL"
+      },
+      {
+        "symbol": "BP.",
+        "exchange": "LSE",
+        "name": "BP PLC"
+      },
+      {
+        "symbol": "BNP",
+        "exchange": "PAR",
+        "name": "BNP PARIBAS SA"
+      },
+      {
+        "symbol": "BATS",
+        "exchange": "LSE",
+        "name": "BRITISH AMERICAN TOBACCO"
+      },
+      {
+        "symbol": "BNS",
+        "exchange": "TSX",
+        "name": "BANK OF NOVA SCOTIA"
+      },
+      {
+        "symbol": "CFR",
+        "exchange": "SIX",
+        "name": "COMPAGNIE FINANCIERE RICHEMONT SA"
+      },
+      {
+        "symbol": "MC",
+        "exchange": "PAR",
+        "name": "LVMH"
+      },
+      {
+        "symbol": "RIO",
+        "exchange": "LSE",
+        "name": "RIO TINTO"
+      },
+      {
+        "symbol": "ISP",
+        "exchange": "MIL",
+        "name": "INTESA SANPAOLO"
+      },
+      {
+        "symbol": "ENB",
+        "exchange": "TSX",
+        "name": "ENBRIDGE"
+      },
+      {
+        "symbol": "ZURN",
+        "exchange": "SIX",
+        "name": "ZURICH INSURANCE GROUP AG"
+      },
+      {
+        "symbol": "DTE",
+        "exchange": "XETRA",
+        "name": "DEUTSCHE TELEKOM N AG"
+      },
+      {
+        "symbol": "INGA",
+        "exchange": "AMS",
+        "name": "ING GROEP"
+      },
+      {
+        "symbol": "939",
+        "exchange": "HKEX",
+        "name": "CHINA CONSTRUCTION BANK CORP H"
+      },
+      {
+        "symbol": "CM",
+        "exchange": "TSX",
+        "name": "CANADIAN IMPERIAL BANK OF COMMERCE"
+      }
+    ]
+  }
+}

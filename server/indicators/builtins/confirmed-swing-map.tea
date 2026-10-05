@@ -1,0 +1,32 @@
+indicator("Confirmed Swing Map", overlay = true)
+strength = input.int(5, "Pivot confirmation bars", minval = 1, maxval = 30)
+ph = ta.pivothigh(high, strength, strength)
+pl = ta.pivotlow(low, strength, strength)
+var float previousHigh = na
+var float previousLow = na
+higherHigh = barstate.isconfirmed and not na(ph) and ph > previousHigh
+lowerHigh = barstate.isconfirmed and not na(ph) and ph < previousHigh
+higherLow = barstate.isconfirmed and not na(pl) and pl > previousLow
+lowerLow = barstate.isconfirmed and not na(pl) and pl < previousLow
+var int previousTime = na
+var float previousValue = na
+var int startTime = na
+var float startValue = na
+var int endTime = na
+var float endValue = na
+if barstate.isconfirmed and (not na(ph) or not na(pl)) and not (not na(ph) and not na(pl))
+    startTime := previousTime
+    startValue := previousValue
+    endTime := time[strength]
+    endValue := not na(ph) ? ph : pl
+    previousTime := endTime
+    previousValue := endValue
+if barstate.isconfirmed and not na(ph)
+    previousHigh := ph
+if barstate.isconfirmed and not na(pl)
+    previousLow := pl
+plotsegment("swing", startTime, startValue, endTime, endValue, color=endValue >= startValue ? #77C6B5 : #D595A7, linewidth=2)
+plotshape("higher_high", higherHigh, "Higher high confirmed", style=shape.triangledown, color=#77C6B5, offset=-strength, text="HH", textcolor=#77C6B5, size=size.tiny)
+plotshape("lower_high", lowerHigh, "Lower high confirmed", style=shape.triangledown, color=#D595A7, offset=-strength, text="LH", textcolor=#D595A7, size=size.tiny)
+plotshape("higher_low", higherLow, "Higher low confirmed", style=shape.triangleup, location=location.belowbar, color=#77C6B5, offset=-strength, text="HL", textcolor=#77C6B5, size=size.tiny)
+plotshape("lower_low", lowerLow, "Lower low confirmed", style=shape.triangleup, location=location.belowbar, color=#D595A7, offset=-strength, text="LL", textcolor=#D595A7, size=size.tiny)

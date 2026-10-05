@@ -1,0 +1,21 @@
+{
+  "name": "@openchart/hose",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/server.ts",
+    "./jsonrpc": "./src/jsonrpc.ts"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json && vitest run",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "rxjs": "^7.8.2",
+    "zod": "^4.1.5",
+    "ws": "^8.18.3",
+    "vscode-jsonrpc": "8.2.1"
+  }
+}

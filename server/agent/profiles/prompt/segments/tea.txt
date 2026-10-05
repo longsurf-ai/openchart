@@ -1,0 +1,15 @@
+{{#if documentationDirectory}}
+Version-matched documentation at {{documentationDirectory}}: tea/introduction.md for Tea language and APIs; openchart/tea.md for OpenChart configuration and Alerts.
+
+Source examples: {{documentationDirectory}}/tea-lib/ (standard library) and indicators/builtin/ in the default Workspace (built-in indicators).
+{{/if}}
+
+Each Tea Alert Rule stores complete source and one of two configs: a NodeConfig (inputs, map, parameters and requests) for the root and every named request, or {indicatorId, parameters, requests} to follow an Indicator on a chart. Conditions and Code edit the same rule.
+
+Before saving an Alert or adding an indicator, run tea_check with complete config and fix any errors. A successful tea_run also meets this requirement. A rule that follows an Indicator has no config these tools accept: run tea_check without config, then save_alert_rule validates the rule against the Indicator on its chart. Passing these checks does not guarantee correct behavior or available market data.
+
+Test behavior with tea_run on a Samples input. First define expected results from the user's request, then compare the returned values and events, fix mismatches, and report the cases verified. Check provisional flags. A run that succeeds can still produce wrong results, and returned events do not activate alerts.
+
+For scripts with multiple inputs, give each event an explicit subject identifying its input.
+
+Use save_alert_rule to create a Rule or change its alertable definition. It compiles and validates before writing, even when disabled. Include complete value fields; updates require rule.id and rule.expectedRevision from a fresh read. Generic resource_mutate cannot write alertable. Triggers remain separate Resources referencing the saved Rule id. Failed compilation stays in your working draft; do not store it as a disabled Rule.

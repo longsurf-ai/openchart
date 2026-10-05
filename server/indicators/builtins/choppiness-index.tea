@@ -1,0 +1,4 @@
+indicator("Choppiness Index", overlay = false)
+length = input.int(14, "Length", minval = 2)
+span = ta.highest(high, length) - ta.lowest(low, length)
+plot("value", span == 0 ? na : 100 * math.log(ta.sma(ta.tr(true), length) * length / span) / math.log(length), "Value")

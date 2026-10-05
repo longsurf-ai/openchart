@@ -1,0 +1,10 @@
+indicator("Choppiness Regime", overlay = false)
+length = input.int(14, "Length", minval = 2, maxval = 500)
+span = ta.highest(high, length) - ta.lowest(low, length)
+value = span > 0 ? 100 * math.log(ta.sma(ta.tr(true), length) * length / span) / math.log(length) : na
+plot("chop", value, "Choppiness", color=#AC9AD0, linewidth=2)
+u = hline("choppy", 61.8, "Choppy threshold", color=#AD9ACF, linestyle=hline.style_dashed)
+l = hline("directional", 38.2, "Directional threshold", color=#7BBDB0, linestyle=hline.style_dashed)
+fill("middle", u, l, color=color.new(#A7A5B7, 95))
+bgcolor("regime", value > 61.8 ? color.new(#AD9ACF, 86) : value < 38.2 ? color.new(#7BBDB0, 87) : na)
+plotshape("trend", barstate.isconfirmed and ta.crossunder(value, 38.2), "Range became more directional", style=shape.diamond, location=location.bottom, color=#7BBDB0, text="Directional", textcolor=#7BBDB0, size=size.tiny)

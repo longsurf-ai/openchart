@@ -1,0 +1,4 @@
+indicator("Accumulation/Distribution", overlay = false)
+flow = high == low ? 0 : ((close - low) - (high - close)) / (high - low) * volume
+ad = ta.cum(flow)
+plot("value", ad, "Value")

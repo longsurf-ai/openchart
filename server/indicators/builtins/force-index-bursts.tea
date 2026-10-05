@@ -1,0 +1,14 @@
+indicator("Force Index Bursts", overlay = false)
+length = input.int(13, "Force smoothing", minval = 1, maxval = 500)
+lookback = input.int(63, "Impulse lookback", minval = 5, maxval = 500)
+multiplier = input.float(2, "Impulse deviations", minval = 0.1)
+raw = nz(close - close[1]) * volume
+value = ta.ema(raw, length)
+threshold = ta.stdev(value, lookback) * multiplier
+shade = value >= 0 ? (value > threshold ? #7AD3B7 : #558C82) : (value < -threshold ? #D798C3 : #8E6D93)
+plot("force", value, "Smoothed price change times volume", color=shade, style=plot.style_columns)
+plot("upper", threshold, "Positive impulse threshold", color=color.new(#D1B27B, 40))
+plot("lower", -threshold, "Negative impulse threshold", color=color.new(#D1B27B, 40))
+hline("zero", 0, "Balance", color=color.new(#A0A0A8, 60))
+plotshape("positive", barstate.isconfirmed and ta.crossover(value, threshold), "Force crossed positive deviation threshold", style=shape.triangleup, location=location.bottom, color=#7AD3B7, text="Positive impulse", textcolor=#7AD3B7, size=size.tiny)
+plotshape("negative", barstate.isconfirmed and ta.crossunder(value, -threshold), "Force crossed negative deviation threshold", style=shape.triangledown, location=location.top, color=#D798C3, text="Negative impulse", textcolor=#D798C3, size=size.tiny)

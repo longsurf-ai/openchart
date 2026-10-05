@@ -1,0 +1,61 @@
+{
+  "name": "@openchart/chart-core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./*": "./src/*.ts",
+    "./animation": "./src/animation/index.ts",
+    "./annotation": "./src/annotation/index.ts",
+    "./bus": "./src/bus/index.ts",
+    "./cache": "./src/cache/index.ts",
+    "./config": "./src/config/index.ts",
+    "./control": "./src/control/index.ts",
+    "./coord": "./src/coord/index.ts",
+    "./data": "./src/data/index.ts",
+    "./drawing": "./src/drawing/index.ts",
+    "./event": "./src/event/index.ts",
+    "./format": "./src/format/index.ts",
+    "./headless": "./src/headless/index.ts",
+    "./hit": "./src/hit/index.ts",
+    "./interaction": "./src/interaction/index.ts",
+    "./invalidate": "./src/invalidate/index.ts",
+    "./live": "./src/live/index.ts",
+    "./marker": "./src/marker/index.ts",
+    "./notification": "./src/notification/index.ts",
+    "./primitive": "./src/primitive/index.ts",
+    "./render": "./src/render/index.ts",
+    "./scale": "./src/scale/index.ts",
+    "./series": "./src/series/index.ts",
+    "./span": "./src/span/index.ts",
+    "./strategy": "./src/strategy/index.ts",
+    "./tz": "./src/tz/index.ts",
+    "./util": "./src/util/index.ts",
+    "./v2/api": "./src/v2/api/index.ts",
+    "./v2": "./src/v2/index.ts",
+    "./v2/paint": "./src/v2/paint/index.ts",
+    "./v2/state": "./src/v2/state/index.ts",
+    "./v2/x-scale": "./src/v2/x-scale/index.ts",
+    "./vertical-profile": "./src/vertical-profile/index.ts",
+    "./view": "./src/view/index.ts",
+    "./workspace": "./src/workspace/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.source.json",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "zod": "^4.1.5",
+    "@openchart/feed": "workspace:*",
+    "@openchart/market": "workspace:*",
+    "effect": "4.0.0-rc.112"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas": "^0.1.97"
+  },
+  "devDependencies": {
+    "immer": "11.1.18",
+    "jsdom": "^24.0.0"
+  }
+}

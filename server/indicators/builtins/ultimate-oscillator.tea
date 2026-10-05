@@ -1,0 +1,7 @@
+indicator("Ultimate Oscillator", overlay = false)
+bp = close - math.min(low, nz(close[1], close))
+tr = math.max(high, nz(close[1], close)) - math.min(low, nz(close[1], close))
+a = ta.sma(bp, 7) / ta.sma(tr, 7)
+b = ta.sma(bp, 14) / ta.sma(tr, 14)
+c = ta.sma(bp, 28) / ta.sma(tr, 28)
+plot("value", 100 * (4 * a + 2 * b + c) / 7, "Value")

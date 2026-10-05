@@ -1,0 +1,292 @@
+[
+  {
+    "id": "aapl-2022-1d",
+    "provider": "yfinance",
+    "symbol": "AAPL",
+    "year": 2022
+  },
+  {
+    "id": "aapl-2024-1d",
+    "provider": "yfinance",
+    "symbol": "AAPL",
+    "year": 2024
+  },
+  {
+    "id": "msft-2022-1d",
+    "provider": "yfinance",
+    "symbol": "MSFT",
+    "year": 2022
+  },
+  {
+    "id": "msft-2024-1d",
+    "provider": "yfinance",
+    "symbol": "MSFT",
+    "year": 2024
+  },
+  {
+    "id": "nvda-2022-1d",
+    "provider": "yfinance",
+    "symbol": "NVDA",
+    "year": 2022
+  },
+  {
+    "id": "nvda-2024-1d",
+    "provider": "yfinance",
+    "symbol": "NVDA",
+    "year": 2024
+  },
+  {
+    "id": "amzn-2022-1d",
+    "provider": "yfinance",
+    "symbol": "AMZN",
+    "year": 2022
+  },
+  {
+    "id": "amzn-2024-1d",
+    "provider": "yfinance",
+    "symbol": "AMZN",
+    "year": 2024
+  },
+  {
+    "id": "googl-2022-1d",
+    "provider": "yfinance",
+    "symbol": "GOOGL",
+    "year": 2022
+  },
+  {
+    "id": "googl-2024-1d",
+    "provider": "yfinance",
+    "symbol": "GOOGL",
+    "year": 2024
+  },
+  {
+    "id": "meta-2022-1d",
+    "provider": "yfinance",
+    "symbol": "META",
+    "year": 2022
+  },
+  {
+    "id": "meta-2024-1d",
+    "provider": "yfinance",
+    "symbol": "META",
+    "year": 2024
+  },
+  {
+    "id": "tsla-2022-1d",
+    "provider": "yfinance",
+    "symbol": "TSLA",
+    "year": 2022
+  },
+  {
+    "id": "tsla-2024-1d",
+    "provider": "yfinance",
+    "symbol": "TSLA",
+    "year": 2024
+  },
+  {
+    "id": "amd-2022-1d",
+    "provider": "yfinance",
+    "symbol": "AMD",
+    "year": 2022
+  },
+  {
+    "id": "amd-2024-1d",
+    "provider": "yfinance",
+    "symbol": "AMD",
+    "year": 2024
+  },
+  {
+    "id": "intc-2022-1d",
+    "provider": "yfinance",
+    "symbol": "INTC",
+    "year": 2022
+  },
+  {
+    "id": "intc-2024-1d",
+    "provider": "yfinance",
+    "symbol": "INTC",
+    "year": 2024
+  },
+  {
+    "id": "jpm-2022-1d",
+    "provider": "yfinance",
+    "symbol": "JPM",
+    "year": 2022
+  },
+  {
+    "id": "jpm-2024-1d",
+    "provider": "yfinance",
+    "symbol": "JPM",
+    "year": 2024
+  },
+  {
+    "id": "xom-2022-1d",
+    "provider": "yfinance",
+    "symbol": "XOM",
+    "year": 2022
+  },
+  {
+    "id": "xom-2024-1d",
+    "provider": "yfinance",
+    "symbol": "XOM",
+    "year": 2024
+  },
+  {
+    "id": "unh-2022-1d",
+    "provider": "yfinance",
+    "symbol": "UNH",
+    "year": 2022
+  },
+  {
+    "id": "unh-2024-1d",
+    "provider": "yfinance",
+    "symbol": "UNH",
+    "year": 2024
+  },
+  {
+    "id": "pfe-2022-1d",
+    "provider": "yfinance",
+    "symbol": "PFE",
+    "year": 2022
+  },
+  {
+    "id": "pfe-2024-1d",
+    "provider": "yfinance",
+    "symbol": "PFE",
+    "year": 2024
+  },
+  {
+    "id": "dis-2022-1d",
+    "provider": "yfinance",
+    "symbol": "DIS",
+    "year": 2022
+  },
+  {
+    "id": "dis-2024-1d",
+    "provider": "yfinance",
+    "symbol": "DIS",
+    "year": 2024
+  },
+  { "id": "ba-2022-1d", "provider": "yfinance", "symbol": "BA", "year": 2022 },
+  { "id": "ba-2024-1d", "provider": "yfinance", "symbol": "BA", "year": 2024 },
+  {
+    "id": "wmt-2022-1d",
+    "provider": "yfinance",
+    "symbol": "WMT",
+    "year": 2022
+  },
+  {
+    "id": "wmt-2024-1d",
+    "provider": "yfinance",
+    "symbol": "WMT",
+    "year": 2024
+  },
+  {
+    "id": "spy-2022-1d",
+    "provider": "yfinance",
+    "symbol": "SPY",
+    "year": 2022
+  },
+  {
+    "id": "spy-2024-1d",
+    "provider": "yfinance",
+    "symbol": "SPY",
+    "year": 2024
+  },
+  {
+    "id": "iwm-2022-1d",
+    "provider": "yfinance",
+    "symbol": "IWM",
+    "year": 2022
+  },
+  {
+    "id": "iwm-2024-1d",
+    "provider": "yfinance",
+    "symbol": "IWM",
+    "year": 2024
+  },
+  {
+    "id": "gld-2022-1d",
+    "provider": "yfinance",
+    "symbol": "GLD",
+    "year": 2022
+  },
+  {
+    "id": "gld-2024-1d",
+    "provider": "yfinance",
+    "symbol": "GLD",
+    "year": 2024
+  },
+  {
+    "id": "xle-2022-1d",
+    "provider": "yfinance",
+    "symbol": "XLE",
+    "year": 2022
+  },
+  {
+    "id": "xle-2024-1d",
+    "provider": "yfinance",
+    "symbol": "XLE",
+    "year": 2024
+  },
+  {
+    "id": "qqq-2022-1d",
+    "provider": "yfinance",
+    "symbol": "QQQ",
+    "year": 2022
+  },
+  {
+    "id": "qqq-2024-1d",
+    "provider": "yfinance",
+    "symbol": "QQQ",
+    "year": 2024
+  },
+  {
+    "id": "tlt-2022-1d",
+    "provider": "yfinance",
+    "symbol": "TLT",
+    "year": 2022
+  },
+  {
+    "id": "tlt-2024-1d",
+    "provider": "yfinance",
+    "symbol": "TLT",
+    "year": 2024
+  },
+  {
+    "id": "btcusdt-2022-1d",
+    "provider": "binance",
+    "symbol": "BTCUSDT",
+    "year": 2022
+  },
+  {
+    "id": "btcusdt-2024-1d",
+    "provider": "binance",
+    "symbol": "BTCUSDT",
+    "year": 2024
+  },
+  {
+    "id": "ethusdt-2022-1d",
+    "provider": "binance",
+    "symbol": "ETHUSDT",
+    "year": 2022
+  },
+  {
+    "id": "ethusdt-2024-1d",
+    "provider": "binance",
+    "symbol": "ETHUSDT",
+    "year": 2024
+  },
+  {
+    "id": "solusdt-2022-1d",
+    "provider": "binance",
+    "symbol": "SOLUSDT",
+    "year": 2022
+  },
+  {
+    "id": "solusdt-2024-1d",
+    "provider": "binance",
+    "symbol": "SOLUSDT",
+    "year": 2024
+  }
+]

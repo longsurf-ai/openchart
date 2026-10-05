@@ -1,0 +1,76 @@
+/* Purpose: Gapless chart tracks and accessible shared resize handles. */
+.chart-grid {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--background);
+}
+
+.chart-grid-slot {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chart-grid-divider {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  outline: none;
+}
+
+.chart-grid-divider[data-axis="columns"] {
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+}
+
+.chart-grid-divider[data-axis="rows"] {
+  left: 0;
+  right: 0;
+  height: 8px;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.chart-grid-divider::after {
+  position: absolute;
+  content: "";
+  background: var(--border);
+}
+
+.chart-grid-divider[data-axis="columns"]::after {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 0.5px);
+  width: 1px;
+}
+
+.chart-grid-divider[data-axis="rows"]::after {
+  top: calc(50% - 0.5px);
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.chart-grid-divider:focus-visible::after,
+.chart-grid-divider[data-dragging]::after {
+  background: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chart-grid-divider:hover::after {
+    background: var(--primary);
+  }
+}
