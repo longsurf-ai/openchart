@@ -135,7 +135,7 @@ test("the last card offers web pages without closing", async () => {
 
   for (const [name, url] of [
     ["Open GitHub", "https://github.com/longsurf-ai/openchart"],
-    ["Join Discord", "https://discord.gg/openchart"],
+    ["Join Discord", "https://discord.gg/PR4gfbMKUD"],
   ]) {
     const link = screen.getByRole("link", { name });
     expect(link).toHaveAttribute("href", url);
