@@ -1,0 +1,21 @@
+Input image mapping: there are FIVE reference files. The FIRST file is a vertical contact sheet containing the three real screenshots labelled 01-single-chart, 02-indicator-picker, and 03-indicator-added. Its captions are reference labels, not UI. Input file TWO is screenshot 04-volume-menu. Input file THREE is screenshot 05-volume-profile. Input file FOUR is screenshot 06-grid-menu. Input file FIVE is screenshot 07-grid-4x4. All seven UI states described below are therefore supplied. The requested output remains an EIGHT-PANEL storyboard, not the input reference layout.
+
+Create a high-resolution storyboard contact sheet for a 7.5-second OpenChart product animation, using the seven supplied REAL DESKTOP SCREENSHOTS as exact UI references. Asset type: ui-mockup / motion storyboard. This is a reference-grounded storyboard, not a redesign. Layout: exactly EIGHT numbered panels in TWO columns and FOUR rows, read left to right then top to bottom. Each panel contains a 1280:840 landscape UI viewport and a small English timestamp/action caption OUTSIDE the UI. Neutral dark presentation, sharp readable labels, Inter typography. The UI screenshot pixels, geometry, colors, toolbars, chart legend, candlesticks, indicator colors, volume-profile shape, and menu choices must match the supplied references. No invented product elements. No decorative objects, laptops, hands, backgrounds, extra headings, or marketing slogans.
+References, in order:
+1: single ETHUSDT chart and floating chart toolbar.
+2: the actual Study library detail for Bollinger Bands, with the Add to chart button at the bottom right.
+3: the chart with Bollinger Bands added: gold basis, blue upper, cyan lower.
+4: the actual Chart type dropdown with Volume Profile at the bottom.
+5: the chart with the red/teal horizontal volume profile along its right edge.
+6: actual Chart grid menu, including 16 and its four-by-four grid icon.
+7: actual completed four-row, four-column sixteen-chart layout. The first chart retains its indicator and profile; the other cells must follow this real screenshot. Do not invent different market symbols.
+Panel sequence:
+01 — 0.00 s — 'Start with one chart': reference 1, full scene, calm readable opening.
+02 — 0.85 s — 'Open indicators': same chart, cursor at the real indicator icon in the floating toolbar, gentle close-up of that toolbar. Add a small zoom-in arrow only outside the viewport.
+03 — 1.55 s — 'Add Bollinger Bands': reference 2; cursor clicks the actual Add to chart button; preserve the native library, no substitute dropdown.
+04 — 2.35 s — 'Indicator appears': reference 3; bands visible on the existing chart, same geometry and candles, camera smoothly returns toward the full chart.
+05 — 3.10 s — 'Enable Volume Profile': reference 4, focus the actual Volume Profile menu row; cursor clicks it.
+06 — 4.00 s — 'See volume by price': reference 5, profile bars grow in from the right, retain gold/blue/cyan bands. A subtle motion arrow can be placed outside the viewport.
+07 — 5.05 s — 'Choose 16 charts': reference 6, cursor precisely at the 16 row's 4x4 icon; close-up keeps that real menu readable.
+08 — 6.15–7.50 s — 'Four by four': reference 7, full scene, EXACTLY SIXTEEN chart cells in FOUR rows and FOUR columns; show a short outside-viewport zoom-out arrow leading to a steady final hold.
+The intended animation is fluid cursor choreography, eased camera zooms, and a smooth one-chart-to-sixteen-layout transition, rather than a slideshow. The contact sheet itself is static and should clearly communicate those transitions. Preserve every native UI invariant even if tiny text cannot be enlarged. All captions in English.
