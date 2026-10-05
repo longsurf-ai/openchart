@@ -169,6 +169,16 @@ export function createIndicatorPrimitive({
             info: painted.at(-1)?.info,
           });
       };
+      // A zone output names itself once, like a last-value tag: its latest
+      // visible zone's text, at the pane's right edge on that zone's level.
+      let zoneTag:
+        | {
+            text: string;
+            color: string;
+            middle: number;
+            info?: IndicatorVisualHit;
+          }
+        | undefined;
       const uniqueGeometry = new Map<string, IndicatorVisualRow>();
       for (const row of rows) {
         const value = row.value;
@@ -299,13 +309,14 @@ export function createIndicatorPrimitive({
                 values: { from: value.top, to: value.bottom },
               },
             });
-            addLabel(
-              { x: Math.min(x2, bounds.x + bounds.width - 8), y: upper },
-              value.text,
-              value.color
+            zoneTag = {
+              text: value.text,
+              color: value.color
                 ? visualCssColor({ ...value.color, a: 255 })!
                 : hostColor!,
-            );
+              middle: upper + height / 2,
+              info: painted.at(-1)!.info,
+            };
           }
           continue;
         }
@@ -458,6 +469,46 @@ export function createIndicatorPrimitive({
               size,
             );
         }
+      }
+      if (zoneTag?.text && labelLimit > 0) {
+        const { text, color, middle, info } = zoneTag;
+        let tag: CoordSys.Bounds | undefined;
+        painted.push({
+          label: true,
+          info,
+          hit: (x, y) =>
+            tag &&
+            x >= tag.x &&
+            x <= tag.x + tag.width &&
+            y >= tag.y &&
+            y <= tag.y + tag.height
+              ? 0
+              : Infinity,
+          draw(ctx) {
+            ctx.font = "10px sans-serif";
+            const width =
+                (ctx.measureText?.(text).width ?? text.length * 6) + 8,
+              height = 16;
+            tag = {
+              x: bounds.x + bounds.width - width,
+              y: Math.max(
+                bounds.y,
+                Math.min(
+                  middle - height / 2,
+                  bounds.y + bounds.height - height,
+                ),
+              ),
+              width,
+              height,
+            };
+            ctx.fillStyle = color;
+            ctx.fillRect(tag.x, tag.y, width, height);
+            ctx.fillStyle = Color.contrast(color);
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, tag.x + 4, tag.y + height / 2);
+          },
+        });
       }
       for (const label of labelLimit > 0
         ? textCandidates.slice(-labelLimit)
