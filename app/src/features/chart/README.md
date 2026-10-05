@@ -5,8 +5,7 @@ An empty Dashboard creates no chart until you choose **Add chart**, search for a
 symbol, and select a real provider result. One backend transaction creates the
 Chart Resource and its Dashboard placement. All placements render as widgets;
 outer drag/resize is always available on wide layouts without changing the chart's
-inner CSS grid. The grip also accepts arrow keys to move and Shift+arrow keys to
-resize. The X removes the widget placement while preserving its Chart Resource.
+inner CSS grid. The grip also accepts arrow keys to move. The X removes the widget placement while preserving its Chart Resource.
 
 The page's upper-left symbol control edits the focused cell in the selected
 Chart widget. It queries and mutates the Chart Resource independently of renderer

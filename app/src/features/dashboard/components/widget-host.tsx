@@ -93,34 +93,29 @@ export function WidgetHost({
               ArrowDown: [0, 1],
             };
             const step = steps[event.key];
-            if (!step || event.altKey || event.ctrlKey || event.metaKey) return;
+            if (
+              !step ||
+              event.altKey ||
+              event.ctrlKey ||
+              event.metaKey ||
+              event.shiftKey
+            )
+              return;
             event.preventDefault();
             const [dx, dy] = step;
             const { x, y, w, h } = placement.layout;
-            const minSize = definition?.minSize ?? { w: 1, h: 1 };
-            void onLayout(
-              event.shiftKey
-                ? {
-                    x,
-                    y,
-                    w: Math.max(minSize.w, Math.min(12 - x, w + dx)),
-                    h: Math.max(minSize.h, h + dy),
-                  }
-                : {
-                    x: Math.max(0, Math.min(12 - w, x + dx)),
-                    y: Math.max(0, y + dy),
-                    w,
-                    h,
-                  },
-            ).catch(() => undefined);
+            void onLayout({
+              x: Math.max(0, Math.min(12 - w, x + dx)),
+              y: Math.max(0, y + dy),
+              w,
+              h,
+            }).catch(() => undefined);
           }}
         >
           <GripVertical className="size-4" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent>
-        Drag to move. Arrow keys move; Shift + arrow keys resize.
-      </TooltipContent>
+      <TooltipContent>Drag to move. Arrow keys move.</TooltipContent>
     </Tooltip>
   ) : null;
   const remove = (

@@ -427,10 +427,7 @@ it("uses shared tooltips for the widget move and remove buttons", async () => {
   const { user, patch } = setup();
   const card = screen.getAllByRole("region", { name: "Fixture" })[0]!;
   for (const [name, label] of [
-    [
-      "Move Fixture",
-      "Drag to move. Arrow keys move; Shift + arrow keys resize.",
-    ],
+    ["Move Fixture", "Drag to move. Arrow keys move."],
     ["Remove from dashboard", "Remove from dashboard"],
   ]) {
     const button = within(card).getByRole("button", { name });
@@ -854,26 +851,6 @@ it("removes a widget directly with the X button and saves the remaining placemen
   ).toBeDisabled();
 });
 
-it("resizes from the grip with Shift+Arrow and saves collisions through the shared layout action", async () => {
-  const { patch, user } = setup();
-  patch.mockReturnValue(new Promise(() => undefined));
-  const first = screen.getAllByRole("region", { name: "Fixture" })[0]!;
-  const grip = within(first).getByRole("button", { name: "Move Fixture" });
-  act(() => grip.focus());
-  await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
-  await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
-  const saved = patch.mock.calls[0]![0].operations[0]
-    .value as Dashboard["widgets"];
-  expect(saved.map((widget) => widget.id)).toEqual([
-    "wdg_one",
-    "wdg_two",
-    "wdg_unknown",
-  ]);
-  expect(saved[0]!.layout).toEqual({ x: 0, y: 0, w: 7, h: 8 });
-  expect(saved[1]!.layout.y).toBe(8);
-  expect(grip).toBeDisabled();
-});
-
 it("moves from the grip with arrow keys without opening a position dialog", async () => {
   const { patch, user } = setup();
   patch.mockReturnValue(new Promise(() => undefined));
@@ -919,11 +896,7 @@ it.each([
   ["{ArrowRight}", { x: 6, y: 0, w: 6, h: 8 }],
   ["{ArrowUp}", { x: 0, y: 0, w: 6, h: 8 }],
   ["{ArrowDown}", { x: 0, y: 16, w: 6, h: 8 }],
-  ["{Shift>}{ArrowLeft}{/Shift}", { x: 0, y: 0, w: 2, h: 8 }],
-  ["{Shift>}{ArrowRight}{/Shift}", { x: 6, y: 0, w: 6, h: 8 }],
-  ["{Shift>}{ArrowUp}{/Shift}", { x: 0, y: 0, w: 6, h: 2 }],
-  ["{Shift>}{ArrowDown}{/Shift}", { x: 0, y: 0, w: 6, h: 24 }],
-  ["{Shift>}{ArrowDown}{/Shift}", { x: 0, y: 16, w: 6, h: 8 }],
+  ["{Shift>}{ArrowRight}{/Shift}", { x: 0, y: 0, w: 6, h: 8 }],
 ])(
   "keeps keyboard layout edits within grid and minimum-size bounds: %s",
   async (keys, layout) => {
