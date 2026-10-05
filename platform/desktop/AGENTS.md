@@ -6,7 +6,8 @@ Owns Electron startup, backend, storage, packaging, updates and the
 - Main owns windows, credentials, run token and host capabilities
   (notifications), no business logic; backend-entry sets network defaults,
   then starts server.
-  Preload exposes connection, folder picker, updates and Clerk's bridge.
+  Preload exposes connection, folder picker, updates, notification opt-in and
+  Clerk's bridge.
 - Parse all four host-protocol messages. Secrets stay in messages, never argv/URLs/logs.
   Readiness expires after 30 seconds. Quit/repeated Quit await backend cleanup
   and exit. Pre-ready failures log/exit in development; release dialogs await ready.

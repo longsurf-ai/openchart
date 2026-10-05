@@ -1,4 +1,4 @@
-// Purpose: Connect a new profile's agent, introduce dashboards, agents and alerts through the content Desktop installs on first launch, then ask for a GitHub star and a Discord join back on the dashboard.
+// Purpose: Connect a new profile's agent and turn on notifications, introduce dashboards, agents and alerts through the content Desktop installs on first launch, then ask for a GitHub star and a Discord join back on the dashboard.
 import { lazy } from "react";
 
 import { communityUrls } from "@openchart/app/app/community-urls";
@@ -14,20 +14,30 @@ import starGithubVideo from "./star-github.mp4";
 const dashboard = "/app/dashboards/dsh_88JOx0yX7TH65p";
 
 /**
- * The first-launch workflow: connecting Claude Code or Codex, the Bitcoin dashboard, the Agent thread behind it
+ * The first-launch workflow: connecting Claude Code or Codex, turning on notifications, the Bitcoin dashboard, the Agent thread behind it
  * and the alert it set, then, back on the dashboard, an ask to star the repository and join Discord. Its IDs must match
  * `platform/desktop/src/onboarding/content`, which starts it.
- * @example starterWorkflow.steps[1].action;
+ * @example starterWorkflow.steps[2].action;
  */
 export const starterWorkflow = {
   steps: [
-    // Loaded on first launch only; Desktop's content test reads these steps without the page's UI.
+    // Loaded on first launch only; Desktop's content test reads these steps without the pages' UI.
     {
       countInProgress: false,
       view: new PageView(
         lazy(() =>
           import("./connect-agents-page").then((module) => ({
             default: module.ConnectAgentsPage,
+          })),
+        ),
+      ),
+    },
+    {
+      countInProgress: false,
+      view: new PageView(
+        lazy(() =>
+          import("./notifications-page").then((module) => ({
+            default: module.NotificationsPage,
           })),
         ),
       ),

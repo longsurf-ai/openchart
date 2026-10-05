@@ -463,6 +463,33 @@ test("a backend notification is shown and its click brings the window forward", 
   expect(runtime.notifications).toHaveLength(2);
 });
 
+test("turning notifications on shows one so macOS can ask, only for the app's own page", async () => {
+  const runtime = await host();
+  runtime.key.resolve(new Uint8Array(32));
+  runtime.ready.resolve(4321);
+  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  const enable = runtime.handle.mock.calls.find(
+    ([channel]) => channel === "desktop.enableNotifications",
+  )![1];
+  const window = runtime.windows[0]!;
+  const event = {
+    sender: window.webContents,
+    senderFrame: window.webContents.mainFrame,
+  };
+  enable(event);
+  expect(runtime.notifications).toHaveLength(1);
+  expect(runtime.notifications[0]!.options).toEqual({
+    title: "Notifications are on",
+    body: "OpenChart will notify you here when your alerts fire.",
+    silent: false,
+  });
+  expect(runtime.notifications[0]!.show).toHaveBeenCalledOnce();
+  expect(() => enable({ ...event, senderFrame: null })).toThrow(
+    "untrusted frame",
+  );
+  expect(runtime.notifications).toHaveLength(1);
+});
+
 test("Quit during credential loading never starts a backend or window", async () => {
   const runtime = await host();
   const event = { preventDefault: vi.fn() };

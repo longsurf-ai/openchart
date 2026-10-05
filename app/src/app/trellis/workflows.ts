@@ -21,7 +21,7 @@ export type OnboardingWorkflow = { readonly steps: readonly OnboardingStep[] };
 /**
  * Every workflow this build can run, by the ID saved in onboarding progress.
  * Each lives in its own `workflows/<id>/` directory with its media.
- * @example onboardingWorkflows.starter.steps[1].action;
+ * @example onboardingWorkflows.starter.steps[2].action;
  */
 export const onboardingWorkflows = {
   starter: starterWorkflow,
