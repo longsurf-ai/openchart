@@ -1,0 +1,440 @@
+<!doctype html>
+<!--
+  README Charts animation source. Open directly to preview the 12-second loop;
+  `just --command node scripts/render-readme-charts.mjs` renders it to feature-charts.gif.
+  `?render` disables autoplay so the renderer can call `renderAt(seconds)`.
+
+  Every UI pixel comes from the native captures in charts-ui/square/ (1600 x 1600
+  device pixels of an 800 x 800 logical window). Layers are crops of those captures at
+  their measured logical rectangles; only the camera, cursor, click rings and
+  layer timing are animated.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenChart Charts</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #111;
+      }
+
+      #stage {
+        position: relative;
+        width: 960px;
+        height: 960px;
+        overflow: hidden;
+        background: #111;
+      }
+
+      #app {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 800px;
+        height: 800px;
+        transform-origin: 0 0;
+      }
+
+      .layer {
+        position: absolute;
+        overflow: hidden;
+      }
+
+      .layer img {
+        position: absolute;
+        display: block;
+        max-width: none;
+      }
+
+      .ring {
+        position: absolute;
+        width: 44px;
+        height: 44px;
+        margin: -22px 0 0 -22px;
+        border: 2.5px solid rgb(255 255 255 / 85%);
+        border-radius: 50%;
+        opacity: 0;
+      }
+
+      #cursor {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+        filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 45%));
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><div id="app"></div></div>
+    <script>
+      const TIMELINE_DURATION = 7.5;
+      const DURATION = 12;
+      const clamp = (x) => Math.min(1, Math.max(0, x));
+      const progress = (t, start, end) => clamp((t - start) / (end - start));
+      const inOut = (x) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2);
+      const out = (x) => 1 - (1 - x) ** 3;
+      const bump = (x) => Math.sin(Math.PI * x);
+      const lerp = (a, b, k) => a + (b - a) * k;
+      const shot = (name) => `charts-ui/square/${name}.png`;
+      const SINGLE = "01-single-chart";
+      const LIBRARY = "02-indicator-picker";
+      const BANDS = "03-indicator-added";
+      const TYPE_MENU = "04-volume-menu";
+      const PROFILE = "05-volume-profile";
+      const GRID_MENU = "06-grid-menu";
+      const GRID = "07-grid-4x4";
+
+      // Measured logical rectangles [x, y, width, height] in the square native captures.
+      const FULL = [0, 0, 800, 800];
+      const TOOLTIPS = [320, 0, 170, 38.5];
+      const TOOLBAR = [267, 38.5, 266, 43];
+      const TYPE_MENU_RECT = [386, 79, 153, 286];
+      const GRID_MENU_RECT = [234, 79, 258, 539];
+      const DIALOG = [64, 80, 672, 640];
+      const PROFILE_RECT = [480, 100, 250, 625];
+      const CARD = [12, 60, 776, 728];
+      const DRAWING_TOOLS = [24, 116.5, 44.5, 454];
+      const HEADER = [0, 0, 800, 60];
+      // Shared borders of the sixteen native cells.
+      const COLUMNS = [12, 206, 400, 594, 788];
+      const ROWS = [60, 242, 424, 606, 788];
+      const CELL_SCALE = (COLUMNS[1] - COLUMNS[0]) / CARD[2];
+      const TARGET = {
+        indicators: [439.1, 60],
+        addToChart: [666.4, 691],
+        chartType: [403.1, 60],
+        volumeProfile: [463, 342],
+        grid: [475.1, 60],
+        sixteen: [300, 453],
+      };
+      const CLICKS = [
+        [1.12, TARGET.indicators],
+        [1.74, TARGET.addToChart],
+        [2.92, TARGET.chartType],
+        [3.46, TARGET.volumeProfile],
+        [4.62, TARGET.grid],
+        [5.14, TARGET.sixteen],
+      ];
+      // Cursor glides: [start, end, from, to, bend]; bend offsets the arc's control point.
+      const MOVES = [
+        [0.45, 1.02, [350, 300], TARGET.indicators, [-60, 20]],
+        [1.28, 1.7, TARGET.indicators, TARGET.addToChart, [70, -90]],
+        [2.3, 2.86, TARGET.addToChart, TARGET.chartType, null],
+        [3.1, 3.4, TARGET.chartType, TARGET.volumeProfile, [30, -10]],
+        [4.22, 4.56, TARGET.volumeProfile, TARGET.grid, [40, 0]],
+        [4.8, 5.1, TARGET.grid, TARGET.sixteen, [40, -30]],
+        [5.3, 5.9, TARGET.sixteen, [550, 640], [0, 0]],
+      ];
+      // Camera holds: [start, end, center x, center y, zoom]; 1 fits the whole window.
+      // Close-ups follow the control being used so it stays readable in a README card.
+      const WIDE = [400, 400, 1];
+      const CAMERA = [
+        [0.62, 1.1, WIDE, [435, 190, 1.65]],
+        [1.16, 1.42, [435, 190, 1.65], [400, 410, 1.08]],
+        [1.43, 1.7, [400, 410, 1.08], [625, 635, 1.5]],
+        [1.84, 2.3, [625, 635, 1.5], WIDE],
+        [2.5, 2.95, WIDE, [450, 230, 1.8]],
+        [3.48, 4.05, [450, 230, 1.8], [525, 400, 1.2]],
+        [4.3, 4.58, [525, 400, 1.2], [475, 185, 1.65]],
+        [4.85, 5.1, [475, 185, 1.65], [370, 340, 1.45]],
+        [5.18, 6.1, [370, 340, 1.45], WIDE],
+      ];
+
+      const stage = document.getElementById("stage");
+      const app = document.getElementById("app");
+      const images = [];
+
+      /** Adds a crop of `name` at its own logical rectangle, or stretched into `into`. */
+      function layer(name, rect, into = rect, parent = app) {
+        const [x, y, w, h] = rect;
+        const k = into[2] / w;
+        const element = document.createElement("div");
+        element.className = "layer";
+        Object.assign(element.style, {
+          left: `${into[0]}px`,
+          top: `${into[1]}px`,
+          width: `${into[2]}px`,
+          height: `${h * k}px`,
+        });
+        const image = new Image();
+        image.src = shot(name);
+        Object.assign(image.style, {
+          left: `${-x * k}px`,
+          top: `${-y * k}px`,
+          width: `${800 * k}px`,
+          height: `${800 * k}px`,
+        });
+        images.push(image);
+        element.append(image);
+        parent.append(element);
+        return element;
+      }
+
+      const L = {
+        single: layer(SINGLE, FULL),
+        bands: layer(BANDS, FULL),
+        typeMenu: layer(TYPE_MENU, FULL),
+        profile: layer(PROFILE, FULL),
+        // The header strip has no hover tooltip; it hides tooltips whose trigger is absent.
+        tooltips: layer(GRID, TOOLTIPS),
+        // Pre-profile pixels; the strip uncovers right-anchored profile bars from the right.
+        profileCover: layer(BANDS, PROFILE_RECT),
+        typeToolbar: layer(TYPE_MENU, TOOLBAR),
+        typeMenuPopup: layer(TYPE_MENU, TYPE_MENU_RECT),
+        gridToolbar: layer(GRID_MENU, TOOLBAR),
+        gridMenuPopup: layer(GRID_MENU, GRID_MENU_RECT),
+        singleBackdrop: layer(SINGLE, FULL),
+        bandsBackdrop: layer(BANDS, FULL),
+        dialog: layer(LIBRARY, DIALOG),
+        library: layer(LIBRARY, FULL),
+        gridHeader: layer(GRID, HEADER),
+        cells: [],
+        group: document.createElement("div"),
+        grid: null,
+        drawingTools: null,
+        resetSingle: null,
+        resetTooltips: null,
+      };
+      for (const backdrop of [L.singleBackdrop, L.bandsBackdrop])
+        // Matches the captured dialog backdrop (Gaussian fit to 02 outside the dialog).
+        backdrop.style.filter = "blur(8px) brightness(0.476)";
+      L.dialog.style.borderRadius = "10px";
+      for (let row = 0; row < 4; row++)
+        for (let column = 0; column < 4; column++) {
+          if (row + column === 0) continue;
+          const rect = [
+            COLUMNS[column],
+            ROWS[row],
+            COLUMNS[column + 1] - COLUMNS[column],
+            ROWS[row + 1] - ROWS[row],
+          ];
+          const cell = layer(GRID, rect);
+          cell.ring = Math.max(row, column);
+          cell.order = row + column;
+          L.cells.push(cell);
+        }
+      // The single chart and its toolbar shrink as one widget into the first native cell.
+      Object.assign(L.group.style, {
+        position: "absolute",
+        left: `${CARD[0]}px`,
+        top: `${CARD[1]}px`,
+        width: `${CARD[2]}px`,
+        height: `${CARD[3]}px`,
+        transformOrigin: "0 0",
+      });
+      app.append(L.group);
+      const local = ([x, y, w, h]) => [x - CARD[0], y - CARD[1], w, h];
+      L.widget = document.createElement("div");
+      L.widget.style.cssText = "position:absolute;inset:0";
+      L.group.append(L.widget);
+      layer(PROFILE, CARD, local(CARD), L.widget);
+      layer(PROFILE, TOOLBAR, local(TOOLBAR), L.widget);
+      const firstCell = [
+        COLUMNS[0],
+        ROWS[0],
+        COLUMNS[1] - COLUMNS[0],
+        ROWS[1] - ROWS[0],
+      ];
+      L.firstCell = layer(GRID, firstCell, [0, 0, CARD[2], 0], L.group);
+      L.grid = layer(GRID, FULL);
+      // The drawing toolbar is fixed to the page in both layouts, so it never moves.
+      L.drawingTools = layer(GRID, DRAWING_TOOLS);
+      L.drawingTools.style.borderRadius = "7px";
+      L.resetSingle = layer(SINGLE, FULL);
+      L.resetTooltips = layer(GRID, TOOLTIPS);
+
+      const rings = CLICKS.map(([, [x, y]]) => {
+        const ring = document.createElement("div");
+        ring.className = "ring";
+        ring.style.left = `${x}px`;
+        ring.style.top = `${y}px`;
+        app.append(ring);
+        return ring;
+      });
+      app.insertAdjacentHTML(
+        "beforeend",
+        `<svg id="cursor" width="24" height="34" viewBox="-2 -2 24 34" aria-hidden="true">
+          <path d="M0 0V24.5L5.9 18.9L9.6 27.6L13.7 25.9L10.1 17.4H18Z"
+            fill="#111" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" />
+        </svg>`,
+      );
+      const cursor = document.getElementById("cursor");
+
+      const show = (element, opacity) => {
+        element.style.opacity = opacity;
+        element.style.visibility = opacity > 0 ? "visible" : "hidden";
+      };
+
+      function cameraAt(t) {
+        let [cx, cy, z] = WIDE;
+        for (const [start, end, from, to] of CAMERA) {
+          if (t < start) break;
+          const k = inOut(progress(t, start, end));
+          cx = lerp(from[0], to[0], k);
+          cy = lerp(from[1], to[1], k);
+          z = Math.exp(lerp(Math.log(from[2]), Math.log(to[2]), k));
+        }
+        return [cx, cy, z];
+      }
+
+      function cursorAt(t) {
+        let point = MOVES[0][2];
+        for (const [start, end, from, to, bend] of MOVES) {
+          if (t < start) break;
+          const k = inOut(progress(t, start, end));
+          // The chart-type approach rises vertically, matching the captured crosshair.
+          const control = bend
+            ? [
+                lerp(from[0], to[0], 0.5) + bend[0],
+                lerp(from[1], to[1], 0.5) + bend[1],
+              ]
+            : [to[0], lerp(from[1], to[1], 0.45)];
+          point = [0, 1].map(
+            (i) =>
+              (1 - k) ** 2 * from[i] +
+              2 * (1 - k) * k * control[i] +
+              k ** 2 * to[i],
+          );
+        }
+        return point;
+      }
+
+      /** Draws the frame at `t` seconds; every visual value is a pure function of `t`. */
+      function renderAt(t) {
+        // Slow every authored beat equally while keeping the original choreography.
+        t =
+          ((((t % DURATION) + DURATION) % DURATION) * TIMELINE_DURATION) /
+          DURATION;
+        const [cx, cy, z] = cameraAt(t);
+        const width = stage.clientWidth;
+        const height = stage.clientHeight;
+        const scale = Math.max(width / 800, height / 800) * z;
+        // Keep the screenshot covering the viewport even when focusing near its edges.
+        const x = Math.min(
+          0,
+          Math.max(width - 800 * scale, width / 2 - cx * scale),
+        );
+        const y = Math.min(
+          0,
+          Math.max(height - 800 * scale, height / 2 - cy * scale),
+        );
+        app.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+
+        // Base captures: each owns the window between the state changes it shows.
+        show(L.single, t < 1.36 ? 1 : 0);
+        show(L.bands, t >= 1.78 && t < 3.24 ? 1 : 0);
+        show(L.typeMenu, t >= 3.12 && t < 3.47 ? progress(t, 3.12, 3.22) : 0);
+        show(L.profile, t >= 3.47 && t < 5.24 ? 1 : 0);
+        // Tooltip strip: the Indicators tooltip appears only while the cursor hovers it.
+        show(
+          L.tooltips,
+          t < 0.98 || t >= 1.78 ? 1 : 1 - progress(t, 0.98, 1.06),
+        );
+        // Volume profile bars grow leftward from the price axis.
+        const reveal = inOut(progress(t, 3.58, 4.2));
+        show(L.profileCover, t >= 3.47 && reveal < 1 ? 1 : 0);
+        L.profileCover.style.clipPath = `inset(0 ${PROFILE_RECT[2] * reveal}px 0 0)`;
+
+        // The floating toolbar appears as the cursor enters the chart and returns to the toolbar.
+        show(L.typeToolbar, t >= 2.6 && t < 3.47 ? progress(t, 2.6, 2.74) : 0);
+        const typeOpen = out(progress(t, 2.94, 3.12));
+        const typeClose = progress(t, 3.48, 3.6);
+        show(
+          L.typeMenuPopup,
+          t >= 2.94 && t < 3.6 ? typeOpen * (1 - typeClose) : 0,
+        );
+        L.typeMenuPopup.style.transformOrigin = "50% 0";
+        L.typeMenuPopup.style.transform = `translateY(${-6 * (1 - typeOpen)}px) scale(${0.96 + 0.04 * typeOpen - 0.03 * typeClose})`;
+        show(L.gridToolbar, t >= 4.62 && t < 5.28 ? 1 : 0);
+        const gridOpen = out(progress(t, 4.64, 4.82));
+        const gridClose = progress(t, 5.16, 5.28);
+        show(
+          L.gridMenuPopup,
+          t >= 4.64 && t < 5.28 ? gridOpen * (1 - gridClose) : 0,
+        );
+        L.gridMenuPopup.style.transformOrigin = "75% 0";
+        L.gridMenuPopup.style.transform = `translateY(${-6 * (1 - gridOpen)}px) scale(${0.96 + 0.04 * gridOpen - 0.03 * gridClose})`;
+
+        // Study library: backdrop and dialog open, then the full capture takes over.
+        const open = out(progress(t, 1.14, 1.36));
+        const close = inOut(progress(t, 1.78, 2.0));
+        show(L.singleBackdrop, t >= 1.14 && t < 1.36 ? open : 0);
+        show(L.bandsBackdrop, t >= 1.78 && t < 2.0 ? 1 - close : 0);
+        const dialog = t < 1.36 ? open : 1 - close;
+        show(
+          L.dialog,
+          (t >= 1.14 && t < 1.36) || (t >= 1.78 && t < 2.0) ? dialog : 0,
+        );
+        L.dialog.style.transform = `scale(${t < 1.36 ? 0.965 + 0.035 * open : 1 - 0.03 * close})`;
+        show(L.library, t >= 1.36 && t < 1.78 ? 1 : 0);
+        // The letterbox takes the captured backdrop's tone while the library is open.
+        const dim = Math.round(17 - 8 * (t < 1.36 ? open : 1 - close));
+        stage.style.background = `rgb(${dim} ${dim} ${dim})`;
+
+        // One chart becomes sixteen: the widget shrinks into the first native cell
+        // while the other fifteen native cells arrive behind it, outermost first.
+        const inGrid = t >= 5.24 && t < 6.12;
+        show(L.gridHeader, inGrid ? 1 : 0);
+        const shrink = inOut(progress(t, 5.24, 5.98));
+        L.group.style.transform = `scale(${lerp(1, CELL_SCALE, shrink)})`;
+        show(L.group, inGrid ? 1 : 0);
+        // The native first cell blends in only once the widget has reached its size.
+        show(L.firstCell, progress(t, 5.98, 6.1));
+        for (const cell of L.cells) {
+          const start =
+            5.3 + (3 - cell.ring) * 0.14 + (cell.order - cell.ring) * 0.02;
+          const k = out(progress(t, start, start + 0.2));
+          show(cell, inGrid ? k : 0);
+          cell.style.transform = `scale(${0.94 + 0.06 * k})`;
+        }
+        show(L.grid, t >= 6.12 ? 1 : 0);
+        show(L.drawingTools, t >= 5.24 ? 1 : 0);
+
+        // Loop reset: the opening chart returns over the final grid.
+        const reset = inOut(progress(t, 7.25, 7.5));
+        show(L.resetSingle, reset);
+        show(L.resetTooltips, reset);
+
+        CLICKS.forEach(([time], i) => {
+          const k = progress(t, time, time + 0.42);
+          rings[i].style.opacity = k > 0 && k < 1 ? 0.55 * (1 - k) : 0;
+          rings[i].style.transform = `scale(${(0.35 + 0.75 * out(k)) / z})`;
+        });
+        const [cursorX, cursorY] = cursorAt(t);
+        const press = Math.max(
+          ...CLICKS.map(([time]) => bump(progress(t, time - 0.06, time + 0.1))),
+        );
+        cursor.style.opacity =
+          out(progress(t, 0.45, 0.6)) * (1 - inOut(progress(t, 5.4, 5.8)));
+        // The pointer keeps its on-screen size while the camera zooms.
+        cursor.style.transform = `translate(${cursorX - 2 / z}px, ${cursorY - 2 / z}px) scale(${(1.25 - 0.12 * press) / z})`;
+      }
+
+      window.renderAt = renderAt;
+      window.animationTiming = {
+        duration: DURATION,
+        timelineDuration: TIMELINE_DURATION,
+      };
+      window.ready = Promise.all(images.map((image) => image.decode())).then(
+        () => renderAt(0),
+      );
+
+      if (!new URLSearchParams(location.search).has("render")) {
+        window.ready.then(() => {
+          const origin = performance.now();
+          const frame = (now) => {
+            renderAt((now - origin) / 1000);
+            requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        });
+      }
+    </script>
+  </body>
+</html>

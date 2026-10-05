@@ -1,0 +1,38 @@
+{
+  "tickers": [
+    "ETHUSDT",
+    "BTCUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "XRPUSDT",
+    "ADAUSDT",
+    "DOGEUSDT",
+    "AVAXUSDT",
+    "LINKUSDT",
+    "DOTUSDT",
+    "LTCUSDT",
+    "TRXUSDT",
+    "NEARUSDT",
+    "ATOMUSDT",
+    "SUIUSDT",
+    "APTUSDT"
+  ],
+  "actual": [
+    "Change ETHUSDT symbol",
+    "Change BTCUSDT symbol",
+    "Change SOLUSDT symbol",
+    "Change BNBUSDT symbol",
+    "Change XRPUSDT symbol",
+    "Change ADAUSDT symbol",
+    "Change DOGEUSDT symbol",
+    "Change AVAXUSDT symbol",
+    "Change LINKUSDT symbol",
+    "Change DOTUSDT symbol",
+    "Change LTCUSDT symbol",
+    "Change TRXUSDT symbol",
+    "Change NEARUSDT symbol",
+    "Change ATOMUSDT symbol",
+    "Change SUIUSDT symbol",
+    "Change APTUSDT symbol"
+  ]
+}
