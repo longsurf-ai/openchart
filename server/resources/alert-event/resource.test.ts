@@ -63,10 +63,10 @@ const create = (
 test("exposes read-only queries while internal operations stay complete", async () => {
   type Inputs = inferRouterInputs<typeof router>;
   expectTypeOf<keyof Inputs["resources"]["alert_event"]>().toEqualTypeOf<
-    "get" | "list"
+    "get" | "list" | "history"
   >();
   expectTypeOf<keyof typeof alertEventResource.transitions>().toEqualTypeOf<
-    "get" | "list" | "listAll" | "create" | "patch" | "remove"
+    "get" | "list" | "listAll" | "create" | "patch" | "remove" | "history"
   >();
   for (const name of ["create", "patch", "delete"] as const) {
     await expect(
@@ -104,6 +104,58 @@ test("backend creation records identical fires as separate events and lists them
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   await expect(
     caller.resources.alert_event.list({ filter: { time: 60_000 } as never }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+});
+
+test("history pages by occurrence time in both directions, preserves ties and counts only the Rule", async () => {
+  const other = await caller.resources.alert_rule.save({ value: rule });
+  const body = { ruleId, condition: "above", detail };
+  const first = await create({ ...body, time: 300 });
+  const oldest = await create({ ...body, time: 100 });
+  const repeated = await create({ ...body, time: 300 });
+  const middle = await create({ ...body, time: 200 });
+  await create({ ...body, ruleId: other.id, time: 400 });
+  for (const order of ["asc", "desc"] as const) {
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await caller.resources.alert_event.history({
+        ruleId,
+        order,
+        limit: 1,
+        ...(cursor ? { cursor } : {}),
+      });
+      expect(page.total).toBe(4);
+      ids.push(...page.items.map((event) => event.id));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    const ascending = [oldest.id, middle.id, first.id, repeated.id];
+    expect(ids).toEqual(order === "asc" ? ascending : [...ascending].reverse());
+  }
+  const page = await caller.resources.alert_event.history({ ruleId, limit: 1 });
+  await runtime.runPromise(
+    Transactor.run(alertEventResource.transitions.remove(repeated.id)),
+  );
+  expect(
+    await caller.resources.alert_event.history({
+      ruleId,
+      cursor: page.nextCursor!,
+    }),
+  ).toMatchObject({
+    total: 3,
+    items: [{ id: first.id }, { id: middle.id }, { id: oldest.id }],
+    nextCursor: null,
+  });
+  expect(
+    await caller.resources.alert_event.history({
+      ruleId: AlertRuleId.create(),
+    }),
+  ).toEqual({ items: [], total: 0, nextCursor: null });
+  await expect(
+    caller.resources.alert_event.history({ ruleId, cursor: "invalid" }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  await expect(
+    caller.resources.alert_event.history({ ruleId, limit: 201 }),
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
 

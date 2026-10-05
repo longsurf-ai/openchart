@@ -7,6 +7,7 @@ import { expect, test, vi } from "vitest";
 import type { BarsSeries } from "@openchart/feed";
 import {
   alertDrawingQueryOptions,
+  alertEventExecutionsQueryOptions,
   encodedBarsInputs,
   useSaveAlertRule,
   useDuplicateAlertRule,
@@ -71,6 +72,40 @@ function setup() {
   );
   return { transport, client, wrapper, save, triggers, patch };
 }
+
+test("event session queries batch the existing read endpoint and skip empty event sets", async () => {
+  const query = vi.fn(async ({ eventIds }: { eventIds: string[] }) =>
+    eventIds.map((eventId) => ({ eventId, runs: [] })),
+  );
+  const transport = {
+    url: "test",
+    rpc: { resources: { macro: { alertFeedExecutions: { query } } } },
+  } as unknown as AppTransport;
+  const client = new QueryClient();
+  const ids = Array.from({ length: 201 }, (_, index) => `ale_event${index}`);
+  expect(
+    await client.fetchQuery(alertEventExecutionsQueryOptions(transport, ids)),
+  ).toHaveLength(201);
+  expect(query).toHaveBeenCalledTimes(2);
+  expect(query).toHaveBeenNthCalledWith(
+    1,
+    { eventIds: ids.slice(0, 200) },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal),
+      context: { method: "POST" },
+    }),
+  );
+  expect(query).toHaveBeenNthCalledWith(
+    2,
+    { eventIds: ids.slice(200) },
+    expect.objectContaining({ context: { method: "POST" } }),
+  );
+  expect(
+    await client.fetchQuery(alertEventExecutionsQueryOptions(transport, [])),
+  ).toEqual([]);
+  expect(query).toHaveBeenCalledTimes(2);
+  client.clear();
+});
 
 test("missing drawing metadata is a deletion state; connection failures still propagate", async () => {
   const { transport, client } = setup();

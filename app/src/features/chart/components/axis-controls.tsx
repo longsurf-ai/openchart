@@ -2,20 +2,12 @@
 // Layout adapted from packages/solid/src/v2/components/y-axis-controls.tsx.
 import { Series, v2 } from "@openchart/chart-core";
 import { Chart } from "@openchart/chart-core/chart/state";
-import * as Tz from "@openchart/chart-core/tz/types";
-import { Clock3, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@openchart/app/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@openchart/app/components/ui/dropdown";
+import { TimezoneControl } from "@openchart/app/components/ui/timezone-control/timezone-control";
 import {
   Tooltip,
   TooltipContent,
@@ -162,7 +154,7 @@ export function AxisControls({
         style={{ bottom: footerBottom, width: config.yAxis.width }}
       >
         <div className="flex h-7 items-center gap-0.5 rounded-sm bg-background px-0.5">
-          <TimezoneControl />
+          <ChartTimezoneControl />
           {primaryAxis ? <AxisSettingsButton axisId={primaryAxis.id} /> : null}
         </div>
       </div>
@@ -204,12 +196,14 @@ function AxisSettingsButton({ axisId }: { axisId: string }) {
   );
 }
 
-function TimezoneControl() {
+function ChartTimezoneControl() {
   const chart = useChart();
   const timezone = useStore(chartSettings, (state) => state.timezone);
-  const label = `Time zone: ${Tz.parse(timezone).label}`;
   return (
-    <DropdownMenu
+    <TimezoneControl
+      compact
+      value={timezone}
+      onValueChange={(value) => chartSettings.setState({ timezone: value })}
       onOpenChange={(open) => {
         if (open)
           chart.mutate((state) => {
@@ -218,43 +212,6 @@ function TimezoneControl() {
             delete state.drawings.contextMenu;
           });
       }}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className={cn(
-                buttonClass,
-                "data-[state=open]:bg-accent data-[state=open]:text-foreground",
-              )}
-              aria-label={label}
-            >
-              <Clock3 className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        side="top"
-        align="end"
-        className="max-h-80 overflow-y-auto"
-      >
-        <DropdownMenuLabel>Time zone</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={timezone}
-          onValueChange={(value) => chartSettings.setState({ timezone: value })}
-        >
-          {Tz.common().map((zone) => (
-            <DropdownMenuRadioItem key={zone.name} value={zone.name}>
-              {zone.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    />
   );
 }

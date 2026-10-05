@@ -30,10 +30,17 @@ import {
 } from "@openchart/app/components/ui/empty/empty";
 import { Skeleton } from "@openchart/app/components/ui/skeleton";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@openchart/app/components/ui/tabs";
+import {
   alertRuleQueryOptions,
   type AlertRule,
 } from "@openchart/app/features/alerts/api/queries";
 import { AlertRulePage } from "@openchart/app/features/alerts/components/alert-rule-dialog";
+import { AlertEvents } from "@openchart/app/features/alerts/components/alert-events";
 import { useUnsavedChanges } from "@openchart/app/lib/unsaved-changes/unsaved-changes";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { renderAlertListingPicker } from "./alert-listing-picker";
@@ -42,6 +49,7 @@ import { useAlertHealth } from "@openchart/app/features/alerts/api/monitoring";
 import { AlertMonitoringBanner } from "@openchart/app/features/alerts/components/alert-health";
 import { AlertRuleActions, AlertRulePauseButton } from "./alert-rule-actions";
 import { NewAlertMenu } from "./new-alert-menu";
+import { useCopilotControls } from "@openchart/app/app/agent/copilot-controls";
 
 const AlertDrawingChart = lazy(() =>
   import("./alert-drawing-chart").then(({ AlertDrawingChart }) => ({
@@ -134,6 +142,9 @@ function RuleConfiguration({
 }) {
   const query = useQuery(alertRuleQueryOptions(transport, ruleId));
   const healthOf = useAlertHealth(transport);
+  const copilot = useCopilotControls();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState("setting");
   // Keep an already-mounted draft readable when its saved Rule is deleted elsewhere.
   const [loadedRule, setLoadedRule] = useState<AlertRule>();
   useEffect(() => {
@@ -173,7 +184,7 @@ function RuleConfiguration({
       </>
     );
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4">
+    <Tabs value={tab} onValueChange={setTab} className="w-full gap-0">
       {query.data
         ? renderBanner(
             <AlertMonitoringBanner
@@ -184,32 +195,65 @@ function RuleConfiguration({
             />,
           )
         : null}
-      <AlertRulePage
-        rule={currentRule}
-        ruleUnavailable={query.data === null}
-        transport={transport}
-        initialActionId={initialActionId}
-        renderListingPicker={renderAlertListingPicker}
-        renderPromptEditor={alertPromptEditor(transport)}
-        renderChart={(drawing) => (
-          <Suspense fallback={<p role="status">Opening chart…</p>}>
-            <AlertDrawingChart drawing={drawing} transport={transport} />
-          </Suspense>
-        )}
-        renderFooter={renderFooter}
-        renderTitle={(title) =>
-          renderTitle(
-            <span className="flex min-w-0 flex-1 items-center gap-1">
-              {title}
-              {query.data ? (
-                <AlertRuleActions transport={transport} rule={query.data} />
-              ) : null}
-            </span>,
-          )
-        }
-        onDirtyChange={onDirtyChange}
-        onClose={onClose}
-      />
-    </div>
+      <div className="sticky top-0 z-10 mb-2 border-b bg-background">
+        <TabsList variant="line" className="h-10" aria-label="Alert page">
+          <TabsTrigger value="setting" className="px-3">
+            Setting
+          </TabsTrigger>
+          <TabsTrigger value="events" className="px-3" disabled={!ruleId}>
+            Events
+          </TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent
+        value="setting"
+        forceMount
+        hidden={tab !== "setting"}
+        className="mx-auto w-full max-w-5xl pt-4 data-[state=inactive]:hidden"
+      >
+        <AlertRulePage
+          rule={currentRule}
+          ruleUnavailable={query.data === null}
+          transport={transport}
+          initialActionId={initialActionId}
+          renderListingPicker={renderAlertListingPicker}
+          renderPromptEditor={alertPromptEditor(transport)}
+          renderChart={(drawing) => (
+            <Suspense fallback={<p role="status">Opening chart…</p>}>
+              <AlertDrawingChart drawing={drawing} transport={transport} />
+            </Suspense>
+          )}
+          renderFooter={(footer) =>
+            renderFooter(tab === "setting" ? footer : null)
+          }
+          renderTitle={(title) =>
+            renderTitle(
+              <span className="flex min-w-0 flex-1 items-center gap-1">
+                {title}
+                {query.data ? (
+                  <AlertRuleActions transport={transport} rule={query.data} />
+                ) : null}
+              </span>,
+            )
+          }
+          onDirtyChange={onDirtyChange}
+          onClose={onClose}
+        />
+      </TabsContent>
+      <TabsContent value="events">
+        {ruleId ? (
+          <AlertEvents
+            transport={transport}
+            ruleId={ruleId}
+            renderFooter={renderFooter}
+            onOpenSession={(sessionId) => {
+              if (copilot) copilot.selectSession(sessionId);
+              else
+                void navigate(`/app/sessions/${encodeURIComponent(sessionId)}`);
+            }}
+          />
+        ) : null}
+      </TabsContent>
+    </Tabs>
   );
 }

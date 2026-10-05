@@ -8,11 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useOutletContext } from "react-router";
-import {
-  queryOptions,
-  useInfiniteQuery,
-  useQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   BellPlusIcon,
   CalendarPlusIcon,
@@ -50,7 +46,10 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@openchart/app/components/ui/toggle-group";
-import { alertRuleQueryOptions } from "@openchart/app/features/alerts/api/queries";
+import {
+  alertRuleQueryOptions,
+  alertEventExecutionsQueryOptions,
+} from "@openchart/app/features/alerts/api/queries";
 import {
   postFeedQueryOptions,
   type Post,
@@ -64,7 +63,6 @@ import {
   isPostUnread,
   usePostReadState,
 } from "@openchart/app/features/posts/hooks/use-post-read-state";
-import { agentQueryKeys } from "@openchart/app/lib/agent/queries";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { ResourceReferenceSpan } from "@openchart/app/features/agent/components/thread/transcript/markdown/resource-reference";
 import { PostChart } from "./post-chart";
@@ -207,26 +205,7 @@ function PostFeed({
     ),
   ];
   const executions = useQuery(
-    queryOptions({
-      meta: { errorTitle: "Couldn’t load alert executions" },
-      queryKey: [
-        ...agentQueryKeys.sessions(transport.url),
-        "alert-feed",
-        eventIds,
-      ],
-      enabled: eventIds.length > 0,
-      queryFn: async ({ signal }) => {
-        const pages = [];
-        for (let i = 0; i < eventIds.length; i += 200)
-          pages.push(
-            transport.rpc.resources.macro.alertFeedExecutions.query(
-              { eventIds: eventIds.slice(i, i + 200) },
-              { signal, context: { method: "POST" } },
-            ),
-          );
-        return (await Promise.all(pages)).flat();
-      },
-    }),
+    alertEventExecutionsQueryOptions(transport, eventIds),
   );
   return (
     <div className="mx-auto w-full max-w-3xl">
