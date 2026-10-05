@@ -1,0 +1,96 @@
+// Twenty semiconductor stocks, each net of its rolling beta to the benchmark.
+// Each line is a stock's beta-adjusted return over the performance window; the
+// current leader is drawn solid. At every month end, the stock on top is named
+// at the top of the pane. Edit the request lines to follow other stocks.
+indicator("Semiconductor Relative Leaders", overlay = false)
+benchmark = input.symbol("yfinance:SMH", "Benchmark")
+betaLength = input.int(60, "Beta lookback", minval = 10, maxval = 250)
+window = input.int(21, "Performance window", minval = 2, maxval = 250)
+
+bench = request.security(benchmark, "", close)
+monthStart = request.security(benchmark, "M", time)
+nvda = request.security("yfinance:NVDA", "", close)
+avgo = request.security("yfinance:AVGO", "", close)
+amd = request.security("yfinance:AMD", "", close)
+tsm = request.security("yfinance:TSM", "", close)
+asml = request.security("yfinance:ASML", "", close)
+qcom = request.security("yfinance:QCOM", "", close)
+txn = request.security("yfinance:TXN", "", close)
+intc = request.security("yfinance:INTC", "", close)
+mu = request.security("yfinance:MU", "", close)
+amat = request.security("yfinance:AMAT", "", close)
+lrcx = request.security("yfinance:LRCX", "", close)
+klac = request.security("yfinance:KLAC", "", close)
+adi = request.security("yfinance:ADI", "", close)
+mrvl = request.security("yfinance:MRVL", "", close)
+nxpi = request.security("yfinance:NXPI", "", close)
+mchp = request.security("yfinance:MCHP", "", close)
+on = request.security("yfinance:ON", "", close)
+arm = request.security("yfinance:ARM", "", close)
+mpwr = request.security("yfinance:MPWR", "", close)
+ter = request.security("yfinance:TER", "", close)
+
+benchReturn = math.log(bench / bench[1])
+
+// Percent return over the last `window` bars left after removing the stock's
+// rolling beta exposure to the benchmark.
+excess(price) =>
+    r = math.log(price / price[1])
+    beta = ta.correlation(r, benchReturn, betaLength) * ta.stdev(r, betaLength) / ta.stdev(benchReturn, betaLength)
+    total = ta.cum(r - beta * benchReturn)
+    100 * (math.exp(total - total[window]) - 1)
+
+values = array.from(excess(nvda), excess(avgo), excess(amd), excess(tsm), excess(asml), excess(qcom), excess(txn), excess(intc), excess(mu), excess(amat), excess(lrcx), excess(klac), excess(adi), excess(mrvl), excess(nxpi), excess(mchp), excess(on), excess(arm), excess(mpwr), excess(ter))
+leader = -1
+best = 0.0
+for i = 0 to values.size() - 1
+    v = values.get(i)
+    if not na(v) and (leader == -1 or v > best)
+        leader := i
+        best := v
+// On a month's first bar, label the line that finished the previous month on top.
+monthEnd = monthStart != monthStart[1] and not na(monthStart[1])
+
+line(i, c) => leader == i ? c : color.new(c, 65)
+
+hline("zero", 0, "Benchmark", color = color.new(color.gray, 50))
+plot("nvda", values.get(0), "NVDA", color = line(0, #76B900))
+plot("avgo", values.get(1), "AVGO", color = line(1, #CC092F))
+plot("amd", values.get(2), "AMD", color = line(2, #F26522))
+plot("tsm", values.get(3), "TSM", color = line(3, #E8A33D))
+plot("asml", values.get(4), "ASML", color = line(4, #1F77B4))
+plot("qcom", values.get(5), "QCOM", color = line(5, #3253DC))
+plot("txn", values.get(6), "TXN", color = line(6, #8C564B))
+plot("intc", values.get(7), "INTC", color = line(7, #17BECF))
+plot("mu", values.get(8), "MU", color = line(8, #9467BD))
+plot("amat", values.get(9), "AMAT", color = line(9, #2CA02C))
+plot("lrcx", values.get(10), "LRCX", color = line(10, #D62728))
+plot("klac", values.get(11), "KLAC", color = line(11, #E377C2))
+plot("adi", values.get(12), "ADI", color = line(12, #7F7F7F))
+plot("mrvl", values.get(13), "MRVL", color = line(13, #BCBD22))
+plot("nxpi", values.get(14), "NXPI", color = line(14, #7FA6D9))
+plot("mchp", values.get(15), "MCHP", color = line(15, #F07C7A))
+plot("on", values.get(16), "ON", color = line(16, #6CC25A))
+plot("arm", values.get(17), "ARM", color = line(17, #A98CC9))
+plot("mpwr", values.get(18), "MPWR", color = line(18, #B07F72))
+plot("ter", values.get(19), "TER", color = line(19, #5FC3D6))
+plotshape("nvda_leads", monthEnd and leader[1] == 0, "NVDA led the month", style = shape.diamond, location = location.top, color = #76B900, offset = -1, text = "NVDA", size = size.tiny)
+plotshape("avgo_leads", monthEnd and leader[1] == 1, "AVGO led the month", style = shape.diamond, location = location.top, color = #CC092F, offset = -1, text = "AVGO", size = size.tiny)
+plotshape("amd_leads", monthEnd and leader[1] == 2, "AMD led the month", style = shape.diamond, location = location.top, color = #F26522, offset = -1, text = "AMD", size = size.tiny)
+plotshape("tsm_leads", monthEnd and leader[1] == 3, "TSM led the month", style = shape.diamond, location = location.top, color = #E8A33D, offset = -1, text = "TSM", size = size.tiny)
+plotshape("asml_leads", monthEnd and leader[1] == 4, "ASML led the month", style = shape.diamond, location = location.top, color = #1F77B4, offset = -1, text = "ASML", size = size.tiny)
+plotshape("qcom_leads", monthEnd and leader[1] == 5, "QCOM led the month", style = shape.diamond, location = location.top, color = #3253DC, offset = -1, text = "QCOM", size = size.tiny)
+plotshape("txn_leads", monthEnd and leader[1] == 6, "TXN led the month", style = shape.diamond, location = location.top, color = #8C564B, offset = -1, text = "TXN", size = size.tiny)
+plotshape("intc_leads", monthEnd and leader[1] == 7, "INTC led the month", style = shape.diamond, location = location.top, color = #17BECF, offset = -1, text = "INTC", size = size.tiny)
+plotshape("mu_leads", monthEnd and leader[1] == 8, "MU led the month", style = shape.diamond, location = location.top, color = #9467BD, offset = -1, text = "MU", size = size.tiny)
+plotshape("amat_leads", monthEnd and leader[1] == 9, "AMAT led the month", style = shape.diamond, location = location.top, color = #2CA02C, offset = -1, text = "AMAT", size = size.tiny)
+plotshape("lrcx_leads", monthEnd and leader[1] == 10, "LRCX led the month", style = shape.diamond, location = location.top, color = #D62728, offset = -1, text = "LRCX", size = size.tiny)
+plotshape("klac_leads", monthEnd and leader[1] == 11, "KLAC led the month", style = shape.diamond, location = location.top, color = #E377C2, offset = -1, text = "KLAC", size = size.tiny)
+plotshape("adi_leads", monthEnd and leader[1] == 12, "ADI led the month", style = shape.diamond, location = location.top, color = #7F7F7F, offset = -1, text = "ADI", size = size.tiny)
+plotshape("mrvl_leads", monthEnd and leader[1] == 13, "MRVL led the month", style = shape.diamond, location = location.top, color = #BCBD22, offset = -1, text = "MRVL", size = size.tiny)
+plotshape("nxpi_leads", monthEnd and leader[1] == 14, "NXPI led the month", style = shape.diamond, location = location.top, color = #7FA6D9, offset = -1, text = "NXPI", size = size.tiny)
+plotshape("mchp_leads", monthEnd and leader[1] == 15, "MCHP led the month", style = shape.diamond, location = location.top, color = #F07C7A, offset = -1, text = "MCHP", size = size.tiny)
+plotshape("on_leads", monthEnd and leader[1] == 16, "ON led the month", style = shape.diamond, location = location.top, color = #6CC25A, offset = -1, text = "ON", size = size.tiny)
+plotshape("arm_leads", monthEnd and leader[1] == 17, "ARM led the month", style = shape.diamond, location = location.top, color = #A98CC9, offset = -1, text = "ARM", size = size.tiny)
+plotshape("mpwr_leads", monthEnd and leader[1] == 18, "MPWR led the month", style = shape.diamond, location = location.top, color = #B07F72, offset = -1, text = "MPWR", size = size.tiny)
+plotshape("ter_leads", monthEnd and leader[1] == 19, "TER led the month", style = shape.diamond, location = location.top, color = #5FC3D6, offset = -1, text = "TER", size = size.tiny)

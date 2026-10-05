@@ -30,6 +30,14 @@ notification and the bundled Multi-Angle Research workflow, asking
 "should I buy bitcoin right now". The drawing, rule, and both actions retain their
 original IDs and references; they use the same portable default workspace.
 
+`studies/` holds the starter studies the new profile owns as ordinary
+editable files: a 20-stock semiconductor beta-adjusted relative performance
+study and a Tea translation of a Pine Script sector rotation heatmap. Both read
+yfinance daily bars through `request.security`, so they need a US equity chart.
+They are copied into the default workspace's `studies/` folder before the
+database is published, never replacing a file of the same name, and are never
+reinstalled once the profile exists.
+
 The only machine-dependent value is supplied by the SQL function
 `onboarding_workspace_root()`. Workspace startup installs the normal bundled RSI
 file at that root. `view.json` contains ordinary browser preferences, applied only

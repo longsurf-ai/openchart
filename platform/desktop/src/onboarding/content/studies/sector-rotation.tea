@@ -1,0 +1,163 @@
+// A Tea translation of a Pine Script sector rotation study. Each row of the
+// heatmap is one sector; a box spans a swing in its smoothed beta-adjusted alpha
+// against the benchmark, green when the swing gained alpha and red when it lost,
+// more solid for larger moves. Sector ETFs stand in for the S&P sector indices.
+indicator("Sector Rotation", overlay = false)
+
+benchmarkSymbol = input.symbol("yfinance:SPY", "Benchmark", group = "Setting")
+alphaLength = input.int(60, "Alpha length", minval = 2, group = "Setting")
+smoothLength = input.int(30, "Smooth length", minval = 1, inline = "smooth", group = "Setting")
+smoothMethod = input.string("SMMA (RMA)", "Smooth method", options = ["SMA", "EMA", "SMMA (RMA)", "WMA", "VWMA"], inline = "smooth", group = "Setting")
+alphaThreshold = input.int(7, "Alpha threshold (%)", tooltip = "A swing whose alpha change exceeds this percentage, in either direction, is marked as an alpha period.", group = "Setting")
+showAlpha = input.bool(false, "Show alpha lines", group = "Setting")
+showHeatmap = input.bool(true, "Show rotation heatmap", group = "Setting")
+
+ticker1 = input.symbol("yfinance:XLI", "Industrial", inline = "ticker1", group = "Tickers")
+ticker1Show = input.bool(true, "Show", inline = "ticker1", group = "Tickers")
+ticker1FixBeta = input.float(0, "Fixed beta", inline = "ticker1", group = "Tickers")
+ticker2 = input.symbol("yfinance:XLK", "InfoTech", inline = "ticker2", group = "Tickers")
+ticker2Show = input.bool(true, "Show", inline = "ticker2", group = "Tickers")
+ticker2FixBeta = input.float(0, "Fixed beta", inline = "ticker2", group = "Tickers")
+ticker3 = input.symbol("yfinance:XLF", "Financial", inline = "ticker3", group = "Tickers")
+ticker3Show = input.bool(true, "Show", inline = "ticker3", group = "Tickers")
+ticker3FixBeta = input.float(0, "Fixed beta", inline = "ticker3", group = "Tickers")
+ticker4 = input.symbol("yfinance:XLP", "Cons", inline = "ticker4", group = "Tickers")
+ticker4Show = input.bool(true, "Show", inline = "ticker4", group = "Tickers")
+ticker4FixBeta = input.float(0, "Fixed beta", inline = "ticker4", group = "Tickers")
+ticker5 = input.symbol("yfinance:XLV", "Health", inline = "ticker5", group = "Tickers")
+ticker5Show = input.bool(true, "Show", inline = "ticker5", group = "Tickers")
+ticker5FixBeta = input.float(0, "Fixed beta", inline = "ticker5", group = "Tickers")
+ticker6 = input.symbol("yfinance:XLE", "Energy", inline = "ticker6", group = "Tickers")
+ticker6Show = input.bool(true, "Show", inline = "ticker6", group = "Tickers")
+ticker6FixBeta = input.float(0, "Fixed beta", inline = "ticker6", group = "Tickers")
+ticker7 = input.symbol("yfinance:SMH", "Semi", inline = "ticker7", group = "Tickers")
+ticker7Show = input.bool(true, "Show", inline = "ticker7", group = "Tickers")
+ticker7FixBeta = input.float(0, "Fixed beta", inline = "ticker7", group = "Tickers")
+ticker8 = input.symbol("yfinance:QQQ", "NDX", inline = "ticker8", group = "Tickers")
+ticker8Show = input.bool(true, "Show", inline = "ticker8", group = "Tickers")
+ticker8FixBeta = input.float(0, "Fixed beta", inline = "ticker8", group = "Tickers")
+ticker9 = input.symbol("yfinance:IGV", "IGV", inline = "ticker9", group = "Tickers")
+ticker9Show = input.bool(true, "Show", inline = "ticker9", group = "Tickers")
+ticker9FixBeta = input.float(0, "Fixed beta", inline = "ticker9", group = "Tickers")
+
+benchmark = request.security(benchmarkSymbol, "D", close)
+ticker1Close = request.security(ticker1, "D", close)
+ticker2Close = request.security(ticker2, "D", close)
+ticker3Close = request.security(ticker3, "D", close)
+ticker4Close = request.security(ticker4, "D", close)
+ticker5Close = request.security(ticker5, "D", close)
+ticker6Close = request.security(ticker6, "D", close)
+ticker7Close = request.security(ticker7, "D", close)
+ticker8Close = request.security(ticker8, "D", close)
+ticker9Close = request.security(ticker9, "D", close)
+
+ma(source, length, type) =>
+    switch type
+        "SMA" => ta.sma(source, length)
+        "EMA" => ta.ema(source, length)
+        "SMMA (RMA)" => ta.rma(source, length)
+        "WMA" => ta.wma(source, length)
+        "VWMA" => ta.vwma(source, length)
+
+// Cumulative log alpha against the benchmark, after removing a rolling or fixed beta.
+cumAlpha(security, length, fixBeta) =>
+    benchmarkReturn = math.log(benchmark / benchmark[1])
+    symbolReturn = math.log(security / security[1])
+    sigmaB = ta.stdev(benchmarkReturn, length)
+    sigmaS = ta.stdev(symbolReturn, length)
+    beta = ta.correlation(benchmarkReturn, symbolReturn, length) * sigmaS / sigmaB
+    alpha = symbolReturn - (fixBeta > 0 ? fixBeta : beta) * benchmarkReturn
+    math.exp(ta.cum(alpha))
+
+// Follows one ticker's smoothed alpha swings. A swing ends when the smoothed
+// alpha turns; it is an alpha event when its largest move from the swing
+// start exceeded the threshold. Locations are bar times.
+doTicker(security, fixBeta) =>
+    tickerAlpha = cumAlpha(security, alphaLength, fixBeta)
+    tickerAlphaSmoothed = ma(tickerAlpha, smoothLength, smoothMethod)
+    startLoc = 0
+    maxLoc = 0
+    maxChange = 0.0
+    srcStart = tickerAlpha
+    diff = tickerAlphaSmoothed - tickerAlphaSmoothed[1]
+    uptrend = diff > 0
+    directionChange = (diff > 0 and diff[1] <= 0) or (diff < 0 and diff[1] >= 0)
+    srcStart := directionChange ? tickerAlpha : srcStart[1]
+    startLoc := directionChange ? time : startLoc[1]
+    change = 100 * (tickerAlpha / srcStart) - 100
+    positiveAlpha = change > 0
+    maxChange := math.max(math.abs(change), maxChange[1])
+    maxLoc := maxChange > maxChange[1] ? time : maxLoc[1]
+    var float baseAlpha = na
+    if na(baseAlpha)
+        baseAlpha := tickerAlpha
+    // Percent change since the first bar, so the lines share the heatmap's scale around 0.
+    displayAlpha = (tickerAlpha / baseAlpha - 1) * 100
+    displaySmoothedAlpha = ma(displayAlpha, smoothLength, smoothMethod)
+    alphaEvent = (directionChange and maxChange[1] > alphaThreshold) or barstate.islast
+    leftLoc = startLoc[1]
+    rightLoc = maxLoc
+    maxChange := directionChange ? 0 : maxChange
+    maxLoc := directionChange ? time : maxLoc
+    [displayAlpha, uptrend, positiveAlpha[1], alphaEvent, leftLoc, rightLoc, displaySmoothedAlpha, maxChange[1]]
+
+alphaChangeMax = 15
+
+// color.from_gradient between the half-transparent and solid color.
+heat(change, positive) =>
+    level = math.max(0, math.min(1, (change - alphaThreshold) / (alphaChangeMax - alphaThreshold)))
+    color.new(positive ? color.green : color.red, 50 - 50 * level)
+
+trend(up) => up ? color.new(color.green, 50) : color.new(color.red, 50)
+
+// Zones do not take part in autoscale; these hidden levels keep the
+// heatmap's rows, centered on 0, filling the pane.
+hline("heat_top", 25, display = display.none)
+hline("heat_bottom", -25, display = display.none)
+
+[ticker1DisplayAlpha, ticker1Uptrend, ticker1PositiveAlpha, ticker1AlphaEvent, ticker1LeftLoc, ticker1RightLoc, ticker1AlphaSmoothed, ticker1AlphaChange] = doTicker(ticker1Close, ticker1FixBeta)
+[ticker2DisplayAlpha, ticker2Uptrend, ticker2PositiveAlpha, ticker2AlphaEvent, ticker2LeftLoc, ticker2RightLoc, ticker2AlphaSmoothed, ticker2AlphaChange] = doTicker(ticker2Close, ticker2FixBeta)
+[ticker3DisplayAlpha, ticker3Uptrend, ticker3PositiveAlpha, ticker3AlphaEvent, ticker3LeftLoc, ticker3RightLoc, ticker3AlphaSmoothed, ticker3AlphaChange] = doTicker(ticker3Close, ticker3FixBeta)
+[ticker4DisplayAlpha, ticker4Uptrend, ticker4PositiveAlpha, ticker4AlphaEvent, ticker4LeftLoc, ticker4RightLoc, ticker4AlphaSmoothed, ticker4AlphaChange] = doTicker(ticker4Close, ticker4FixBeta)
+[ticker5DisplayAlpha, ticker5Uptrend, ticker5PositiveAlpha, ticker5AlphaEvent, ticker5LeftLoc, ticker5RightLoc, ticker5AlphaSmoothed, ticker5AlphaChange] = doTicker(ticker5Close, ticker5FixBeta)
+[ticker6DisplayAlpha, ticker6Uptrend, ticker6PositiveAlpha, ticker6AlphaEvent, ticker6LeftLoc, ticker6RightLoc, ticker6AlphaSmoothed, ticker6AlphaChange] = doTicker(ticker6Close, ticker6FixBeta)
+[ticker7DisplayAlpha, ticker7Uptrend, ticker7PositiveAlpha, ticker7AlphaEvent, ticker7LeftLoc, ticker7RightLoc, ticker7AlphaSmoothed, ticker7AlphaChange] = doTicker(ticker7Close, ticker7FixBeta)
+[ticker8DisplayAlpha, ticker8Uptrend, ticker8PositiveAlpha, ticker8AlphaEvent, ticker8LeftLoc, ticker8RightLoc, ticker8AlphaSmoothed, ticker8AlphaChange] = doTicker(ticker8Close, ticker8FixBeta)
+[ticker9DisplayAlpha, ticker9Uptrend, ticker9PositiveAlpha, ticker9AlphaEvent, ticker9LeftLoc, ticker9RightLoc, ticker9AlphaSmoothed, ticker9AlphaChange] = doTicker(ticker9Close, ticker9FixBeta)
+
+plot("ticker1_alpha", showAlpha and ticker1Show ? ticker1DisplayAlpha : na, "Industrial alpha", color = trend(ticker1Uptrend))
+plot("ticker1_smoothed", showAlpha and ticker1Show ? ticker1AlphaSmoothed : na, "Industrial smoothed alpha", color = trend(ticker1Uptrend))
+if ticker1AlphaEvent and showHeatmap and ticker1Show
+    plotzone("ticker1_heat", ticker1LeftLoc, ticker1RightLoc, 22.5, 17.5, color = heat(ticker1AlphaChange, ticker1PositiveAlpha), text = "Industrial")
+plot("ticker2_alpha", showAlpha and ticker2Show ? ticker2DisplayAlpha : na, "InfoTech alpha", color = trend(ticker2Uptrend))
+plot("ticker2_smoothed", showAlpha and ticker2Show ? ticker2AlphaSmoothed : na, "InfoTech smoothed alpha", color = trend(ticker2Uptrend))
+if ticker2AlphaEvent and showHeatmap and ticker2Show
+    plotzone("ticker2_heat", ticker2LeftLoc, ticker2RightLoc, 17.5, 12.5, color = heat(ticker2AlphaChange, ticker2PositiveAlpha), text = "InfoTech")
+plot("ticker3_alpha", showAlpha and ticker3Show ? ticker3DisplayAlpha : na, "Financial alpha", color = trend(ticker3Uptrend))
+plot("ticker3_smoothed", showAlpha and ticker3Show ? ticker3AlphaSmoothed : na, "Financial smoothed alpha", color = trend(ticker3Uptrend))
+if ticker3AlphaEvent and showHeatmap and ticker3Show
+    plotzone("ticker3_heat", ticker3LeftLoc, ticker3RightLoc, 12.5, 7.5, color = heat(ticker3AlphaChange, ticker3PositiveAlpha), text = "Financial")
+plot("ticker4_alpha", showAlpha and ticker4Show ? ticker4DisplayAlpha : na, "Cons alpha", color = trend(ticker4Uptrend))
+plot("ticker4_smoothed", showAlpha and ticker4Show ? ticker4AlphaSmoothed : na, "Cons smoothed alpha", color = trend(ticker4Uptrend))
+if ticker4AlphaEvent and showHeatmap and ticker4Show
+    plotzone("ticker4_heat", ticker4LeftLoc, ticker4RightLoc, 7.5, 2.5, color = heat(ticker4AlphaChange, ticker4PositiveAlpha), text = "Cons")
+plot("ticker5_alpha", showAlpha and ticker5Show ? ticker5DisplayAlpha : na, "Health alpha", color = trend(ticker5Uptrend))
+plot("ticker5_smoothed", showAlpha and ticker5Show ? ticker5AlphaSmoothed : na, "Health smoothed alpha", color = trend(ticker5Uptrend))
+if ticker5AlphaEvent and showHeatmap and ticker5Show
+    plotzone("ticker5_heat", ticker5LeftLoc, ticker5RightLoc, 2.5, -2.5, color = heat(ticker5AlphaChange, ticker5PositiveAlpha), text = "Health")
+plot("ticker6_alpha", showAlpha and ticker6Show ? ticker6DisplayAlpha : na, "Energy alpha", color = trend(ticker6Uptrend))
+plot("ticker6_smoothed", showAlpha and ticker6Show ? ticker6AlphaSmoothed : na, "Energy smoothed alpha", color = trend(ticker6Uptrend))
+if ticker6AlphaEvent and showHeatmap and ticker6Show
+    plotzone("ticker6_heat", ticker6LeftLoc, ticker6RightLoc, -2.5, -7.5, color = heat(ticker6AlphaChange, ticker6PositiveAlpha), text = "Energy")
+plot("ticker7_alpha", showAlpha and ticker7Show ? ticker7DisplayAlpha : na, "Semi alpha", color = trend(ticker7Uptrend))
+plot("ticker7_smoothed", showAlpha and ticker7Show ? ticker7AlphaSmoothed : na, "Semi smoothed alpha", color = trend(ticker7Uptrend))
+if ticker7AlphaEvent and showHeatmap and ticker7Show
+    plotzone("ticker7_heat", ticker7LeftLoc, ticker7RightLoc, -7.5, -12.5, color = heat(ticker7AlphaChange, ticker7PositiveAlpha), text = "Semi")
+plot("ticker8_alpha", showAlpha and ticker8Show ? ticker8DisplayAlpha : na, "NDX alpha", color = trend(ticker8Uptrend))
+plot("ticker8_smoothed", showAlpha and ticker8Show ? ticker8AlphaSmoothed : na, "NDX smoothed alpha", color = trend(ticker8Uptrend))
+if ticker8AlphaEvent and showHeatmap and ticker8Show
+    plotzone("ticker8_heat", ticker8LeftLoc, ticker8RightLoc, -12.5, -17.5, color = heat(ticker8AlphaChange, ticker8PositiveAlpha), text = "NDX")
+plot("ticker9_alpha", showAlpha and ticker9Show ? ticker9DisplayAlpha : na, "IGV alpha", color = trend(ticker9Uptrend))
+plot("ticker9_smoothed", showAlpha and ticker9Show ? ticker9AlphaSmoothed : na, "IGV smoothed alpha", color = trend(ticker9Uptrend))
+if ticker9AlphaEvent and showHeatmap and ticker9Show
+    plotzone("ticker9_heat", ticker9LeftLoc, ticker9RightLoc, -17.5, -22.5, color = heat(ticker9AlphaChange, ticker9PositiveAlpha), text = "IGV")
