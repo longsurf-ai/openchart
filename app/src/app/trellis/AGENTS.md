@@ -24,9 +24,11 @@ Onboarding workflows, defined as data and run by `OnboardingHost`.
   ends the workflow.
 - Product code never imports trellis, and trellis never reaches into
   product markup: it only follows routes. Pages may reuse product components;
-  the starter's agent page reuses Settings' native provider setup.
+  the starter's agent page reuses Settings' native provider setup, and its
+  notification page asks AppHost to turn notifications on.
 - `local:onboarding` stores device-local progress: the running workflow and its
   seen step indexes. Desktop starts `starter` for new profiles
   through onboarding `view.json`; its IDs are checked against that content.
-- Videos are square 720px faststart MP4s on #111111 without audio, mostly
-  website films cut to product behavior; these files are the source.
+- Videos are square 720px faststart MP4s without audio, on #111111 or, for
+  macOS prompts, a dark wallpaper; mostly website films cut to product
+  behavior; these files are the source.

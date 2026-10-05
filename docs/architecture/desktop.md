@@ -301,6 +301,12 @@ and, where Electron supports notifications, shows one; clicking it restores,
 shows and focuses the open window. An invalid message fails a pending startup
 and is only logged afterwards.
 
+`desktop.enableNotifications` uses the same main-frame/origin guard and shows a
+fixed confirming notification through the same path. Electron offers no
+permission request, so this first notification is what lets macOS ask the
+user; the answer stays with the system and is not reported back. Onboarding
+calls it through `AppHost.enableNotifications`.
+
 Quit: open editors first resolve their `beforeunload` decision; canceling keeps
 the backend available for saving. Once windows accept closing, `will-quit`
 posts `shutdown`; the backend runs `server.shutdown()` and

@@ -59,6 +59,7 @@ export function testAppHost(overrides: Partial<AppHost> = {}): AppHost {
     restartToUpdate: async () => {},
     openBilling: async () => {},
     onBillingReturn: () => () => {},
+    enableNotifications: async () => {},
     ...overrides,
   };
 }

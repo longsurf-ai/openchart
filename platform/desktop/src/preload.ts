@@ -1,4 +1,4 @@
-// Purpose: Expose the backend connection, native folder picker and update restart through guarded main IPC.
+// Purpose: Expose the backend connection, native folder picker, update restart and notification opt-in through guarded main IPC.
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import { exposeClerkBridge } from "@clerk/electron/preload";
@@ -46,4 +46,6 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   /** Asks main to quit normally and install the downloaded update. */
   restartToUpdate: () => ipcRenderer.invoke("desktop.restartToUpdate"),
+  /** Asks main to show the notification that lets macOS ask for permission. */
+  enableNotifications: () => ipcRenderer.invoke("desktop.enableNotifications"),
 });

@@ -23,6 +23,7 @@ declare global {
         listener: (release: string) => void,
       ) => () => void;
       readonly restartToUpdate: () => Promise<void>;
+      readonly enableNotifications: () => Promise<void>;
     };
   }
 }
@@ -55,6 +56,7 @@ void window.desktop
         changelog,
         onUpdateReady: (listener) => window.desktop.onUpdateReady(listener),
         restartToUpdate: () => window.desktop.restartToUpdate(),
+        enableNotifications: () => window.desktop.enableNotifications(),
       });
     },
   );

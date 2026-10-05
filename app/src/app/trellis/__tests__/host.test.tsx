@@ -1,4 +1,4 @@
-// Purpose: Verify the starter workflow opens with its agent page, explains each page once, opens the next one on Next, and finishes.
+// Purpose: Verify the starter workflow opens with its agent and notification pages, explains each page once, opens the next one on Next, and finishes.
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, Link, useLocation } from "react-router";
@@ -10,7 +10,7 @@ import { useOnboardingProgress } from "@openchart/app/app/trellis/progress";
 import type { OnboardingPageProps } from "@openchart/app/app/trellis/views";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 
-// The page has its own test; here it only needs to hand back control.
+// The pages have their own tests; here they only need to hand back control.
 const transport = {} as AppTransport;
 vi.mock(
   "@openchart/app/app/trellis/workflows/starter/connect-agents-page",
@@ -20,6 +20,16 @@ vi.mock(
         {given === transport ? (
           <button onClick={onDone}>Skip for now</button>
         ) : null}
+      </div>
+    ),
+  }),
+);
+vi.mock(
+  "@openchart/app/app/trellis/workflows/starter/notifications-page",
+  () => ({
+    NotificationsPage: ({ onDone }: OnboardingPageProps) => (
+      <div role="dialog" aria-label="Turn on notifications">
+        <button onClick={onDone}>Continue</button>
       </div>
     ),
   }),
@@ -55,24 +65,31 @@ function renderAt(path: string) {
 
 const page = () => screen.getByRole("status", { name: "Page" });
 
-test("the agent page opens first wherever the user is, then the tour starts", async () => {
+test("the agent and notification pages open first wherever the user is, then the tour starts", async () => {
   const user = userEvent.setup();
   useOnboardingProgress.setState({ workflow: "starter", seen: [] });
   renderAt(session);
 
-  await user.click(await screen.findByRole("button", { name: "Skip for now" }));
+  await screen.findByRole("dialog", { name: "Connect your agent" });
+  await user.click(screen.getByRole("button", { name: "Skip for now" }));
+  // The notification page follows on the same page, outside the tour's count.
+  await screen.findByRole("dialog", { name: "Turn on notifications" });
+  expect(page()).toHaveTextContent(session);
+  expect(useOnboardingProgress.getState().seen).toEqual([0]);
+
+  await user.click(screen.getByRole("button", { name: "Continue" }));
   expect(page()).toHaveTextContent(dashboard);
   expect(
     await screen.findByRole("dialog", {
       name: "Watch the market from your dashboard",
     }),
   ).toHaveTextContent("1 of 4");
-  expect(useOnboardingProgress.getState().seen).toEqual([0]);
+  expect(useOnboardingProgress.getState().seen).toEqual([0, 1]);
 });
 
 test("Next opens each next page until the workflow finishes", async () => {
   const user = userEvent.setup();
-  useOnboardingProgress.setState({ workflow: "starter", seen: [0] });
+  useOnboardingProgress.setState({ workflow: "starter", seen: [0, 1] });
   renderAt(dashboard);
 
   expect(
@@ -110,18 +127,18 @@ test("Next opens each next page until the workflow finishes", async () => {
 
 test("leaving a page counts as seeing it", async () => {
   const user = userEvent.setup();
-  useOnboardingProgress.setState({ workflow: "starter", seen: [0] });
+  useOnboardingProgress.setState({ workflow: "starter", seen: [0, 1] });
   renderAt(alert);
 
   await screen.findByRole("dialog", { name: "Alerts put agents to work" });
   await user.click(screen.getByRole("link", { name: "Feed" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(useOnboardingProgress.getState().seen).toEqual([0, 3]);
+  expect(useOnboardingProgress.getState().seen).toEqual([0, 1, 4]);
 });
 
 test("Next out of order opens the first unseen step", async () => {
   const user = userEvent.setup();
-  useOnboardingProgress.setState({ workflow: "starter", seen: [0] });
+  useOnboardingProgress.setState({ workflow: "starter", seen: [0, 1] });
   renderAt(session);
 
   await user.click(await screen.findByRole("button", { name: "Next" }));
@@ -129,7 +146,10 @@ test("Next out of order opens the first unseen step", async () => {
 });
 
 test("the last card offers web pages without closing", async () => {
-  useOnboardingProgress.setState({ workflow: "starter", seen: [0, 1, 2, 3] });
+  useOnboardingProgress.setState({
+    workflow: "starter",
+    seen: [0, 1, 2, 3, 4],
+  });
   renderAt(dashboard);
   await screen.findByRole("dialog", { name: "Star us on GitHub" });
 

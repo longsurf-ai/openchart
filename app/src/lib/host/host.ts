@@ -30,6 +30,12 @@ export type AppHost = {
   onUpdateReady: (listener: (release: string) => void) => () => void;
   /** Quits through the normal path, which may still be cancelled, then installs the update. */
   restartToUpdate: () => Promise<void>;
+  /**
+   * Shows a system notification confirming notifications are on. The first
+   * one OpenChart shows is what lets macOS ask the user to allow them; the
+   * answer is the system's and is not reported back. Failures reject.
+   */
+  enableNotifications: () => Promise<void>;
 };
 
 const AppHostContext = createContext<AppHost | undefined>(undefined);

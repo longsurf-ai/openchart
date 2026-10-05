@@ -396,6 +396,16 @@ function start(): void {
           installUpdateOnQuit = true;
           app.quit();
         });
+        // Electron has no permission request; macOS asks when the app first notifies.
+        ipcMain.handle("desktop.enableNotifications", (event) => {
+          assertTrustedFrame(event);
+          showNotification({
+            type: "notify",
+            title: "Notifications are on",
+            body: "OpenChart will notify you here when your alerts fire.",
+            sound: "system",
+          });
+        });
         if (!development) {
           // Serve packaged pages from disk when the browser asks for openchart://app.
           const directory = join(app.getAppPath(), "renderer");
