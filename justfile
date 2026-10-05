@@ -62,7 +62,7 @@ desktop-package environment="production":
 desktop-release:
     npm --prefix platform/desktop run release
 
-# Upload verified downloads first; publish the update manifest last.
+# Upload verified downloads, then the update manifest, then the GitHub Release.
 [arg('version', pattern='[0-9]+\.[0-9]+\.[0-9]+')]
 desktop-publish version:
     #!/usr/bin/env bash
@@ -78,6 +78,14 @@ desktop-publish version:
     npx --yes wrangler@4.135.0 r2 object put 'openchart-releases/openchart/darwin/arm64/SHA256SUMS-{{version}}' --remote --file "$release_directory/SHA256SUMS" --content-type text/plain --cache-control 'public, max-age=31536000, immutable'
     npx --yes wrangler@4.135.0 r2 object put 'openchart-releases/openchart/darwin/arm64/OpenChart.dmg' --remote --file "$release_directory/OpenChart-{{version}}-darwin-arm64.dmg" --content-type application/x-apple-diskimage --content-disposition 'attachment; filename="OpenChart-{{version}}-darwin-arm64.dmg"' --cache-control no-store
     npx --yes wrangler@4.135.0 r2 object put 'openchart-releases/openchart/darwin/arm64/RELEASES.json' --remote --file "$release_directory/RELEASES.json" --content-type application/json --cache-control no-store
+    # Mirror the release on GitHub, tagged at its source commit, and mark it latest.
+    if gh release view 'v{{version}}' >/dev/null 2>&1; then
+      gh release edit 'v{{version}}' --latest
+    else
+      notes=$(jq -r '.[] | select(.version == "{{version}}") | .items[] | "- \(.)"' '{{justfile_directory()}}/platform/desktop/src/changelog/changelog.json')
+      test -n "$notes"
+      gh release create 'v{{version}}' OpenChart-{{version}}-darwin-arm64.dmg OpenChart-{{version}}-darwin-arm64.zip SHA256SUMS --target "$(cat SOURCE)" --title 'OpenChart {{version}}' --notes "$notes" --latest
+    fi
 
 # Verify a packaged Electron executable; all test data stays in a temporary profile.
 [arg('keychain', pattern='mock|system')]

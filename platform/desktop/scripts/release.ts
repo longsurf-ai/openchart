@@ -21,10 +21,12 @@ export const signingIdentity = "Developer ID Application: Longsurf, Inc.";
 const run = promisify(execFile);
 
 /**
- * Creates versioned DMG/ZIP downloads, checksums and RELEASES.json in out/release.
- * Requires a Developer ID-signed, stapled Apple Silicon app and
- * the openchart-notary Keychain profile. Throws on failed Apple verification;
- * the update feed is written only after both downloads pass verification.
+ * Creates versioned DMG/ZIP downloads, checksums, RELEASES.json and SOURCE (the
+ * commit the release was built from, which publishing tags) in out/release.
+ * Requires committed tracked files, a Developer ID-signed, stapled Apple Silicon
+ * app and the openchart-notary Keychain profile. Throws on failed Apple
+ * verification; the update feed is written only after both downloads pass
+ * verification.
  * @example await createRelease('/build/OpenChart.app', '0.1.0');
  */
 export async function createRelease(
@@ -43,6 +45,18 @@ export async function createRelease(
     throw new Error(
       `Packaged version ${appVersion.trim()} does not match release ${version}`,
     );
+  // The published tag must name the exact source of these bytes.
+  const repository = join(import.meta.dirname, "../../..");
+  const { stdout: changes } = await run(
+    "git",
+    ["status", "--porcelain", "--untracked-files=no"],
+    { cwd: repository },
+  );
+  if (changes.trim())
+    throw new Error("Commit the release source before building a release.");
+  const { stdout: commit } = await run("git", ["rev-parse", "HEAD"], {
+    cwd: repository,
+  });
   await run("codesign", ["--verify", "--deep", "--strict", appPath]);
   await run("xcrun", ["stapler", "validate", appPath]);
   await run("spctl", ["--assess", "--type", "execute", appPath]);
@@ -108,6 +122,7 @@ export async function createRelease(
       checksums.push(`${hash.digest("hex")}  ${file}`);
     }
     await writeFile(join(output, "SHA256SUMS"), `${checksums.join("\n")}\n`);
+    await writeFile(join(output, "SOURCE"), commit);
     await writeFile(
       join(output, "RELEASES.json"),
       JSON.stringify(
