@@ -16,9 +16,17 @@
   <a href="https://openchart.co/#pricing"><img src="https://img.shields.io/badge/pricing-free-2da44e?style=flat-square" alt="Desktop pricing: free"></a>
   <a href="https://discord.gg/PR4gfbMKUD"><img src="https://img.shields.io/badge/chat-Discord-5865F2?style=flat-square&amp;logo=discord&amp;logoColor=white" alt="Chat on Discord"></a>
   <a href="https://x.com/OpenChartHQ"><img src="https://img.shields.io/badge/follow-%40OpenChartHQ-18181b?style=flat-square&amp;logo=x&amp;logoColor=white" alt="Follow @OpenChartHQ on X"></a>
-  <img src="https://img.shields.io/badge/subreddit-coming_soon-FF4500?style=flat-square&amp;logo=reddit&amp;logoColor=white" alt="Subreddit: coming soon">
+  <a href="https://www.reddit.com/r/OpenChartOfficial/"><img src="https://img.shields.io/badge/subreddit-r%2FOpenChartOfficial-FF4500?style=flat-square&amp;logo=reddit&amp;logoColor=white" alt="Join r/OpenChartOfficial on Reddit"></a>
   <a href="https://github.com/longsurf-ai/openchart/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/longsurf-ai/openchart/ci.yml?branch=main&amp;style=flat-square&amp;label=build&amp;logo=github" alt="Build status on main"></a>
 </p>
+
+OpenChart brings AI agents into every step of your investment journey: statistical
+and technical analysis with code and charts, real-time responses to market events
+with alerts, opportunity discovery through agentic research, and more.
+
+OpenChart is not built to monetize software, but to explore a future where humans
+and agents manage assets together. If you believe in this future and want to join
+forces, [we want to talk to you](https://discord.gg/PR4gfbMKUD).
 
 ## Quick start
 
@@ -93,6 +101,35 @@ and help more people discover it.
 
 [![A cursor clicks Star on the OpenChart GitHub repository, changing it to Starred.](docs/assets/star-openchart.gif)](https://github.com/longsurf-ai/openchart)
 
+## Credits
+
+Thank you to the projects and people whose work helps shape OpenChart:
+
+- [Jan](https://www.jan.ai/): for inspiration on the app's design and visual style.
+- [TradingView's Pine Script](https://www.tradingview.com/pine-script-docs/welcome/):
+  for inspiring Tea's language design.
+- [OpenCode](https://opencode.ai/): a major inspiration for OpenChart, and the
+  project through which we discovered [Effect](https://effect.website/).
+- [Dify](https://github.com/langgenius/dify): for inspiring the organization of
+  this README.
+- [assistant-ui](https://www.assistant-ui.com/) and
+  [AG-UI](https://docs.ag-ui.com/introduction): for the agent conversation interface
+  and event protocol.
+- [shadcn/ui](https://ui.shadcn.com/docs),
+  [Radix UI](https://www.radix-ui.com/primitives), and
+  [Base UI](https://base-ui.com/): for reusable interface components.
+- [Effect](https://effect.website/): for the runtime, concurrency, and error-handling
+  foundations.
+- [Inter](https://rsms.me/inter/) and [Hugeicons](https://hugeicons.com/): for
+  typography and interface icons.
+- [robust-orientation](https://github.com/mikolalysenko/robust-orientation) and
+  related libraries by Mikola Lysenko, and
+  [kld-intersections](https://github.com/thelonious/kld-intersections) by Kevin Lindsey:
+  for geometry algorithms adapted in Tea.
+
+Thanks also to the maintainers of the many other open-source dependencies that
+make OpenChart possible.
+
 ## Contributing
 
 Help improve OpenChart through code, indicators, documentation, and feedback.
@@ -127,7 +164,8 @@ Thanks to everyone helping build OpenChart.
   reproducible bugs and suggest improvements.
 - [X / @OpenChartHQ](https://x.com/OpenChartHQ): Follow release news and project
   updates.
-- **Reddit:** Our subreddit is coming soon.
+- [Reddit / r/OpenChartOfficial](https://www.reddit.com/r/OpenChartOfficial/): Share
+  setups, discuss market research workflows, and exchange ideas.
 
 ## Security disclosure
 
