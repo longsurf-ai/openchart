@@ -5,16 +5,16 @@ import ChartCandlestickIcon from "@hugeicons/core-free-icons/ChartCandlestickIco
 import ChartHighLowIcon from "@hugeicons/core-free-icons/ChartHighLowIcon";
 import ChartLineData01Icon from "@hugeicons/core-free-icons/ChartLineData01Icon";
 import ChartLineData02Icon from "@hugeicons/core-free-icons/ChartLineData02Icon";
-import type { Resolution } from "@openchart/feed";
 import { SessionType } from "@openchart/market";
+import { providerName, type Resolution } from "@openchart/feed";
 import {
   useIsMutating,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Plus, FunctionSquare } from "lucide-react";
-import { useContext, useEffect, useState } from "react";
+import { Lock, Plus, FunctionSquare } from "lucide-react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 
 import { Button } from "@openchart/app/components/ui/button";
@@ -70,6 +70,11 @@ import { SymbolPicker } from "./symbol-picker";
 import { IndicatorLibraryNavigation } from "@openchart/app/lib/indicator-library/indicator-library";
 import { WorkspaceFileNavigation } from "@openchart/app/lib/workspace/workspace";
 import { GridPresetMenu } from "./layout-menu";
+import {
+  cloudOffersOption,
+  reportLockedOption,
+  type ChartOption,
+} from "@openchart/app/lib/upsell/upsell";
 
 const resolutions: readonly Resolution[] = [
   "1s",
@@ -84,10 +89,20 @@ const resolutions: readonly Resolution[] = [
   "1M",
 ];
 const adjustments = [
-  { value: "raw", name: "Raw prices" },
-  { value: "split", name: "Split adjusted" },
-  { value: "split_dividend", name: "Total return" },
+  { value: "raw", name: "Raw prices", coverage: "raw prices" },
+  { value: "split", name: "Split adjusted", coverage: "split-adjusted prices" },
+  {
+    value: "split_dividend",
+    name: "Total return",
+    coverage: "total-return prices",
+  },
 ] as const;
+/** How a missing session reads in "<source> doesn't provide …". */
+const sessionCoverage: Record<CellDefinition["session"], string> = {
+  regular: "regular-hours bars",
+  extended: "extended-hours bars",
+  "24h": "24-hour bars",
+};
 const typeIcons = {
   Candlestick: ChartCandlestickIcon,
   Bar: ChartHighLowIcon,
@@ -186,6 +201,52 @@ export function ChartToolbar() {
   );
 }
 
+/**
+ * One interval, session or adjustment choice. A choice the source lacks is
+ * disabled, unless Cloud offers it: then it is muted with a lock, explains on
+ * hover which source lacks it, and stays clickable so the menu can raise the
+ * Cloud offer.
+ */
+function OptionItem({
+  value,
+  supported,
+  locked,
+  missing,
+  children,
+}: {
+  value: string;
+  supported: boolean;
+  locked: boolean;
+  /** What the source lacks, e.g. "Yahoo Finance doesn't provide 1s bars". */
+  missing: string;
+  children: ReactNode;
+}) {
+  if (!locked)
+    return (
+      <DropdownMenuRadioItem value={value} disabled={!supported}>
+        {children}
+      </DropdownMenuRadioItem>
+    );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <DropdownMenuRadioItem
+          value={value}
+          className="group text-muted-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
+        >
+          {children}
+          <Lock
+            aria-hidden
+            className="ml-auto size-3.5 text-muted-foreground group-data-[highlighted]:text-accent-foreground"
+          />
+          <span className="sr-only">, available with OpenChart Cloud</span>
+        </DropdownMenuRadioItem>
+      </TooltipTrigger>
+      <TooltipContent side="right">{missing}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ChartControls({
   cell,
   localStore,
@@ -228,6 +289,16 @@ function ChartControls({
         (choice.adjustment === undefined ||
           value.adjustment === choice.adjustment),
     );
+  // An option the source lacks stays clickable when Cloud offers it: choosing it
+  // raises the Cloud offer and leaves the chart unchanged.
+  const chart = {
+    provider: source.provider,
+    listingClass: source.listing.class,
+  };
+  const locked = (option: ChartOption, supported: boolean) =>
+    !supported && cloudOffersOption(option, chart);
+  const missing = (what: string) =>
+    `${providerName(source.provider)} doesn't provide ${what}`;
   const style = { ...defaultSeriesPreferences, ...prefs.series[main.id] };
   const setStyle = (change: Partial<typeof style>) =>
     updateSeriesStyles(localStore, [main.id], change);
@@ -350,25 +421,30 @@ function ChartControls({
           </DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={cell.resolution}
-            onValueChange={(value) =>
+            onValueChange={(value) => {
+              const resolution = value as Resolution;
+              if (!supports({ resolution }))
+                return reportLockedOption("resolution", chart);
               onChange((current) => ({
                 ...current,
-                ...chooseBarsOptions(choices, {
-                  ...current,
-                  resolution: value as Resolution,
-                }),
-              }))
-            }
+                ...chooseBarsOptions(choices, { ...current, resolution }),
+              }));
+            }}
           >
-            {resolutions.map((resolution) => (
-              <DropdownMenuRadioItem
-                key={resolution}
-                value={resolution}
-                disabled={!supports({ resolution })}
-              >
-                {resolution}
-              </DropdownMenuRadioItem>
-            ))}
+            {resolutions.map((resolution) => {
+              const supported = supports({ resolution });
+              return (
+                <OptionItem
+                  key={resolution}
+                  value={resolution}
+                  supported={supported}
+                  locked={locked("resolution", supported)}
+                  missing={missing(`${resolution} bars`)}
+                >
+                  {resolution}
+                </OptionItem>
+              );
+            })}
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
@@ -376,32 +452,41 @@ function ChartControls({
             <DropdownMenuSubContent>
               <DropdownMenuRadioGroup
                 value={cell.session}
-                onValueChange={(value) =>
-                  onChange((current) => ({
-                    ...current,
-                    session: value as CellDefinition["session"],
-                  }))
-                }
+                onValueChange={(value) => {
+                  const session = value as CellDefinition["session"];
+                  if (
+                    !supports({
+                      resolution: cell.resolution,
+                      session,
+                      adjustment: cell.adjustment,
+                    })
+                  )
+                    return reportLockedOption("session", chart);
+                  onChange((current) => ({ ...current, session }));
+                }}
               >
-                {SessionType.literals.map((session) => (
-                  <DropdownMenuRadioItem
-                    key={session}
-                    value={session}
-                    disabled={
-                      !supports({
-                        resolution: cell.resolution,
-                        session,
-                        adjustment: cell.adjustment,
-                      })
-                    }
-                  >
-                    {session === "24h"
-                      ? "24 hr"
-                      : session === "regular"
-                        ? "Regular"
-                        : "Extended"}
-                  </DropdownMenuRadioItem>
-                ))}
+                {SessionType.literals.map((session) => {
+                  const supported = supports({
+                    resolution: cell.resolution,
+                    session,
+                    adjustment: cell.adjustment,
+                  });
+                  return (
+                    <OptionItem
+                      key={session}
+                      value={session}
+                      supported={supported}
+                      locked={locked("session", supported)}
+                      missing={missing(sessionCoverage[session])}
+                    >
+                      {session === "24h"
+                        ? "24 hr"
+                        : session === "regular"
+                          ? "Regular"
+                          : "Extended"}
+                    </OptionItem>
+                  );
+                })}
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
@@ -410,28 +495,37 @@ function ChartControls({
             <DropdownMenuSubContent>
               <DropdownMenuRadioGroup
                 value={cell.adjustment}
-                onValueChange={(value) =>
-                  onChange((current) => ({
-                    ...current,
-                    adjustment: value as CellDefinition["adjustment"],
-                  }))
-                }
+                onValueChange={(value) => {
+                  const adjustment = value as CellDefinition["adjustment"];
+                  if (
+                    !supports({
+                      resolution: cell.resolution,
+                      session: cell.session,
+                      adjustment,
+                    })
+                  )
+                    return reportLockedOption("adjustment", chart);
+                  onChange((current) => ({ ...current, adjustment }));
+                }}
               >
-                {adjustments.map((adjustment) => (
-                  <DropdownMenuRadioItem
-                    key={adjustment.value}
-                    value={adjustment.value}
-                    disabled={
-                      !supports({
-                        resolution: cell.resolution,
-                        session: cell.session,
-                        adjustment: adjustment.value,
-                      })
-                    }
-                  >
-                    {adjustment.name}
-                  </DropdownMenuRadioItem>
-                ))}
+                {adjustments.map((adjustment) => {
+                  const supported = supports({
+                    resolution: cell.resolution,
+                    session: cell.session,
+                    adjustment: adjustment.value,
+                  });
+                  return (
+                    <OptionItem
+                      key={adjustment.value}
+                      value={adjustment.value}
+                      supported={supported}
+                      locked={locked("adjustment", supported)}
+                      missing={missing(adjustment.coverage)}
+                    >
+                      {adjustment.name}
+                    </OptionItem>
+                  );
+                })}
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>

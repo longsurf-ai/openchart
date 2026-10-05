@@ -17,7 +17,11 @@ vi.mock("@clerk/react", () => ({
 
 beforeEach(() => {
   vi.stubGlobal("PointerEvent", MouseEvent);
-  useUpsell.setState({ pending: false, open: false, lastShownAt: undefined });
+  useUpsell.setState({
+    pending: undefined,
+    open: false,
+    lastShownAt: undefined,
+  });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -89,7 +93,7 @@ test("a moment Cloud solves shows the offer once; Stay on limited data closes it
   expect(screen.queryByText("Keep your data flowing")).not.toBeInTheDocument();
   // Within the cooldown a new moment stays quiet.
   act(() => reportUpsell(limited));
-  await waitFor(() => expect(useUpsell.getState().pending).toBe(false));
+  await waitFor(() => expect(useUpsell.getState().pending).toBeUndefined());
   expect(screen.queryByText("Keep your data flowing")).not.toBeInTheDocument();
 });
 
@@ -110,7 +114,7 @@ test.each([
 ])("%s never sees the offer", async (_, options) => {
   fixture(options);
   act(() => reportUpsell(limited));
-  await waitFor(() => expect(useUpsell.getState().pending).toBe(false));
+  await waitFor(() => expect(useUpsell.getState().pending).toBeUndefined());
   expect(screen.queryByText("Keep your data flowing")).not.toBeInTheDocument();
   expect(useUpsell.getState().lastShownAt).toBeUndefined();
 });
@@ -118,7 +122,7 @@ test.each([
 test("while paused, moments are dropped without reading billing", async () => {
   const { getSubscription } = fixture({ paused: true });
   act(() => reportUpsell(limited));
-  await waitFor(() => expect(useUpsell.getState().pending).toBe(false));
+  await waitFor(() => expect(useUpsell.getState().pending).toBeUndefined());
   expect(getSubscription).not.toHaveBeenCalled();
   expect(screen.queryByText("Keep your data flowing")).not.toBeInTheDocument();
 });

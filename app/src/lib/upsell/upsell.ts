@@ -1,5 +1,6 @@
 // Purpose: Collect the moments when OpenChart Cloud would help and pace how often the offer appears.
 import type { FeedError } from "@openchart/feed";
+import type { AssetClass, ProviderId } from "@openchart/market";
 import { z } from "zod";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -26,19 +27,51 @@ export function cloudSolves(failure: FeedError): boolean {
   }
 }
 
+/** A chart toolbar option menu: interval, session or price adjustment. */
+export type ChartOption = "resolution" | "session" | "adjustment";
+
+/** The chart a locked option belongs to. */
+export type OptionChart = {
+  readonly provider: ProviderId;
+  readonly listingClass?: AssetClass;
+};
+
+/**
+ * Whether OpenChart Cloud offers a chart option the chart's free source lacks.
+ * Cloud serves every interval, session and adjustment. Crypto trades around the
+ * clock without splits, so its session and adjustment options never raise the
+ * offer. A chart already on Cloud never does.
+ * @example cloudOffersOption("resolution", { provider }); // true off Cloud
+ */
+export function cloudOffersOption(
+  option: ChartOption,
+  chart: OptionChart,
+): boolean {
+  if (chart.provider === "openchart") return false;
+  return option === "resolution" || chart.listingClass !== "crypto";
+}
+
 const Saved = z.object({
   /** When the offer last appeared, in epoch milliseconds. */
   lastShownAt: z.number().int().nonnegative().optional(),
 });
 
+/**
+ * Why the offer is pending: a failure the user saw waits out the cooldown; a
+ * locked option the user chose asked for the offer, so it shows every time.
+ */
+type Moment = "failure" | "request";
+
 type Upsell = z.infer<typeof Saved> & {
   /** A reported moment the offer card has not decided on yet. */
-  readonly pending: boolean;
+  readonly pending: Moment | undefined;
   /** Whether the offer card is showing. */
   readonly open: boolean;
   /** Records a moment if Cloud would solve the failure; anything else is ignored. */
   report: (failure: FeedError) => void;
-  /** Shows the pending moment unless the cooldown is running, which drops it. */
+  /** Records the user asking for the offer; it skips the cooldown. */
+  request: () => void;
+  /** Shows the pending moment; a failure during the cooldown is dropped instead. */
   present: (now: number) => void;
   /** Drops the pending moment, for example when the account is not offered Cloud. */
   discard: () => void;
@@ -48,26 +81,29 @@ type Upsell = z.infer<typeof Saved> & {
 
 /**
  * Device-local offer pacing; only `lastShownAt` persists. Features call
- * `report`; the billing offer card owns eligibility, `present` and `close`.
+ * `report` or `request`; the billing offer card owns eligibility, `present`
+ * and `close`.
  * @example useUpsell.getState().report(failure);
  */
 export const useUpsell = create<Upsell>()(
   persist(
     (set) => ({
-      pending: false,
+      pending: undefined,
       open: false,
       lastShownAt: undefined,
       report: (failure) => {
-        if (cloudSolves(failure)) set({ pending: true });
+        if (cloudSolves(failure)) set({ pending: "failure" });
       },
+      request: () => set({ pending: "request" }),
       present: (now) =>
         set(({ pending, lastShownAt }) => {
           if (!pending) return {};
-          if (lastShownAt !== undefined && now - lastShownAt < offerCooldownMs)
-            return { pending: false };
-          return { pending: false, open: true, lastShownAt: now };
+          const cooling =
+            lastShownAt !== undefined && now - lastShownAt < offerCooldownMs;
+          if (pending === "failure" && cooling) return { pending: undefined };
+          return { pending: undefined, open: true, lastShownAt: now };
         }),
-      discard: () => set({ pending: false }),
+      discard: () => set({ pending: undefined }),
       close: () => set({ open: false }),
     }),
     {
@@ -88,4 +124,16 @@ export const useUpsell = create<Upsell>()(
  */
 export function reportUpsell(failure: FeedError): void {
   useUpsell.getState().report(failure);
+}
+
+/**
+ * Reports a click on a chart option the current source lacks. Only options
+ * Cloud offers raise the offer, and since the user asked, it skips the cooldown.
+ * @example reportLockedOption("resolution", { provider });
+ */
+export function reportLockedOption(
+  option: ChartOption,
+  chart: OptionChart,
+): void {
+  if (cloudOffersOption(option, chart)) useUpsell.getState().request();
 }
