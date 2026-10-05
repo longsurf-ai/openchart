@@ -15,7 +15,8 @@
   Conversation runtimes remain isolated.
 - `left-sidebar/` composes navigation, queried Dashboards/Alerts, Chats, the
   Cloud SubscribeBanner (which rechecks providers on billing change) and the
-  AccountButton row with update and GitHub/Discord actions (`community-urls.ts`).
+  AccountButton row: GitHub/Discord (`community-urls.ts`), or the restart
+  button once an update downloads.
   Section headings reuse creation actions and select timestamp sorting before
   pagination; `stores/sidebar.ts` persists only each section's display preference.
   Layout owns rename dialogs; FullPageAgent selects Sessions before submitting.
