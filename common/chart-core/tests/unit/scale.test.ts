@@ -371,6 +371,25 @@ describe("TimeScale", () => {
       expect(valid.to).toBeLessThanOrEqual(50);
     });
 
+    it.each([
+      [-2000, { from: 0, to: 0 }],
+      [2000, { from: 100, to: 100 }],
+    ])(
+      "returns an empty intersection outside data at offset %s",
+      (rightOffset, valid) => {
+        const state = TimeScale.State.parse({
+          width: 800,
+          barSpacing: 10,
+          rightOffset,
+        });
+        const result = TimeScale.visibleRange(state, 100);
+        expect(result.valid).toEqual(valid);
+        expect(result.range.to - result.range.from).toBeGreaterThan(0);
+        if (rightOffset < 0) expect(result.range.to).toBeLessThan(0);
+        else expect(result.range.from).toBeGreaterThan(100);
+      },
+    );
+
     it("handles single data point", () => {
       const state = {
         width: 800,

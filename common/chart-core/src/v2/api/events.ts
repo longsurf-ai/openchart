@@ -1770,6 +1770,17 @@ export function setupEvents(config: EventsConfig): EventsController {
           }
         }
       });
+      if (drag.offset !== undefined && nextRightOffset !== undefined) {
+        const committedOffset = getAxis(getState().config.xAxis, activeXAxis.id)
+          .spacing.rightOffset;
+        // Discard movement beyond the host's viewport boundary, so reversing
+        // this same gesture moves immediately instead of repaying overscroll.
+        if (committedOffset !== nextRightOffset)
+          drag = {
+            ...drag,
+            offset: drag.offset + committedOffset - nextRightOffset,
+          };
+      }
       if (changed) scheduleRender("full");
     }
   }
