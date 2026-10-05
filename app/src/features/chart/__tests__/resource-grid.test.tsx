@@ -37,6 +37,7 @@ import {
   type ChartPreferencesStore,
 } from "@openchart/app/lib/chart/preferences";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
+import { useUpsell } from "@openchart/app/lib/upsell/upsell";
 
 const mocks = vi.hoisted(() => ({
   inputs: new Map<string, MarketSeriesInput>(),
@@ -626,3 +627,72 @@ it("fills a selected preset in one save and preserves cells when shrinking and r
   view.unmount();
   client.clear();
 });
+
+it.each([
+  { source: "a free source", provider: "yfinance", offers: true },
+  { source: "OpenChart Cloud", provider: "openchart", offers: false },
+] as const)(
+  "on $source, a missing interval raises the Cloud offer: $offers",
+  async ({ provider, offers }) => {
+    useUpsell.setState({
+      pending: undefined,
+      open: false,
+      lastShownAt: undefined,
+    });
+    const resource: ChartResource = {
+      id: defineId("cht", "Chart.ID").create(),
+      dashboardId: "dsh_test",
+      revision: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      preset: "1",
+      cells: [
+        createCell(
+          {
+            provider: ProviderId.make(provider),
+            listing: { symbol: "MSFT", currency: "USD", class: "stock" },
+          },
+          { resolution: "1d", session: "regular", adjustment: "raw" },
+        ),
+      ],
+      links: [],
+    };
+    const patch = vi.fn();
+    const transport = {
+      rpc: { resources: { chart: { patch: { mutate: patch } } } },
+    } as unknown as AppTransport;
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    client.setQueryData(chartDetail(transport, resource.id).queryKey, resource);
+    render(
+      <QueryClientProvider client={client}>
+        <TestGrid resource={resource} transport={transport} />
+      </QueryClientProvider>,
+    );
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Interval 1d" }),
+    );
+    if (offers) {
+      // Locked, not disabled: choosing it raises the Cloud offer instead.
+      const item = screen.getByRole("menuitemradio", {
+        name: /^1m\s*, available with OpenChart Cloud$/,
+      });
+      expect(item).not.toHaveAttribute("aria-disabled", "true");
+      await user.hover(item);
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(
+        "Yahoo Finance doesn't provide 1m bars",
+      );
+      await user.click(item);
+      expect(useUpsell.getState().pending).toBe("request");
+    } else {
+      expect(screen.getByRole("menuitemradio", { name: "1m" })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+      expect(useUpsell.getState().pending).toBeUndefined();
+    }
+    expect(patch).not.toHaveBeenCalled();
+  },
+);
