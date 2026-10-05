@@ -82,12 +82,12 @@ export namespace TimeScale {
     const rawTo = stableFloor(idxAtRightEdge) + 1;
 
     // Valid range clamped to data bounds
-    const firstVisible = Math.max(0, rawFrom);
-    const lastVisible = Math.min(total - 1, rawTo - 1);
+    const firstVisible = Math.min(total, Math.max(0, rawFrom));
+    const visibleEnd = Math.max(firstVisible, Math.min(total, rawTo));
 
     return {
       range: { from: rawFrom, to: rawTo },
-      valid: { from: firstVisible, to: lastVisible + 1 },
+      valid: { from: firstVisible, to: visibleEnd },
     };
   }
 

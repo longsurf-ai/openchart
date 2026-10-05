@@ -32,6 +32,7 @@ export function useChartRenderer(
       if (!alive) return;
       store.setState((draft) => {
         recipe(draft);
+        v2.ChartStateUtils.constrainHistoryViewport(draft);
       }, true);
     };
     const renderer = v2.createRenderer({

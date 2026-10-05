@@ -378,6 +378,12 @@ Drawings can extend past the loaded bars. Converting between a mouse position in
 
 The viewport API and paint use the same plot width. rightOffset is in **pixels**, and negative values mean
 history. set/get round-trips and repeated installs should not keep changing the zoom.
+Every app chart commit applies core's `constrainHistoryViewport`: a populated ordinal axis
+keeps its first loaded bar at or before the plot's right edge, preserving zoom and negative
+logical indices for history demand. Dragging against that boundary discards excess movement,
+so reversing the same gesture responds immediately. An empty successful historical snapshot
+for the current request clears a restored viewport and requests latest once; an empty latest
+window remains an ordinary empty result. Failed or retained older requests never trigger this recovery.
 
 core still draws by ordinal index. Compare inputs use joinByTime from common/timeseries to
 align to the main timeline. They get the main data reference through a native Zustand selector subscription, without a separate
