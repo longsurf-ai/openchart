@@ -10,6 +10,7 @@ import {
 import type { BarsSeries } from "@openchart/feed";
 import { encodedBarsInputs } from "@openchart/app/lib/tea";
 import { resourceQueryKeys } from "@openchart/app/lib/resource/invalidation";
+import { agentQueryKeys } from "@openchart/app/lib/agent/queries";
 import type {
   AgentInputs,
   AppTransport,
@@ -19,6 +20,98 @@ import type {
 
 /** Saved Tea definitions or drawing links define execution. */
 export type AlertRule = ResourceOutputs["alert_rule"]["list"]["items"][number];
+/** Immutable source facts captured when an Alert Rule fired. */
+export type AlertEvent = Pick<
+  ResourceOutputs["alert_event"]["get"],
+  | "id"
+  | "ruleId"
+  | "revision"
+  | "createdAt"
+  | "updatedAt"
+  | "time"
+  | "condition"
+> & {
+  // Keep tRPC's recursive JSON type out of presentation; narrow optional facts individually.
+  detail: { title: string; message: string; data: Record<string, unknown> };
+};
+type AlertEventPage = Pick<
+  ResourceOutputs["alert_event"]["history"],
+  "total" | "nextCursor"
+> & { items: AlertEvent[] };
+
+/**
+ * Page a Rule's saved occurrences in the requested time order. Query owns
+ * cancellation/cache lifetime; Resource invalidation refreshes new fires.
+ * Failures use the shared Query toast and keep previously loaded pages.
+ * @example useInfiniteQuery(alertEventPagesQueryOptions(transport, ruleId));
+ */
+export function alertEventPagesQueryOptions(
+  transport: AppTransport,
+  ruleId: string,
+  order: "asc" | "desc" = "desc",
+) {
+  return infiniteQueryOptions({
+    meta: { errorTitle: "Couldn’t load alert events" },
+    queryKey: [
+      ["resources", "alert_event", "history"],
+      transport.url,
+      ruleId,
+      order,
+    ] as const,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      transport.rpc.resources.alert_event.history.query(
+        { ruleId, order, limit: 50, cursor: pageParam },
+        { signal },
+      ) as unknown as Promise<AlertEventPage>,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  });
+}
+
+/** One existing conversation reached by an event's accepted Agent Runs. */
+export type AlertEventSession = Pick<
+  Awaited<
+    ReturnType<
+      AppTransport["rpc"]["resources"]["macro"]["alertFeedExecutions"]["query"]
+    >
+  >[number]["runs"][number],
+  "sessionId" | "title"
+>;
+
+/**
+ * Read accepted executions for the loaded events, in batches of at most 200.
+ * The Agent session prefix refreshes these links on admission, rename and
+ * reconnect, including a Run accepted after its event was first displayed.
+ * Query owns cancellation/cache lifetime and reports failures; reads never
+ * create sessions or submit prompts. Feed and Events share the same query.
+ * @example useQuery(alertEventExecutionsQueryOptions(transport, eventIds));
+ */
+export function alertEventExecutionsQueryOptions(
+  transport: AppTransport,
+  eventIds: readonly string[],
+) {
+  return queryOptions({
+    meta: { errorTitle: "Couldn’t load alert sessions" },
+    queryKey: [
+      ...agentQueryKeys.sessions(transport.url),
+      "alert-feed",
+      eventIds,
+    ],
+    enabled: eventIds.length > 0,
+    queryFn: async ({ signal }) => {
+      const pages = [];
+      for (let i = 0; i < eventIds.length; i += 200) {
+        pages.push(
+          transport.rpc.resources.macro.alertFeedExecutions.query(
+            { eventIds: eventIds.slice(i, i + 200) },
+            { signal, context: { method: "POST" } },
+          ),
+        );
+      }
+      return (await Promise.all(pages)).flat();
+    },
+  });
+}
 export type DrawingAlert = Extract<
   AlertSave["value"]["alertable"],
   { kind: "drawing" }

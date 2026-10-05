@@ -6,8 +6,9 @@ import type {
   Row,
   Store,
   StoreBody,
+  Tx,
 } from "@openchart/server/lib/resource/store";
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, or, sql } from "drizzle-orm";
 import { Effect } from "effect";
 
 import type { AlertEventEntity } from "./entity";
@@ -17,6 +18,49 @@ function toRow(row: typeof alertEvents.$inferSelect): Row {
   const { id, revision, createdAt, updatedAt, ...body } = row;
   return { id, revision, createdAt, updatedAt, body };
 }
+
+/**
+ * Read a bounded occurrence-time window and the Rule's complete event count in
+ * the caller's transaction. IDs break ties without collapsing repeated fires.
+ * The caller owns transaction cleanup; database failures propagate unchanged.
+ * @example yield* readAlertHistory(tx, {ruleId, limit: 51, order: "desc"});
+ */
+export const readAlertHistory = Effect.fn("AlertEvent.readHistory")(function* (
+  tx: Tx,
+  input: {
+    readonly ruleId: string;
+    readonly limit: number;
+    readonly order: "asc" | "desc";
+    readonly cursor?: { readonly time: number; readonly id: string };
+  },
+) {
+  const [after, direction] = input.order === "desc" ? [lt, desc] : [gt, asc];
+  const rule = eq(alertEvents.ruleId, input.ruleId);
+  const rows = yield* tx
+    .select()
+    .from(alertEvents)
+    .where(
+      and(
+        rule,
+        input.cursor
+          ? or(
+              after(alertEvents.time, input.cursor.time),
+              and(
+                eq(alertEvents.time, input.cursor.time),
+                after(alertEvents.id, input.cursor.id),
+              ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(direction(alertEvents.time), direction(alertEvents.id))
+    .limit(input.limit);
+  const [total] = yield* tx
+    .select({ count: sql<number>`count(*)` })
+    .from(alertEvents)
+    .where(rule);
+  return { rows: rows.map(toRow), total: total?.count ?? 0 };
+});
 
 /** Full backend CRUD; the read-only API never narrows this Store. */
 export const alertEventStore: Store<

@@ -8,6 +8,8 @@ See [alert-trigger](../../../docs/architecture/alert-trigger.md).
   The backend writes through the internal intrinsic create inside
   [recordAlertFire](../macros/record-alert-fire.ts); add no custom transition
   for insertion.
+- `history` reads one Rule by occurrence `time`, then ID, in either direction,
+  with bounded cursors and an exact count. Generic lists retain envelope order.
 - `condition` is the source's stable condition id; `time` is occurrence epoch
   milliseconds. `detail = {title, message, data}` stores source-authored text
   and JSON facts. Source adapters provide explicit scalar identity fields;

@@ -98,6 +98,25 @@ For old databases, one forward migration wraps the Rule source/config, converts 
 
 ## Frontend
 
+Each saved Rule page has Setting and Events tabs. Switching tabs keeps the
+unsaved editor mounted and hides Save/Cancel while reading Events. New rules
+must be saved before they have history. Events reads `alert_event.history`:
+bounded pages ordered by occurrence `time`, then ID, with the Rule's complete
+event count. Same-time fires remain separate. Compact entries group events by
+the selected display calendar day, defaulting to Local. When events are present,
+the shared chart timezone control stays at the pane's bottom left, aligned with
+timestamps, and updates times and day labels together; this page-local choice
+does not change chart preferences or stored timestamps. Details starts collapsed and shows
+saved source facts and the original JSON; missing identity, values, and
+thresholds stay absent rather than being inferred from current Rule settings.
+Resource invalidation refreshes new fires; failed reads retain loaded rows and
+offer retry. History does not imply notification delivery or monitoring health.
+
+Each entry links its existing Sessions through the same accepted-execution read
+as Feed, deduplicating Session IDs within that event. Agent directory invalidation
+refreshes late admissions and title changes. App composition opens the selected
+Session in Copilot, retaining the rule draft; navigation never submits a prompt.
+
 `/app/feed` shows the persisted generic Post Feed; New Alert in the main sidebar offers manual/Agent creation, and the Alerts list sits alongside Dashboards and Chats. Selecting a Rule opens the `/app/alerts/rules/:ruleId` configuration page; neither Feed nor rule editing shows a middle navigation column anymore, and the old `/app/alerts` entry redirects to Feed. Feed shows all Posts published by regular chats, scheduled tasks, and Alerts, and references resolve to the current Post; Posts remain after their source is deleted, and stale action entries are hidden. Body text and media reuse the shared renderer and native media controls. Page read state uses a separate device-local preference isolated per desktop profile; filtering happens on the server before pagination, and counts include the full history.
 
 The page and the chart share the same If/Then/And editor. Once/Repeat sits on the right of the If title row; If's separate Conditions/Code toggles can both be turned off. If cannot be deleted; the first action is labeled Then and later ones And. Each action maps to an existing Trigger, and all respond to the same Alert with no serial result dependency. Each Agent has its own native composer, whose current provider decides the icon and title; a notification node edits its own message. New rules add a notification and an Agent by default, and both can be deleted; the + at the end adds an action, and adds/deletes affect only the draft. Existing disabled actions stay disabled and can be enabled explicitly. A Rule with no actions still records events and Feed entries. Drawing keeps a fixed symbol/Price/condition/linked Value, and geometry still belongs to Drawing.
