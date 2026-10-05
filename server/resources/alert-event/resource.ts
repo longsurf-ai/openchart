@@ -4,6 +4,7 @@ import { defineResource } from "@openchart/server/lib/resource/definition";
 
 import { AlertEventEntity } from "./entity";
 import { alertEventStore } from "./store";
+import { history } from "./transitions/history";
 
 export { AlertEventEntity, AlertEventId } from "./entity";
 export { AlertEventDetail } from "./schema";
@@ -26,6 +27,7 @@ export const alertEventResource = defineResource({
   readOnly: true,
   entity: AlertEventEntity,
   store: alertEventStore,
+  transitions: { history },
 });
 
 /** Complete Alert Event returned by Resource reads. */
