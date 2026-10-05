@@ -449,6 +449,59 @@ describe("setupEvents", () => {
     Bus.clear();
   });
 
+  it("reverses a constrained pan immediately within the same gesture", () => {
+    const state = createState({
+      series: {
+        main: {
+          type: "Line",
+          data: Array.from({ length: 40 }, (_, time) => ({ time, value: 100 })),
+        },
+      },
+    });
+    getAxis(state.config.xAxis).spacing.rightOffset = -220;
+    const canvas = createCanvas();
+    const runtime = {
+      canvas,
+      ctx: {},
+      seriesPrimitives: new Map(),
+    } as unknown as RuntimeState;
+    const cleanup = setupEvents({
+      canvas,
+      getState: () => state,
+      setState: (mutator) => {
+        mutator(state);
+        ChartStateUtils.constrainHistoryViewport(state);
+      },
+      getRuntime: () => runtime,
+      scheduleRender: () => {},
+    });
+    try {
+      canvas.dispatchEvent(
+        new MouseEvent("mousedown", { clientX: 100, clientY: 160, buttons: 1 }),
+      );
+      window.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 600, clientY: 160, buttons: 1 }),
+      );
+      expect(ChartStateUtils.getVisibleRange(state).to).toBe(1);
+      const boundary = getAxis(state.config.xAxis).spacing.rightOffset;
+      window.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 590, clientY: 160, buttons: 1 }),
+      );
+      expect(getAxis(state.config.xAxis).spacing.rightOffset).toBe(
+        boundary + 10,
+      );
+      canvas.dispatchEvent(
+        new WheelEvent("wheel", { clientX: 590, clientY: 160, deltaY: 100 }),
+      );
+      expect(getAxis(state.config.xAxis).spacing.barSpacing).toBeLessThan(6);
+      expect(ChartStateUtils.getVisibleRange(state).to).toBeGreaterThanOrEqual(
+        1,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
   it("uses grab cursors for default plot hover and pan drag", () => {
     const state = createState({
       id: "chart",

@@ -1315,6 +1315,38 @@ export namespace ChartStateUtils {
     });
   }
 
+  /**
+   * Keep the first loaded bar at or before the plot's right edge on each
+   * populated ordinal axis. Only an excessive historical offset is changed;
+   * spacing, future margins, empty axes and linear domains are preserved.
+   *
+   * Hosts call this on their mutable draft after every state mutation, before
+   * publishing it, so gestures, data replacement and restored viewports share
+   * the same constraint. Negative logical indices remain available for history
+   * demand. This synchronous operation owns no resources or cleanup and throws
+   * if the chart object model is invalid.
+   *
+   * @example
+   * store.setState((draft) => {
+   *   mutate(draft);
+   *   ChartStateUtils.constrainHistoryViewport(draft);
+   * });
+   */
+  export function constrainHistoryViewport(state: Chart.State): void {
+    ChartStateModel.assertModelReady(state);
+    const all = seriesValues(state);
+    for (const axis of state.config.xAxis.axes) {
+      if (axis.mode !== "ordinal") continue;
+      const total = axisDataLength(all, axis.id);
+      if (total === 0) continue;
+      const minimumOffset = (1 - total) * axis.spacing.barSpacing;
+      if (axis.spacing.rightOffset < minimumOffset)
+        setAxisSpacing(state.config.xAxis, axis.id, {
+          rightOffset: minimumOffset,
+        });
+    }
+  }
+
   export function setVisibleRange(
     state: Chart.State,
     from: number,

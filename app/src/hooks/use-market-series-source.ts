@@ -21,6 +21,7 @@ import {
   type ChartPreferences,
 } from "@openchart/app/lib/chart/preferences";
 import type { ChartOutput, ChartRuntime } from "@openchart/app/lib/chart/store";
+import { sameBarsRequest } from "@openchart/app/lib/feed/contracts";
 
 import { useBars } from "./use-bars";
 
@@ -86,6 +87,20 @@ export function useMarketSeriesSource(
     materialized?.view === current ? materialized?.data : current?.data;
   const main = input.bindings.some((binding) => binding.main);
   const step = resolutionMs[input.series.resolution];
+  useLayoutEffect(() => {
+    if (
+      main &&
+      status === "ready" &&
+      current?.data.numRows === 0 &&
+      current.request.to !== "now" &&
+      sameBarsRequest(current.request, request) &&
+      localStore.getState().viewport !== null
+    ) {
+      // A saved window before available history has no timeline to pan from.
+      // Returning to latest uses the existing request effect below, once only.
+      localStore.setState({ viewport: null, rightOffset: 0 });
+    }
+  }, [main, status, current, request, localStore]);
   useLayoutEffect(() => {
     setProjectionError(undefined);
     if (!current) return;

@@ -575,6 +575,72 @@ describe("ChartStateUtils", () => {
     });
   });
 
+  describe("constrainHistoryViewport", () => {
+    it("retains a loaded bar without changing zoom and releases the boundary when history arrives", () => {
+      const data = Array.from({ length: 100 }, (_, time) => ({
+        time,
+        value: time,
+      }));
+      const state = createState({ series: { main: { type: "Line", data } } });
+      getAxis(state.config.xAxis).spacing.rightOffset = -10000;
+      ChartStateUtils.constrainHistoryViewport(state);
+      const offset = getAxis(state.config.xAxis).spacing.rightOffset;
+      expect(ChartStateUtils.getVisibleRange(state).to).toBe(1);
+      expect(ChartStateUtils.getVisibleRange(state).from).toBeLessThan(0);
+      expect(getAxis(state.config.xAxis).spacing.barSpacing).toBe(6);
+
+      ChartStateUtils.setSeriesData(state, "main", [
+        ...data.map((row) => ({ ...row, time: row.time - 100 })),
+        ...data,
+      ]);
+      ChartStateUtils.constrainHistoryViewport(state);
+      expect(getAxis(state.config.xAxis).spacing.rightOffset).toBe(offset);
+      getAxis(state.config.xAxis).spacing.rightOffset -= 60;
+      ChartStateUtils.constrainHistoryViewport(state);
+      expect(getAxis(state.config.xAxis).spacing.rightOffset).toBe(offset - 60);
+    });
+
+    it("reapplies the constraint after zoom or data replacement while preserving future margins", () => {
+      const state = createState({
+        series: {
+          main: {
+            type: "Line",
+            data: [
+              { time: 1, value: 10 },
+              { time: 2, value: 20 },
+            ],
+          },
+        },
+      });
+      getAxis(state.config.xAxis).spacing.rightOffset = -6;
+      getAxis(state.config.xAxis).spacing.barSpacing = 0.5;
+      ChartStateUtils.constrainHistoryViewport(state);
+      expect(ChartStateUtils.getVisibleRange(state).to).toBe(1);
+      expect(getAxis(state.config.xAxis).spacing.barSpacing).toBe(0.5);
+      ChartStateUtils.setSeriesData(state, "main", [{ time: 2, value: 20 }]);
+      ChartStateUtils.constrainHistoryViewport(state);
+      expect(ChartStateUtils.getVisibleRange(state).to).toBe(1);
+      getAxis(state.config.xAxis).spacing.rightOffset = 1200;
+      ChartStateUtils.constrainHistoryViewport(state);
+      expect(getAxis(state.config.xAxis).spacing.rightOffset).toBe(1200);
+    });
+
+    it("leaves empty and linear axes unchanged", () => {
+      const state = createState();
+      ChartStateUtils.addXAxis(state, { id: "linear", mode: "linear" });
+      ChartStateUtils.addSeries(state, {
+        type: "Line",
+        xAxisId: "linear",
+        data: [{ time: 1, value: 10 }],
+      });
+      for (const axis of state.config.xAxis.axes)
+        axis.spacing.rightOffset = -1000;
+      const before = structuredClone(state.config.xAxis);
+      ChartStateUtils.constrainHistoryViewport(state);
+      expect(state.config.xAxis).toEqual(before);
+    });
+  });
+
   describe("fitContent", () => {
     it("fits all data in view", () => {
       const state = createState();

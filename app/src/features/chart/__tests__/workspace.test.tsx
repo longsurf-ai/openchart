@@ -188,7 +188,7 @@ function MarketScene({
   );
 }
 
-function setup() {
+function setup(initialViewport?: { from: number; to: number }) {
   const calls: Array<{
     request: BarsRequest;
     sink: Subscriber<BarsMessage>;
@@ -251,7 +251,7 @@ function setup() {
     register: vi.fn(),
   };
   // No stored style: the binding's output alone makes csr_volume a histogram.
-  const local = createChartPreferences("test");
+  const local = createChartPreferences("test", initialViewport);
   let runtime: ChartRuntime;
   const onReady = (chart: ChartRuntime) => {
     runtime = chart;
@@ -515,7 +515,9 @@ it.each([true, false])(
         fixture.runtime.mutate((state) =>
           v2.ChartStateUtils.setVisibleRange(state, from, from + 100),
         );
-        renderer.config.onVisibleRangeChange!({ from, to: from + 100 });
+        renderer.config.onVisibleRangeChange!(
+          v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()),
+        );
       });
     // The ordinal axis needs earlier bars even if the estimated time is a covered gap.
     pan(-50);
@@ -525,6 +527,92 @@ it.each([true, false])(
     pan(-110);
     await act(async () => vi.advanceTimersByTime(300));
     expect(fixture.calls).toHaveLength(originalCalls + Number(hasMoreBefore));
+    fixture.view.unmount();
+  },
+);
+
+it("constrains renderer gestures and restored viewports through the same commit", () => {
+  const fixture = setup();
+  const data = minuteHistory(Date.now());
+  act(() =>
+    fixture.active("AAPL").sink.next({
+      type: "snapshot",
+      snapshot: {
+        data,
+        range: { from: data.get(0)!.time, to: Date.now() },
+        hasMoreBefore: false,
+      },
+    }),
+  );
+  const renderer = mocks.renderers.at(-1)!;
+  act(() =>
+    renderer.config.setState((state) => {
+      v2.XScale.getAxis(state.config.xAxis).spacing.rightOffset = -100000;
+    }),
+  );
+  expect(
+    v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()).to,
+  ).toBe(1);
+  act(() =>
+    fixture.runtime.mutate((state) =>
+      v2.ChartStateUtils.setVisibleRange(state, -200, -100),
+    ),
+  );
+  const state = fixture.runtime.store.getState();
+  expect(v2.ChartStateUtils.getVisibleRange(state).to).toBe(1);
+  const spacing = v2.XScale.getAxis(state.config.xAxis).spacing.barSpacing;
+  act(() => mocks.resize(900, 400));
+  expect(
+    v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()).to,
+  ).toBe(1);
+  expect(
+    v2.XScale.getAxis(fixture.runtime.store.getState().config.xAxis).spacing
+      .barSpacing,
+  ).toBe(spacing);
+  fixture.view.unmount();
+});
+
+it.each([false, true])(
+  "recovers an empty restored history once, even when latest is empty (%s)",
+  async (emptyLatest) => {
+    const fixture = setup({ from: 900000000000, to: 901000000000 });
+    const historical = fixture.active("AAPL");
+    expect(historical.request.to).not.toBe("now");
+    const empty = NativeBars.create({ labels: { symbol: "AAPL" }, rows: [] });
+    const initialCalls = fixture.calls.length;
+    act(() =>
+      historical.sink.next({
+        type: "snapshot",
+        snapshot: {
+          data: empty,
+          range: {
+            from: historical.request.from,
+            to: Number(historical.request.to),
+          },
+          hasMoreBefore: false,
+        },
+      }),
+    );
+    await waitFor(() => expect(fixture.active("AAPL").request.to).toBe("now"));
+    expect(fixture.local.getState().viewport).toBeNull();
+    expect(fixture.calls).toHaveLength(initialCalls + 1);
+    const latest = fixture.active("AAPL");
+    act(() =>
+      latest.sink.next({
+        type: "snapshot",
+        snapshot: {
+          data: emptyLatest ? empty : fixture.data("AAPL"),
+          range: { from: latest.request.from, to: Date.now() },
+          hasMoreBefore: false,
+        },
+      }),
+    );
+    expect(
+      v2.ChartStateModel.mainSeries(fixture.runtime.store.getState())!.data,
+    ).toHaveLength(emptyLatest ? 0 : 1);
+    fixture.view.rerender(fixture.tree());
+    expect(fixture.calls).toHaveLength(initialCalls + 1);
+    expect(latest.sink.closed).toBe(false);
     fixture.view.unmount();
   },
 );
