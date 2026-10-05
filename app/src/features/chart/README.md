@@ -137,7 +137,8 @@ cells and all their children.
   Details show a breadcrumb,
   reading guide, recreation prompt and compiled Inputs when the study has them;
   defaults that follow the chart show the values the preview ran with.
-  My scripts excludes catalog originals. Selecting a file there or in search
+  My scripts excludes the default Workspace's `indicators/builtin/` originals,
+  including chart built-ins. Selecting a file there or in search
   results closes the library and opens the exact Workspace file directly,
   without compiling or attaching it to the chart. Catalog studies retain their
   previews, and Open source opens their exact Workspace file the same way.

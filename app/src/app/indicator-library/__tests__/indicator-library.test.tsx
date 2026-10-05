@@ -52,9 +52,6 @@ vi.mock("@openchart/app/features/chart/components/indicator-picker", () => ({
         <h1>What are you looking for?</h1>
         {props.composer}
         <output aria-label="Filtered query">{props.query}</output>
-        <button onClick={() => props.onUsePrompt("Create an indicator that ")}>
-          Create a study
-        </button>
         <button onClick={() => props.onModifyScript(file)}>
           Modify my script
         </button>
@@ -163,7 +160,7 @@ test("typing searches without execution; IME Enter does nothing and Enter sends 
   ).not.toBeInTheDocument();
 });
 
-test("creation and modification actions only prefill; sending keeps the exact source and its workspace", async () => {
+test("modification only prefills; sending keeps the exact source and its workspace", async () => {
   const user = userEvent.setup();
   mount();
   const input = await open(user);
@@ -172,8 +169,6 @@ test("creation and modification actions only prefill; sending keeps the exact so
     workspaceId: "wsp_research",
     path: "studies/my-rsi.tea",
   });
-  await user.click(screen.getByRole("button", { name: "Create a study" }));
-  expect(input).toHaveValue("Create an indicator that ");
   await user.click(screen.getByRole("button", { name: "Modify my script" }));
   expect(input).toHaveValue("Modify the indicator in @studies/my-rsi.tea: ");
   expect(mocks.create).not.toHaveBeenCalled();
