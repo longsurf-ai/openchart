@@ -20,6 +20,7 @@ import {
 import {
   CredentialUnavailable,
   OpenChartInvalidResponse,
+  OpenChartLiveError,
   OpenChartRejected,
   OpenChartResyncRequired,
   OpenChartUnavailable,
@@ -32,9 +33,13 @@ const decodeWireEvent = Schema.decodeUnknownOption(
       Schema.Struct({ type: Schema.Literal("heartbeat") }),
       Schema.Struct({ type: Schema.Literal("subscribed"), id: Schema.String }),
       Schema.Struct({
+        type: Schema.Literal("unsubscribed"),
+        id: Schema.String,
+      }),
+      Schema.Struct({
         type: Schema.Literal("error"),
         id: Schema.String,
-        code: Schema.Literals(["busy", "unavailable"]),
+        code: OpenChartLiveError.fields.code,
       }),
       Schema.Struct({
         type: Schema.Literal("bar"),
@@ -146,9 +151,15 @@ const dispatch = (connection: Connection, data: WebSocket.RawData) => {
   if (event.type === "subscribed") {
     Deferred.doneUnsafe(entry.ready, Effect.void);
   } else if (event.type === "error") {
-    failSubscription(connection, entry, new OpenChartResyncRequired({}));
+    failSubscription(
+      connection,
+      entry,
+      new OpenChartLiveError({ code: event.code }),
+    );
     closeIfIdle(connection);
   } else if (
+    // A cancellation acknowledgement can only belong to an already-retired ID.
+    event.type === "unsubscribed" ||
     event.listing !== entry.query.listing ||
     event.resolution !== entry.query.resolution
   ) {
