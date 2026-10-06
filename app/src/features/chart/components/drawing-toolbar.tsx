@@ -6,10 +6,10 @@ import {
   Lock,
   LockOpen,
   MousePointer2,
-  ScanLine,
+  Sparkles,
   Trash2,
 } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import Draggable from "react-draggable";
 import { useStore } from "zustand";
 
@@ -180,6 +180,28 @@ function RailButton({
   );
 }
 
+/** Emphasize Chart explain with the theme's AI gradient, periwinkle above peach. */
+function AiSparkles() {
+  const id = `ai-gradient-${useId().replace(/\W/g, "")}`;
+  return (
+    <Sparkles className="size-4" color={`url(#${id})`} aria-hidden="true">
+      <defs>
+        <linearGradient
+          id={id}
+          gradientUnits="userSpaceOnUse"
+          x1="12"
+          y1="2"
+          x2="12"
+          y2="22"
+        >
+          <stop style={{ stopColor: "var(--ai-gradient-start)" }} />
+          <stop offset="1" style={{ stopColor: "var(--ai-gradient-end)" }} />
+        </linearGradient>
+      </defs>
+    </Sparkles>
+  );
+}
+
 /** All tools use the core's existing gestures; each group button shows its last chosen tool. @example <DrawingToolbar chart={activeChart} /> */
 export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
   const railRef = useRef<HTMLDivElement>(null);
@@ -225,7 +247,7 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
           active={activeTool === "agent_session"}
           onClick={() => selectTool("agent_session")}
         >
-          <ScanLine className="size-4 rotate-90" />
+          <AiSparkles />
         </RailButton>
         {groups.map((group) => {
           const shown =

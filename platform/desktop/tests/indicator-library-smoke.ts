@@ -451,7 +451,7 @@ try {
     .getByRole("dialog", { name: "Connect your agent", exact: true })
     .getByRole("button", { name: "Close", exact: true })
     .click();
-  for (const action of ["Next", "Next", "Next", "Done"])
+  for (const action of ["Next", "Next", "Next", "Next", "Next", "Done"])
     await page
       .locator(".onboarding-card")
       .getByRole("button", { name: action, exact: true })
