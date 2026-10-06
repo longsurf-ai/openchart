@@ -12,7 +12,7 @@ import { WorkspaceFileActions } from "@openchart/app/lib/workspace/workspace";
 export function WorkspaceChartActions({ children }: PropsWithChildren) {
   const { dashboardId, transport } = useWidget();
   const dashboard = useQuery(dashboardQueryOptions(transport, dashboardId));
-  const target = useSelectedChart(dashboard.data);
+  const target = useSelectedChart(dashboard.data ?? undefined);
   return (
     <WorkspaceFileActions.Provider
       value={

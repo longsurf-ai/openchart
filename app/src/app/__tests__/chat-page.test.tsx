@@ -279,7 +279,10 @@ function backend() {
   );
   rpc.resources.dashboard.get.query.mockImplementation(async ({ id }) => {
     const dashboard = dashboards.find((item) => item.id === id);
-    if (!dashboard) throw new Error("Dashboard not found");
+    if (!dashboard)
+      throw Object.assign(new Error("Dashboard not found"), {
+        data: { code: "NOT_FOUND" },
+      });
     return { ...dashboard };
   });
   const saveDashboard = (
@@ -2208,6 +2211,144 @@ test("Deleting another Dashboard refreshes without SSE and preserves the selecte
     ).not.toBeInTheDocument(),
   );
   expect(window.location.pathname).toBe("/app/dashboards/dsh_1");
+  expect(
+    await screen.findByRole("heading", { name: "Current" }),
+  ).toBeInTheDocument();
+});
+
+test("Dashboard deletion leaves the page before a slow directory refresh finishes", async () => {
+  const fixture = backend();
+  await rpc.resources.dashboard.create.mutate({
+    name: "Overview",
+    widgets: [],
+  });
+  window.history.replaceState({}, "", "/app/dashboards/dsh_1");
+  renderWorkspace();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Options for Overview" }),
+  );
+  await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+  let finishRefresh!: () => void;
+  rpc.resources.dashboard.list.query.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishRefresh = () => resolve({ items: [], nextCursor: null });
+      }),
+  );
+  try {
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(fixture.dashboards).toHaveLength(0));
+    await waitFor(() => expect(window.location.pathname).toBe("/app"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Unexpected Application Error!"),
+    ).not.toBeInTheDocument();
+  } finally {
+    await act(async () => finishRefresh?.());
+  }
+});
+
+test("Dashboard deletion tolerates its invalidation arriving before the mutation response", async () => {
+  const fixture = backend();
+  await rpc.resources.dashboard.create.mutate({
+    name: "Overview",
+    widgets: [],
+  });
+  window.history.replaceState({}, "", "/app/dashboards/dsh_1");
+  renderWorkspace();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Options for Overview" }),
+  );
+  await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+  const remove = rpc.resources.dashboard.delete.mutate.getMockImplementation()!;
+  let finishDelete!: () => void;
+  rpc.resources.dashboard.delete.mutate.mockImplementationOnce(
+    async (input) => {
+      await remove(input);
+      fixture.emit("resource.changed", {
+        resource: "dashboard",
+        id: input.id,
+        revision: 1,
+      });
+      await new Promise<void>((resolve) => {
+        finishDelete = resolve;
+      });
+    },
+  );
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  try {
+    await screen.findByRole("heading", {
+      name: "This dashboard is no longer available",
+      hidden: true,
+    });
+    expect(
+      screen.getByRole("dialog", { name: "Delete dashboard" }),
+    ).toHaveTextContent("Overview");
+    expect(screen.queryByText("Couldn’t load data")).not.toBeInTheDocument();
+  } finally {
+    await act(async () => finishDelete());
+  }
+  await waitFor(() => expect(window.location.pathname).toBe("/app"));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+test("An unavailable Dashboard has an exit instead of a retry loop, including after reload", async () => {
+  backend();
+  window.history.replaceState({}, "", "/app/dashboards/dsh_missing");
+  const view = renderWorkspace();
+  await screen.findByRole("heading", {
+    name: "This dashboard is no longer available",
+  });
+  expect(
+    screen.queryByRole("button", { name: "Try again" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("Couldn’t load data")).not.toBeInTheDocument();
+  view.unmount();
+  renderWorkspace();
+  await screen.findByRole("heading", {
+    name: "This dashboard is no longer available",
+  });
+  await userEvent.click(screen.getByRole("link", { name: "Go to home" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/app"));
+});
+
+test("Dashboard deletion completion preserves a newer route", async () => {
+  backend();
+  await rpc.resources.dashboard.create.mutate({
+    name: "Overview",
+    widgets: [],
+  });
+  await rpc.resources.dashboard.create.mutate({ name: "Current", widgets: [] });
+  window.history.replaceState({}, "", "/app/dashboards/dsh_1");
+  renderWorkspace();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Options for Overview" }),
+  );
+  await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+  const remove = rpc.resources.dashboard.delete.mutate.getMockImplementation()!;
+  let finishDelete!: () => void;
+  rpc.resources.dashboard.delete.mutate.mockImplementationOnce(
+    async (input) => {
+      await new Promise<void>((resolve) => {
+        finishDelete = resolve;
+      });
+      return remove(input);
+    },
+  );
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  // Browser history can navigate while the modal's request is pending.
+  act(() => {
+    window.history.pushState({}, "", "/app/dashboards/dsh_2");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await act(async () => finishDelete());
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  expect(window.location.pathname).toBe("/app/dashboards/dsh_2");
   expect(
     await screen.findByRole("heading", { name: "Current" }),
   ).toBeInTheDocument();

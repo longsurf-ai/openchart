@@ -1,5 +1,5 @@
 // Purpose: Rename saved Dashboards and confirm their deletion with shared dialogs.
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Button } from "@openchart/app/components/ui/button";
@@ -15,7 +15,7 @@ import { Input } from "@openchart/app/components/ui/input";
 import {
   type Dashboard,
   dashboardQueryOptions,
-  useDeleteDashboard,
+  deleteDashboardMutationOptions,
   useRenameDashboard,
 } from "@openchart/app/features/dashboard/api/queries";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
@@ -36,7 +36,8 @@ type DashboardDialogProps = {
  * Show the selected action, or nothing when closed. Query supplies the latest
  * Dashboard revision while the keyed form preserves drafts across refetches.
  * Changing actions or closing resets the form; failed mutations stay open for
- * retry. Successful deletion notifies the caller, which owns navigation.
+ * retry. Deletion confirms the selected name snapshot; on success it notifies
+ * the caller, which owns navigation, then closes.
  * @example <DashboardActionDialog action={dashboards.action} transport={transport} onClose={dashboards.close} onDeleted={leave} />
  */
 export function DashboardActionDialog({
@@ -64,10 +65,20 @@ function DashboardActionForm({
   const { data: dashboard } = useQuery({
     ...dashboardQueryOptions(transport, action.dashboard.id),
     initialData: action.dashboard,
+    enabled: action.type === "rename",
   });
   const [name, setName] = useState(action.dashboard.name);
+  const queryClient = useQueryClient();
   const rename = useRenameDashboard(transport);
-  const remove = useDeleteDashboard(transport);
+  // Hook-level callbacks read the latest props, so completion sees the current route.
+  const remove = useMutation({
+    ...deleteDashboardMutationOptions(transport, queryClient),
+    onSettled: (_result, error, id) => {
+      if (error) return;
+      onDeleted(id);
+      onClose();
+    },
+  });
   const deleting = action.type === "delete";
   const mutation = deleting ? remove : rename;
   const [label, pendingLabel] = deleting
@@ -87,8 +98,10 @@ function DashboardActionForm({
           </DialogTitle>
           <DialogDescription className="break-words">
             {deleting
-              ? `Delete “${dashboard.name}” and its contents? This cannot be undone.`
-              : "Give this dashboard a name."}
+              ? `Delete “${action.dashboard.name}” and its contents? This cannot be undone.`
+              : dashboard === null
+                ? "This dashboard is no longer available."
+                : "Give this dashboard a name."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -96,13 +109,8 @@ function DashboardActionForm({
             event.preventDefault();
             if (mutation.isPending) return;
             if (deleting) {
-              remove.mutate(action.dashboard.id, {
-                onSuccess: () => {
-                  onDeleted(action.dashboard.id);
-                  onClose();
-                },
-              });
-            } else if (name.trim()) {
+              remove.mutate(action.dashboard.id);
+            } else if (dashboard && name.trim()) {
               rename.mutate(
                 { dashboard, name: name.trim() },
                 { onSuccess: onClose },
@@ -114,7 +122,7 @@ function DashboardActionForm({
             <Input
               aria-label="Dashboard name"
               value={name}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !dashboard}
               onChange={(event) => setName(event.target.value)}
             />
           ) : null}
@@ -131,7 +139,10 @@ function DashboardActionForm({
             <Button
               type="submit"
               variant={deleting ? "destructive" : "default"}
-              disabled={mutation.isPending || (!deleting && !name.trim())}
+              disabled={
+                mutation.isPending ||
+                (!deleting && (!dashboard || !name.trim()))
+              }
             >
               {mutation.isPending ? pendingLabel : label}
             </Button>

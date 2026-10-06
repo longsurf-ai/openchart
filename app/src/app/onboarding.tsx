@@ -15,8 +15,8 @@ import { useOnboardingProgress } from "./trellis/progress";
  * never offer it. Query owns Dashboard data and releases observation on unmount.
  * An offer waits for another tour to finish on this page and expires on leaving
  * it. Trellis persists one shared offer history across both entry points.
- * Failed reads or saves cannot count as adding a widget. This hook writes no
- * product resources and performs no navigation.
+ * Failed reads or saves and missing Dashboards cannot count as adding a widget.
+ * This hook writes no product resources and performs no navigation.
  * @example const onOpenIndicators = usePineConversionOnboarding(transport);
  */
 export function usePineConversionOnboarding(transport: AppTransport) {
@@ -33,7 +33,7 @@ export function usePineConversionOnboarding(transport: AppTransport) {
   useEffect(() => {
     if (previous.current.id !== dashboardId)
       previous.current = { id: dashboardId };
-    if (!dashboardId || !dashboard.isSuccess) return;
+    if (!dashboardId || !dashboard.isSuccess || !dashboard.data) return;
     const hasWorkspace = dashboard.data.widgets.some(
       (widget) => widget.kind === "workspace",
     );

@@ -534,7 +534,7 @@ it("keeps failed mutation variables for retry even after a newer revision arrive
   );
   expect(harness.grid!.dragConfig?.enabled).toBe(false);
   act(() => {
-    client.setQueryData(key, { ...resource, revision: 2 });
+    client.setQueryData(key, () => ({ ...resource, revision: 2 }));
   });
   await user.click(screen.getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
@@ -664,7 +664,7 @@ it.each(["Widgets", "Chart fixture"])(
   async (button) => {
     const { resource, patch, createChart, user, client, key } = setup();
     await act(async () => {
-      client.setQueryData(key, { ...resource, widgets: [] });
+      client.setQueryData(key, () => ({ ...resource, widgets: [] }));
     });
     const mutation = button === "Widgets" ? patch : createChart;
     mutation.mockReturnValue(deferred<never>().promise);
@@ -684,7 +684,7 @@ it.each(["Widgets", "Chart fixture"])(
     const { resource, patch, createChart, user, client, key } = setup();
     const first = resource.widgets[0]!;
     await act(async () => {
-      client.setQueryData(key, { ...resource, widgets: [first] });
+      client.setQueryData(key, () => ({ ...resource, widgets: [first] }));
     });
     const mutation = button === "Widgets" ? patch : createChart;
     mutation.mockReturnValue(deferred<never>().promise);
@@ -774,10 +774,10 @@ it("reuses a placement already showing the Resource without saving", async () =>
     layout: { x: 6, y: 8, w: 6, h: 8 },
   };
   await act(async () => {
-    client.setQueryData(key, {
+    client.setQueryData(key, () => ({
       ...resource,
       widgets: [...resource.widgets, existing],
-    });
+    }));
   });
   await user.click(
     screen.getByRole("button", { name: "Place beside wdg_one" }),
@@ -868,12 +868,12 @@ it("moves an overflowing placement back into view without changing its height", 
   const { resource, patch, client, key, user } = setup();
   patch.mockReturnValue(new Promise(() => undefined));
   act(() => {
-    client.setQueryData(key, {
+    client.setQueryData(key, () => ({
       ...resource,
       widgets: [
         { ...resource.widgets[0]!, layout: { x: 1, y: 30, w: 6, h: 8 } },
       ],
-    });
+    }));
   });
   await waitFor(() =>
     expect(
@@ -902,10 +902,10 @@ it.each([
   async (keys, layout) => {
     const { resource, patch, client, key, user } = setup();
     act(() => {
-      client.setQueryData(key, {
+      client.setQueryData(key, () => ({
         ...resource,
         widgets: [{ ...resource.widgets[0]!, layout }],
-      });
+      }));
     });
     await waitFor(() =>
       expect(
@@ -965,11 +965,11 @@ it("commits a real RGL mouse drag once from its grip and leaves canvas gestures 
   });
   fireEvent.mouseMove(document, { clientX: 30, clientY: 20, buttons: 1 });
   act(() => {
-    client.setQueryData(key, {
+    client.setQueryData(key, () => ({
       ...resource,
       revision: 2,
       name: "Remote rename",
-    });
+    }));
   });
   await screen.findByText("Remote rename");
   fireEvent.mouseMove(document, { clientX: 624, clientY: 20, buttons: 1 });

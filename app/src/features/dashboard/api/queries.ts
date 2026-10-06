@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 
 import { resourceQueryKeys } from "@openchart/app/lib/resource/invalidation";
+import { missingResourceAsNull } from "@openchart/app/lib/resource/missing";
 import type {
   AppTransport,
   ResourceInputs,
@@ -91,22 +92,26 @@ export function useRenameDashboard(transport: AppTransport) {
   });
 }
 
-/** Delete a confirmed Dashboard, discard its cached entity, and refresh the directory without waiting for SSE. Failures leave navigation and cached data intact. @example const remove = useDeleteDashboard(transport); remove.mutate(id); */
-export function useDeleteDashboard(transport: AppTransport) {
-  const queryClient = useQueryClient();
-  return useMutation({
+/** Delete a confirmed Dashboard; already absent is success. onSuccess cancels stale detail reads, caches null and refreshes the directory without waiting. Other failures preserve cached data. Compose onSettled in the confirming dialog for closing and caller navigation. @example useMutation({ ...deleteDashboardMutationOptions(transport, client), onSettled }); */
+export function deleteDashboardMutationOptions(
+  transport: AppTransport,
+  queryClient: QueryClient,
+) {
+  return mutationOptions({
     meta: { errorTitle: "Couldn’t delete this dashboard" },
     mutationFn: (id: string) =>
-      transport.rpc.resources.dashboard.delete.mutate({ id }),
+      transport.rpc.resources.dashboard.delete
+        .mutate({ id })
+        .catch(missingResourceAsNull),
     retry: false,
-    onSuccess: (_result, id) => {
-      queryClient.removeQueries({
-        queryKey: dashboardQueryOptions(transport, id).queryKey,
-        exact: true,
-      });
-      return queryClient.invalidateQueries({
-        queryKey: [["resources", "dashboard", "list"], transport.url],
-      });
+    onSuccess: async (_result, id) => {
+      const detailKey = dashboardQueryOptions(transport, id).queryKey;
+      await queryClient.cancelQueries({ queryKey: detailKey, exact: true });
+      queryClient.setQueryData(detailKey, null);
+      const queryKey = [["resources", "dashboard", "list"], transport.url];
+      void queryClient
+        .cancelQueries({ queryKey })
+        .then(() => queryClient.invalidateQueries({ queryKey }));
     },
   });
 }

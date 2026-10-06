@@ -106,14 +106,14 @@ test("keeps dirty drafts across layout refreshes, checks every widget on navigat
         <Link to="/next">Leave dashboard</Link>
         <button
           onClick={() =>
-            client.setQueryData(key, {
+            client.setQueryData(key, () => ({
               ...dashboard,
               revision: 2,
               widgets: dashboard.widgets.map((widget) => ({
                 ...widget,
                 layout: { ...widget.layout, w: 4 },
               })),
-            })
+            }))
           }
         >
           Refresh layout

@@ -46,10 +46,14 @@ function savedDashboard(id: string, kinds: string[]): Dashboard {
   };
 }
 
-function mount(path: string, kinds: string[] = []) {
-  const query = vi.fn(({ id }: { id: string }) =>
-    Promise.resolve(savedDashboard(id, kinds)),
-  );
+function mount(path: string, kinds: string[] | null = []) {
+  const query = vi.fn(async ({ id }: { id: string }) => {
+    if (kinds === null)
+      throw Object.assign(new Error("Dashboard not found"), {
+        data: { code: "NOT_FOUND" },
+      });
+    return savedDashboard(id, kinds);
+  });
   const transport = {
     url: "http://onboarding.test/trpc",
     rpc: { resources: { dashboard: { get: { query } } } },
@@ -139,6 +143,14 @@ test("opening the Workspace page never offers the film", async () => {
   await user.click(screen.getByRole("link", { name: "Workspace" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(query).not.toHaveBeenCalled();
+});
+
+test("a missing Dashboard keeps onboarding idle and the page usable", async () => {
+  const { loaded } = mount("/app/dashboards/demo", null);
+  await loaded();
+  expect(screen.getByRole("button", { name: "Indicators" })).toBeVisible();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(useOnboardingProgress.getState().started).toEqual([]);
 });
 
 test("a newly committed Workspace widget offers the film; Indicators shares the same history", async () => {

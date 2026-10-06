@@ -10,6 +10,7 @@ import {
 import type { BarsSeries } from "@openchart/feed";
 import { encodedBarsInputs } from "@openchart/app/lib/tea";
 import { resourceQueryKeys } from "@openchart/app/lib/resource/invalidation";
+import { missingResourceAsNull } from "@openchart/app/lib/resource/missing";
 import { agentQueryKeys } from "@openchart/app/lib/agent/queries";
 import type {
   AgentInputs,
@@ -248,25 +249,10 @@ export function alertRuleQueryOptions(transport: AppTransport, id?: string) {
     meta: { errorTitle: "Couldn’t load this rule" },
     queryKey: [["resources", "alert_rule", "get"], transport.url, id] as const,
     queryFn: id
-      ? async ({ signal }) => {
-          try {
-            return await transport.rpc.resources.alert_rule.get.query(
-              { id },
-              { signal },
-            );
-          } catch (error) {
-            if (
-              error instanceof Error &&
-              "data" in error &&
-              typeof error.data === "object" &&
-              error.data !== null &&
-              "code" in error.data &&
-              error.data.code === "NOT_FOUND"
-            )
-              return null;
-            throw error;
-          }
-        }
+      ? ({ signal }) =>
+          transport.rpc.resources.alert_rule.get
+            .query({ id }, { signal })
+            .catch(missingResourceAsNull)
       : skipToken,
   });
 }
@@ -343,25 +329,10 @@ export function alertDrawingQueryOptions(
       drawingId,
     ],
     queryFn: drawingId
-      ? async ({ signal }) => {
-          try {
-            return await transport.rpc.resources.drawing.get.query(
-              { id: drawingId },
-              { signal },
-            );
-          } catch (error) {
-            if (
-              error instanceof Error &&
-              "data" in error &&
-              typeof error.data === "object" &&
-              error.data !== null &&
-              "code" in error.data &&
-              error.data.code === "NOT_FOUND"
-            )
-              return null;
-            throw error;
-          }
-        }
+      ? ({ signal }) =>
+          transport.rpc.resources.drawing.get
+            .query({ id: drawingId }, { signal })
+            .catch(missingResourceAsNull)
       : skipToken,
   });
 }
