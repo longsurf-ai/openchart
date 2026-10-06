@@ -55,13 +55,17 @@ export function OnboardingHost({ transport }: { transport: AppTransport }) {
   // StrictMode's repeated mount keeps the same path, so only real navigation
   // counts. Seeing before paint keeps an actionless view from flashing on the
   // next page.
-  const shown = useRef({ pathname, index: current?.index });
+  const shown = useRef({ pathname, workflow: running, index: current?.index });
   useLayoutEffect(() => {
     const previous = shown.current;
-    shown.current = { pathname, index: current?.index };
-    if (previous.pathname !== pathname && previous.index !== undefined)
+    shown.current = { pathname, workflow: running, index: current?.index };
+    if (
+      previous.workflow === running &&
+      previous.pathname !== pathname &&
+      previous.index !== undefined
+    )
       see(previous.index);
-  }, [pathname, current, see]);
+  }, [pathname, running, current, see]);
 
   if (!current) return null;
   // Leaving a page marks its step seen; marking first would briefly show, and
@@ -72,7 +76,7 @@ export function OnboardingHost({ transport }: { transport: AppTransport }) {
     else see(current.index);
   };
   return (
-    <Suspense key={current.index} fallback={null}>
+    <Suspense key={`${running}:${current.index}`} fallback={null}>
       {current.step.view.render({
         transport,
         number: current.number,

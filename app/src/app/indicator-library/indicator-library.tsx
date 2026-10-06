@@ -32,24 +32,36 @@ import {
   WorkspaceFileNavigation,
 } from "@openchart/app/lib/workspace/workspace";
 
-/** Supply chart controls with a library opener; retain unsent search drafts and navigate on Session creation. @example <IndicatorLibraryProvider transport={transport}><Outlet /></IndicatorLibraryProvider> */
+/** Supply chart controls with a library opener; retain unsent search drafts and navigate on Session creation. `onOpen` notifies shell composition on each explicit open, never on mount or re-render. `suspended` temporarily hides the Dialog behind shell onboarding, retaining its target and draft; resuming opens and focuses it normally. Dialog owns focus restoration and cleanup. @example <IndicatorLibraryProvider transport={transport} onOpen={onOpenIndicators}><Outlet /></IndicatorLibraryProvider> */
 export function IndicatorLibraryProvider({
   transport,
+  onOpen,
+  suspended = false,
   children,
-}: PropsWithChildren<{ transport: AppTransport }>) {
+}: PropsWithChildren<{
+  transport: AppTransport;
+  onOpen?: () => void;
+  suspended?: boolean;
+}>) {
   const [target, setTarget] = useState<IndicatorLibraryTarget>();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const returnFocus = useRef<HTMLElement>();
-  const show = useCallback((next: IndicatorLibraryTarget) => {
-    const element = document.activeElement;
-    returnFocus.current = element instanceof HTMLElement ? element : undefined;
-    setTarget(next);
-    setOpen(true);
-  }, []);
+  const show = useCallback(
+    (next: IndicatorLibraryTarget) => {
+      const element = document.activeElement;
+      returnFocus.current =
+        element instanceof HTMLElement ? element : undefined;
+      setTarget(next);
+      setOpen(true);
+      onOpen?.();
+    },
+    [onOpen],
+  );
   const restoreFocus = useCallback(() => {
-    if (returnFocus.current?.isConnected) returnFocus.current.focus();
-  }, []);
+    if (!suspended && returnFocus.current?.isConnected)
+      returnFocus.current.focus();
+  }, [suspended]);
   return (
     <IndicatorLibraryNavigation.Provider value={show}>
       {children}
@@ -57,7 +69,7 @@ export function IndicatorLibraryProvider({
         <IndicatorLibraryModal
           transport={transport}
           target={target}
-          open={open}
+          open={open && !suspended}
           onOpenChange={setOpen}
           onSelectSession={(id) => {
             setOpen(false);
