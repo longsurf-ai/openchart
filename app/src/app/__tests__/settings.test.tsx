@@ -360,6 +360,65 @@ test("login supports output, manual code input, cancellation, and fresh status",
   expect(rpc.config.update.mutate).not.toHaveBeenCalled();
 });
 
+test("failed sign-in keeps old instructions in details and retries with a fresh input and operation", async () => {
+  const operation = {
+    status: "running",
+    id: "login-old",
+    action: "login",
+    output: "https://accounts.example/old\nPaste the authorization code here.",
+  };
+  rpc.models.setupState.query.mockResolvedValue(operation);
+  mount(login);
+  const user = userEvent.setup();
+  await user.type(await screen.findByRole("textbox"), "expired-code");
+  rpc.models.setupState.query.mockResolvedValue({
+    ...operation,
+    status: "failed",
+    output: operation.output + "\nTLS handshake timeout",
+  });
+  await act(() =>
+    client.invalidateQueries({ queryKey: ["agent", "provider-setup"] }),
+  );
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Sign-in failed. Please try again.",
+  );
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  const details = screen.getByRole("button", { name: "Error details" });
+  expect(details).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText(/TLS handshake timeout/)).not.toBeInTheDocument();
+  await user.click(details);
+  expect(await screen.findByText(/TLS handshake timeout/)).toBeVisible();
+  expect(screen.queryByRole("link")).not.toBeInTheDocument();
+
+  const retry = {
+    ...operation,
+    id: "login-new",
+    output: "https://accounts.example/new",
+  };
+  rpc.models.startSetup.mutate.mockResolvedValue(retry);
+  rpc.models.setupState.query.mockResolvedValue(retry);
+  await user.click(screen.getByRole("button", { name: "Retry sign-in" }));
+  expect(rpc.models.startSetup.mutate).toHaveBeenCalledExactlyOnceWith({
+    providerID: CODEX,
+    action: "login",
+  });
+  const code = await screen.findByRole("textbox");
+  expect(code).toHaveValue("");
+  expect(screen.getByRole("link")).toHaveAttribute(
+    "href",
+    "https://accounts.example/new",
+  );
+  expect(screen.queryByText(/TLS handshake timeout/)).not.toBeInTheDocument();
+  expect(screen.queryByText("Error details")).not.toBeInTheDocument();
+  await user.type(code, "fresh-code");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  expect(rpc.models.writeSetup.mutate).toHaveBeenCalledExactlyOnceWith({
+    providerID: CODEX,
+    id: "login-new",
+    text: "fresh-code",
+  });
+});
+
 test("completed installation does not claim successful discovery; recheck can recover", async () => {
   rpc.models.setupState.query.mockResolvedValue({
     status: "succeeded",

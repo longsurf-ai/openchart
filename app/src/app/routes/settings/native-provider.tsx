@@ -9,6 +9,11 @@ import {
 } from "@tanstack/react-query";
 import { Badge } from "@openchart/app/components/ui/badge";
 import { Button } from "@openchart/app/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@openchart/app/components/ui/collapsible/collapsible";
 import { Switch } from "@openchart/app/components/ui/form/switch";
 import { Input } from "@openchart/app/components/ui/input";
 import { CardItem } from "@openchart/app/components/ui/settings/card";
@@ -106,7 +111,9 @@ export function ProviderSetupAction({
           disabled={disabled}
           onClick={() => start.mutate("login")}
         >
-          Sign in
+          {operation?.status === "failed" && operation.action === "login"
+            ? "Retry sign-in"
+            : "Sign in"}
         </Button>
       );
     case "ready":
@@ -226,7 +233,7 @@ function SetupOutput({ text }: { text: string }) {
   );
 }
 
-/** Shows a running or failed setup's status and output, plus the sign-in code input; renders nothing otherwise. Onboarding reuses it.
+/** Shows active setup output and sign-in input; failed sign-in output is collapsed and has no active links. Renders nothing after success or cancellation. Onboarding reuses it.
  * @example <SetupProgress providerID={CODEX} controls={useNativeProvider(CODEX, transport)} />
  */
 export function SetupProgress({
@@ -241,22 +248,38 @@ export function SetupProgress({
   // Success and cancellation speak through the card; only live or failed setup shows here.
   if (!operation || (!running && operation.status !== "failed")) return null;
   const login = operation.action === "login";
+  const output =
+    operation.output && (!running || login) ? (
+      <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs text-muted-foreground">
+        {!running && login ? (
+          operation.output
+        ) : (
+          <SetupOutput text={operation.output} />
+        )}
+      </pre>
+    ) : null;
   return (
     <div className="mt-3">
       <p role="status" className="text-sm text-muted-foreground">
         {!running
-          ? "Setup failed. Review the output and try again."
+          ? login
+            ? "Sign-in failed. Please try again."
+            : "Setup failed. Review the output and try again."
           : login
             ? "Complete sign-in in your browser. Keep this operation running."
             : operation.output || "Downloading provider…"}
       </p>
-      {/* Install progress is already the status line; login output may carry
-          the sign-in URL or code. */}
-      {operation.output && (!running || login) ? (
-        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs text-muted-foreground">
-          <SetupOutput text={operation.output} />
-        </pre>
-      ) : null}
+      {/* Failed login output is historical; its links and input prompts are no longer active. */}
+      {!running && login && output ? (
+        <Collapsible key={operation.id}>
+          <CollapsibleTrigger render={<Button size="sm" variant="link" />}>
+            Error details
+          </CollapsibleTrigger>
+          <CollapsibleContent>{output}</CollapsibleContent>
+        </Collapsible>
+      ) : (
+        output
+      )}
       {running && login ? (
         <form
           className="mt-2 flex flex-wrap items-center gap-2"
@@ -337,11 +360,13 @@ export function useNativeProvider(
     });
     return () => subscription.unsubscribe();
   }, [client, providerID, transport]);
+  const [input, setInput] = useState("");
   const start = useMutation({
     mutationFn: (action: "login" | "install") =>
       transport.rpc.models.startSetup.mutate({ providerID, action }),
     retry: false,
     onSuccess: (state) => {
+      setInput("");
       client.setQueryData(setupKey, state);
     },
     onSettled: () => client.invalidateQueries({ queryKey: setupKey }),
@@ -352,7 +377,6 @@ export function useNativeProvider(
     retry: false,
     onSettled: () => client.invalidateQueries({ queryKey: setupKey }),
   });
-  const [input, setInput] = useState("");
   const write = useMutation({
     mutationFn: ({ id, text }: { id: string; text: string }) =>
       transport.rpc.models.writeSetup.mutate({ providerID, id, text }),
