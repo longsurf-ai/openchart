@@ -349,6 +349,8 @@ test("normal startup migrates the template and reads the chart, actions, and lin
       starterWorkflow.steps.flatMap(({ action }) => action?.path ?? []),
     ).toEqual([
       view!.path,
+      view!.path,
+      view!.path,
       `/app/sessions/${session!.id}`,
       `/app/alerts/rules/${rule.id}`,
       view!.path,

@@ -1,4 +1,4 @@
-// Purpose: Verify the starter workflow opens with its agent and notification pages, explains each page once, opens the next one on Next, and finishes.
+// Purpose: Verify the starter workflow opens with its agent and notification pages, explains each page once, opens the next one on Next, finishes, and keeps saved progress meaningful across versions.
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, Link, useLocation } from "react-router";
@@ -83,7 +83,7 @@ test("the agent and notification pages open first wherever the user is, then the
     await screen.findByRole("dialog", {
       name: "Watch the market from your dashboard",
     }),
-  ).toHaveTextContent("1 of 4");
+  ).toHaveTextContent("1 of 6");
   expect(useOnboardingProgress.getState().seen).toEqual([0, 1]);
 });
 
@@ -96,25 +96,40 @@ test("Next opens each next page until the workflow finishes", async () => {
     await screen.findByRole("dialog", {
       name: "Watch the market from your dashboard",
     }),
-  ).toHaveTextContent("1 of 4");
+  ).toHaveTextContent("1 of 6");
+  // The chart cards follow on the same dashboard.
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  expect(page()).toHaveTextContent(dashboard);
+  expect(
+    await screen.findByRole("dialog", { name: "Make the chart yours" }),
+  ).toHaveTextContent("2 of 6");
+
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  expect(page()).toHaveTextContent(dashboard);
+  expect(
+    await screen.findByRole("dialog", {
+      name: "Ask the Agent for an indicator",
+    }),
+  ).toHaveTextContent("3 of 6");
+
   await user.click(screen.getByRole("button", { name: "Next" }));
   expect(page()).toHaveTextContent(session);
   expect(
     screen.getByRole("dialog", { name: "All your agents, in one place" }),
-  ).toHaveTextContent("2 of 4");
+  ).toHaveTextContent("4 of 6");
 
   await user.click(screen.getByRole("button", { name: "Next" }));
   expect(page()).toHaveTextContent(alert);
   expect(
     screen.getByRole("dialog", { name: "Alerts put agents to work" }),
-  ).toHaveTextContent("3 of 4");
+  ).toHaveTextContent("5 of 6");
 
   // The closing card brings the user back to the dashboard.
   await user.click(screen.getByRole("button", { name: "Next" }));
   expect(page()).toHaveTextContent(dashboard);
   expect(
     screen.getByRole("dialog", { name: "Star us on GitHub" }),
-  ).toHaveTextContent("4 of 4");
+  ).toHaveTextContent("6 of 6");
   await user.click(screen.getByRole("button", { name: "Done" }));
 
   expect(page()).toHaveTextContent(dashboard);
@@ -133,7 +148,7 @@ test("leaving a page counts as seeing it", async () => {
   await screen.findByRole("dialog", { name: "Alerts put agents to work" });
   await user.click(screen.getByRole("link", { name: "Feed" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(useOnboardingProgress.getState().seen).toEqual([0, 1, 4]);
+  expect(useOnboardingProgress.getState().seen).toEqual([0, 1, 6]);
 });
 
 test("Next out of order opens the first unseen step", async () => {
@@ -148,7 +163,7 @@ test("Next out of order opens the first unseen step", async () => {
 test("the last card offers web pages without closing", async () => {
   useOnboardingProgress.setState({
     workflow: "starter",
-    seen: [0, 1, 2, 3, 4],
+    seen: [0, 1, 2, 3, 4, 5, 6],
   });
   renderAt(dashboard);
   await screen.findByRole("dialog", { name: "Star us on GitHub" });
@@ -173,4 +188,48 @@ test("saved progress drops a workflow this build no longer has", async () => {
   );
   await act(() => useOnboardingProgress.persist.rehydrate());
   expect(useOnboardingProgress.getState().workflow).toBeUndefined();
+});
+
+test("progress saved before the chart cards keeps its seen steps", async () => {
+  // Version 1 had the dashboard at 2, the Agent at 3 and the alert at 4.
+  localStorage.setItem(
+    "local:onboarding",
+    JSON.stringify({
+      state: { workflow: "starter", seen: [0, 1, 2, 3] },
+      version: 1,
+    }),
+  );
+  await act(() => useOnboardingProgress.persist.rehydrate());
+  expect(useOnboardingProgress.getState()).toMatchObject({
+    workflow: "starter",
+    seen: [0, 1, 2, 5],
+  });
+
+  // A finished tour stays finished.
+  localStorage.setItem(
+    "local:onboarding",
+    JSON.stringify({ state: { seen: [] }, version: 1 }),
+  );
+  await act(() => useOnboardingProgress.persist.rehydrate());
+  expect(useOnboardingProgress.getState()).toMatchObject({
+    workflow: undefined,
+    seen: [],
+  });
+});
+
+test("chart-card migration preserves the completed Pine conversion offer", async () => {
+  localStorage.setItem(
+    "local:onboarding",
+    JSON.stringify({
+      state: { seen: [], started: ["pine-conversion"] },
+      version: 1,
+    }),
+  );
+  await act(() => useOnboardingProgress.persist.rehydrate());
+  useOnboardingProgress.getState().startOnce("pine-conversion");
+  expect(useOnboardingProgress.getState()).toMatchObject({
+    workflow: undefined,
+    seen: [],
+    started: ["pine-conversion"],
+  });
 });

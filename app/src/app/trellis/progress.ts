@@ -63,12 +63,27 @@ export const useOnboardingProgress = create<
     }),
     {
       name: "local:onboarding",
-      version: 1,
+      version: 2,
       partialize: ({ workflow, seen, started }) => ({
         workflow,
         seen,
         started,
       }),
+      // Version 2 inserted the starter's two chart cards after its dashboard
+      // step (index 2), so steps the user saw later keep their meaning.
+      migrate: (saved, version) => {
+        const parsed = Progress.safeParse(saved);
+        if (!parsed.success) return Progress.parse({});
+        const { workflow, seen } = parsed.data;
+        return {
+          ...parsed.data,
+          workflow,
+          seen:
+            version < 2 && workflow === "starter"
+              ? seen.map((index) => (index > 2 ? index + 2 : index))
+              : seen,
+        };
+      },
       merge: (saved, current) => {
         const parsed = Progress.safeParse(saved);
         return parsed.success ? { ...current, ...parsed.data } : current;

@@ -1,0 +1,1063 @@
+<!doctype html>
+<!--
+  Source for the starter workflow's chart-controls.mp4 and agent-indicator.mp4.
+  Open with ?film=chart-controls or ?film=agent-indicator to preview a loop;
+  `just --command node scripts/render-trellis-films.mjs` renders both films.
+  `?render` disables autoplay so the renderer can call `renderAt(seconds)`.
+
+  Every product pixel comes from the native captures in captures/ (1600 × 1600
+  device pixels of an 800 × 800 logical Desktop window without window chrome).
+  Layers are crops at their measured logical rectangles. The manifest below owns
+  shots, checkpoints, events and pointer targets; the scenes only add native
+  transitions between them. The Agent states are fixed captures: rendering never
+  calls a model.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trellis starter films</title>
+    <link rel="stylesheet" href="../../../../../styles/fonts.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #111;
+      }
+
+      #stage {
+        position: relative;
+        width: 800px;
+        height: 800px;
+        overflow: hidden;
+        background: #111;
+      }
+
+      .layer {
+        position: absolute;
+        overflow: hidden;
+      }
+
+      .layer img {
+        position: absolute;
+        display: block;
+        width: 800px;
+        height: 800px;
+        max-width: none;
+      }
+
+      .value {
+        position: absolute;
+        font:
+          14px/17px Inter,
+          sans-serif;
+        color: #fafafa;
+        white-space: pre;
+      }
+
+      .ring {
+        position: absolute;
+        border: 1.5px solid rgb(255 255 255 / 70%);
+        border-radius: 50%;
+      }
+
+      #cursor {
+        position: absolute;
+        left: 0;
+        top: 0;
+        filter: drop-shadow(0 1px 1px rgb(0 0 0 / 50%));
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <!-- Remaps a menu row between the native popover (23) and its highlighted
+         item (38) while keeping the row's text (250): the hover highlight comes
+         from the captured row pixels rather than redrawn UI. -->
+    <svg width="0" height="0" aria-hidden="true">
+      <filter id="highlight" color-interpolation-filters="sRGB">
+        <feComponentTransfer>
+          <feFuncR type="linear" slope="0.93392" intercept="0.06478" />
+          <feFuncG type="linear" slope="0.93392" intercept="0.06478" />
+          <feFuncB type="linear" slope="0.93392" intercept="0.06478" />
+        </feComponentTransfer>
+      </filter>
+      <filter id="unhighlight" color-interpolation-filters="sRGB">
+        <feComponentTransfer>
+          <feFuncR type="linear" slope="1.07075" intercept="-0.06937" />
+          <feFuncG type="linear" slope="1.07075" intercept="-0.06937" />
+          <feFuncB type="linear" slope="1.07075" intercept="-0.06937" />
+        </feComponentTransfer>
+      </filter>
+    </svg>
+    <script type="application/json" id="manifest">
+      {
+        "fps": 30,
+        "canvas": 800,
+        "output": 720,
+        "films": {
+          "chart-controls": {
+            "duration": 17,
+            "shots": [
+              {
+                "id": "A01",
+                "title": "Single chart",
+                "start": 0,
+                "end": 0.9,
+                "checkpoint": 0.6,
+                "pointer": [364, 60]
+              },
+              {
+                "id": "A02",
+                "title": "Choose 1h",
+                "start": 0.9,
+                "end": 2.3,
+                "checkpoint": 2,
+                "pointer": [410, 289]
+              },
+              {
+                "id": "A03",
+                "title": "Resolution changes",
+                "start": 2.3,
+                "end": 3.6,
+                "checkpoint": 3.3,
+                "pointer": [438, 60]
+              },
+              {
+                "id": "A04",
+                "title": "Open Study library",
+                "start": 3.6,
+                "end": 5,
+                "checkpoint": 4.7,
+                "pointer": [310, 204]
+              },
+              {
+                "id": "A05",
+                "title": "Find EMA",
+                "start": 5,
+                "end": 6.2,
+                "checkpoint": 5.9,
+                "pointer": [116, 540]
+              },
+              {
+                "id": "A06",
+                "title": "Add the indicator",
+                "start": 6.2,
+                "end": 8.2,
+                "checkpoint": 7.9,
+                "pointer": [666, 691]
+              },
+              {
+                "id": "A07",
+                "title": "EMA appears",
+                "start": 8.2,
+                "end": 9.8,
+                "checkpoint": 9.5,
+                "pointer": [42, 136]
+              },
+              {
+                "id": "A08",
+                "title": "Edit Length",
+                "start": 9.8,
+                "end": 12,
+                "checkpoint": 11.7,
+                "pointer": [571, 503]
+              },
+              {
+                "id": "A09",
+                "title": "Edit line width",
+                "start": 12,
+                "end": 14.3,
+                "checkpoint": 14,
+                "pointer": [558, 435]
+              },
+              {
+                "id": "A10",
+                "title": "Configured chart",
+                "start": 14.3,
+                "end": 17,
+                "checkpoint": 16.7,
+                "pointer": [780, 778]
+              }
+            ],
+            "events": [
+              {
+                "id": "open-interval",
+                "at": 0.98,
+                "action": "Open Interval menu",
+                "target": "Interval 1d",
+                "click": [364, 60]
+              },
+              {
+                "id": "select-1h",
+                "at": 2.16,
+                "action": "Select 1h",
+                "target": "menuitemradio 1h",
+                "click": [410, 289]
+              },
+              {
+                "id": "open-library",
+                "at": 3.75,
+                "action": "Open Study library",
+                "target": "Indicators",
+                "click": [438, 60]
+              },
+              {
+                "id": "type-ema",
+                "at": 5.12,
+                "action": "Type EMA into library search",
+                "target": "Search studies or create your own"
+              },
+              {
+                "id": "open-ema",
+                "at": 6.05,
+                "action": "Open EMA result",
+                "target": "EMA",
+                "click": [116, 540]
+              },
+              {
+                "id": "add-to-chart",
+                "at": 8.06,
+                "action": "Attach built-in EMA",
+                "target": "Add to chart",
+                "click": [666, 691]
+              },
+              {
+                "id": "open-settings",
+                "at": 9.55,
+                "action": "Open indicator settings",
+                "target": "Series settings for EMA",
+                "click": [42, 136]
+              },
+              {
+                "id": "edit-length",
+                "at": 10.84,
+                "action": "Replace Length 14 with 50",
+                "target": "Length",
+                "click": [540, 455]
+              },
+              {
+                "id": "save-inputs",
+                "at": 11.76,
+                "action": "Save inputs",
+                "target": "Save",
+                "click": [571, 503]
+              },
+              {
+                "id": "style-tab",
+                "at": 12.78,
+                "action": "Select Style tab",
+                "target": "Style",
+                "click": [288, 361]
+              },
+              {
+                "id": "edit-width",
+                "at": 13.76,
+                "action": "Replace line width 1.5 with 3",
+                "target": "Line width",
+                "click": [558, 435]
+              },
+              {
+                "id": "close-settings",
+                "at": 14.82,
+                "action": "Close settings",
+                "target": "Close",
+                "click": [599, 208]
+              },
+              {
+                "id": "park",
+                "at": 15.95,
+                "action": "Park pointer and hold the configured chart through 17.00",
+                "target": "neutral lower-right margin",
+                "hover": [780, 778]
+              }
+            ]
+          },
+          "agent-indicator": {
+            "duration": 14,
+            "shots": [
+              {
+                "id": "B01",
+                "title": "Empty dashboard",
+                "start": 0,
+                "end": 0.8,
+                "checkpoint": 0.5,
+                "pointer": [733, 370]
+              },
+              {
+                "id": "B02",
+                "title": "Type the request",
+                "start": 0.8,
+                "end": 1.9,
+                "checkpoint": 1.6,
+                "pointer": [733, 370]
+              },
+              {
+                "id": "B03",
+                "title": "Press Send",
+                "start": 1.9,
+                "end": 2.3,
+                "checkpoint": 2.1,
+                "pointer": [756, 410]
+              },
+              {
+                "id": "B04",
+                "title": "Request submitted",
+                "start": 2.3,
+                "end": 3.4,
+                "checkpoint": 3.1,
+                "pointer": [780, 110]
+              },
+              {
+                "id": "B05",
+                "title": "Chart arrives",
+                "start": 3.4,
+                "end": 4.6,
+                "checkpoint": 4.3,
+                "pointer": [430, 80]
+              },
+              {
+                "id": "B06",
+                "title": "Indicator is attached",
+                "start": 4.6,
+                "end": 6.2,
+                "checkpoint": 5.9,
+                "pointer": [740, 70]
+              },
+              {
+                "id": "B07",
+                "title": "Close the sidebar",
+                "start": 6.2,
+                "end": 6.6,
+                "checkpoint": 6.4,
+                "pointer": [770, 30]
+              },
+              {
+                "id": "B08",
+                "title": "Inspect the chart",
+                "start": 6.6,
+                "end": 8,
+                "checkpoint": 7.7,
+                "pointer": [300, 22]
+              },
+              {
+                "id": "B09",
+                "title": "Reveal legend actions",
+                "start": 8,
+                "end": 8.7,
+                "checkpoint": 8.4,
+                "pointer": [110, 136]
+              },
+              {
+                "id": "B10",
+                "title": "Click Open code",
+                "start": 8.7,
+                "end": 9.4,
+                "checkpoint": 9.1,
+                "pointer": [264, 136]
+              },
+              {
+                "id": "B11",
+                "title": "Workspace opens",
+                "start": 9.4,
+                "end": 10.8,
+                "checkpoint": 10.5,
+                "pointer": [776, 111]
+              },
+              {
+                "id": "B12",
+                "title": "Chart and source",
+                "start": 10.8,
+                "end": 14,
+                "checkpoint": 13.7,
+                "pointer": [788, 778]
+              }
+            ],
+            "events": [
+              {
+                "id": "type-prompt",
+                "at": 0.95,
+                "action": "Begin typing complete prompt",
+                "target": "Message",
+                "text": [
+                  "Create an EMA crossover ",
+                  "indicator (9/21) for BTCUSDT and ",
+                  "add it to a new 1h chart here."
+                ]
+              },
+              {
+                "id": "finish-prompt",
+                "at": 1.78,
+                "action": "Finish typing; pause for reading",
+                "target": "Message"
+              },
+              {
+                "id": "send",
+                "at": 2.18,
+                "action": "Click Send exactly once",
+                "target": "Send message",
+                "click": [756, 410]
+              },
+              {
+                "id": "submitted",
+                "at": 2.32,
+                "action": "Show sent user bubble and collapsed Working state",
+                "target": "scripted Agent playback"
+              },
+              {
+                "id": "chart-arrives",
+                "at": 3.48,
+                "action": "Reveal chart and header symbol control",
+                "target": "scripted Agent playback"
+              },
+              {
+                "id": "indicator-ready",
+                "at": 4.62,
+                "action": "Reveal completed indicator without changing chart placement",
+                "target": "scripted Agent playback"
+              },
+              {
+                "id": "reply",
+                "at": 4.9,
+                "action": "Show completion reply",
+                "target": "scripted Agent playback"
+              },
+              {
+                "id": "close-copilot",
+                "at": 6.47,
+                "action": "Close Copilot",
+                "target": "Close Copilot",
+                "click": [770, 30]
+              },
+              {
+                "id": "hover-legend",
+                "at": 8.32,
+                "action": "Hover indicator legend; reveal action icons",
+                "target": "EMA Crossover 9/21 legend",
+                "hover": [110, 136]
+              },
+              {
+                "id": "hover-code",
+                "at": 8.96,
+                "action": "Hover code icon; show native tooltip",
+                "target": "Open code",
+                "hover": [264, 136]
+              },
+              {
+                "id": "open-code",
+                "at": 9.28,
+                "action": "Click code icon exactly once",
+                "target": "Open code",
+                "click": [264, 136]
+              },
+              {
+                "id": "workspace",
+                "at": 9.48,
+                "action": "Dock Workspace on chart's right and open actual file",
+                "target": "ema-crossover-9-21.tea"
+              },
+              {
+                "id": "word-wrap",
+                "at": 10.65,
+                "action": "Enable native word wrap",
+                "target": "Word wrap",
+                "click": [776, 111]
+              },
+              {
+                "id": "park",
+                "at": 11.9,
+                "action": "Park pointer and hold chart plus source through 14.00",
+                "target": "neutral lower-right margin",
+                "hover": [788, 778]
+              }
+            ]
+          }
+        }
+      }
+    </script>
+    <script>
+      const manifest = JSON.parse(
+        document.getElementById("manifest").textContent,
+      );
+      const filmId =
+        new URLSearchParams(location.search).get("film") ?? "chart-controls";
+      const film = manifest.films[filmId];
+      const at = Object.fromEntries(film.events.map(({ id, at }) => [id, at]));
+      const stage = document.getElementById("stage");
+      const images = [];
+
+      const clamp = (x) => Math.min(1, Math.max(0, x));
+      const ramp = (t, start, duration) => clamp((t - start) / duration);
+      const inOut = (x) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2);
+      const out = (x) => 1 - (1 - x) ** 3;
+      const lerp = (a, b, k) => a + (b - a) * k;
+      const FULL = [0, 0, 800, 800];
+      const PAGE = "#111111";
+
+      /** Adds a crop of capture `id` at its logical rectangle. */
+      function layer(id, [x, y, w, h] = FULL, parent = stage) {
+        const element = document.createElement("div");
+        element.className = "layer";
+        Object.assign(element.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+          width: `${w}px`,
+          height: `${h}px`,
+        });
+        const image = new Image();
+        image.src = `captures/${id}.png`;
+        image.style.left = `${-x}px`;
+        image.style.top = `${-y}px`;
+        images.push(image);
+        element.append(image);
+        // Children use page coordinates like their parent.
+        element.at = [x, y];
+        parent.append(element);
+        return element;
+      }
+
+      /** Adds a crop inside `parent`, keeping page coordinates. */
+      function inner(parent, id, [x, y, w, h]) {
+        const element = layer(id, [x, y, w, h], parent);
+        element.style.left = `${x - parent.at[0]}px`;
+        element.style.top = `${y - parent.at[1]}px`;
+        element.at = [x, y];
+        return element;
+      }
+
+      /** Hides captured pixels under a solid native background. */
+      function cover([x, y, w, h], color, parent = stage) {
+        const element = document.createElement("div");
+        Object.assign(element.style, {
+          position: "absolute",
+          left: `${x - (parent.at?.[0] ?? 0)}px`,
+          top: `${y - (parent.at?.[1] ?? 0)}px`,
+          width: `${w}px`,
+          height: `${h}px`,
+          background: color,
+        });
+        parent.append(element);
+        return element;
+      }
+
+      function show(element, opacity = 1, transform = "") {
+        element.style.opacity = opacity;
+        element.style.visibility = opacity > 0 ? "visible" : "hidden";
+        element.style.transform = transform;
+      }
+
+      const inside = ([px, py], [x, y, w, h]) =>
+        px >= x && px <= x + w && py >= y && py <= y + h;
+
+      // Pointer: rests at each shot's checkpoint position and event target. It
+      // hovers each click target for DWELL seconds before pressing, leaves SETTLE
+      // seconds after, and departs as late as a relaxed glide allows.
+      const DWELL = 0.2;
+      const SETTLE = 0.12;
+      const glide = (distance) => 0.38 + distance / 1000;
+      const stops = [
+        ...film.shots.map(({ checkpoint, pointer }) => ({
+          arrive: checkpoint,
+          leave: checkpoint,
+          point: pointer,
+        })),
+        ...film.events.flatMap(({ at: time, click, hover }) =>
+          click
+            ? [{ arrive: time - DWELL, leave: time + SETTLE, point: click }]
+            : hover
+              ? [{ arrive: time, leave: time, point: hover }]
+              : [],
+        ),
+      ].sort((a, b) => a.arrive - b.arrive);
+      const moves = [];
+      let leave = stops[0].leave;
+      stops.slice(1).forEach((to, index) => {
+        const from = stops[index].point;
+        const distance = Math.hypot(
+          to.point[0] - from[0],
+          to.point[1] - from[1],
+        );
+        if (distance === 0) {
+          leave = Math.max(leave, to.leave);
+          return;
+        }
+        const start = Math.max(leave, to.arrive - glide(distance));
+        moves.push({ start, end: to.arrive, from, to: to.point, distance });
+        leave = to.leave;
+      });
+      // Event times must leave every glide enough room; the renderer refuses rushed moves.
+      const rushed = moves
+        .filter(
+          ({ start, end, distance }) =>
+            end - start < 0.2 || distance / (end - start) > 800,
+        )
+        .map(({ start, to }) => `${start.toFixed(2)}s → ${to}`);
+
+      function pointerAt(t) {
+        let point = stops[0].point;
+        for (const { start, end, from, to } of moves) {
+          if (t < start) break;
+          const k = end > start ? inOut(ramp(t, start, end - start)) : 1;
+          // A slight arc reads as a hand movement rather than a slide.
+          const bend = Math.hypot(to[0] - from[0], to[1] - from[1]) * 0.08;
+          const lift = 4 * k * (1 - k) * bend;
+          point = [lerp(from[0], to[0], k) - lift, lerp(from[1], to[1], k)];
+        }
+        return point;
+      }
+
+      const clicks = film.events.filter(({ click }) => click);
+      const rings = clicks.map(() => {
+        const ring = document.createElement("div");
+        ring.className = "ring";
+        return ring;
+      });
+
+      /** Text the captured field held before it was edited, drawn in its own font. */
+      function value(parent, left, baseline) {
+        const element = document.createElement("span");
+        element.className = "value";
+        element.style.left = `${left - parent.at[0]}px`;
+        // Inter's ascender is 0.96875 em, centered in the 17px line box.
+        element.style.top = `${baseline - parent.at[1] - 14 * 0.96875 - (17 - 14 * 1.2109) / 2}px`;
+        parent.append(element);
+        return element;
+      }
+
+      /** Shows an input's value before editing: unselected, then selected for replacement. */
+      function setValue(element, text, selected) {
+        element.textContent = text;
+        element.style.background = selected ? "#e3e3e3" : "transparent";
+        element.style.color = selected ? "#111111" : "#fafafa";
+      }
+
+      const scenes = {
+        "chart-controls": () => {
+          const base = Object.fromEntries(
+            [
+              "A01",
+              "A02",
+              "A03",
+              "A04",
+              "A05",
+              "A06",
+              "A07",
+              "A08",
+              "A09",
+              "A10",
+            ].map((id) => [id, layer(id)]),
+          );
+          // Interval menu with its rows; only the hovered row is highlighted.
+          const MENU = [345, 80, 128, 431];
+          const menu = layer("A02", MENU);
+          menu.style.borderRadius = "8px";
+          menu.style.transformOrigin = "50% 0";
+          const HOUR = 5;
+          const rows = [
+            113, 145, 177, 209, 241, 273, 305, 337, 369, 401, 441, 473,
+          ].map((y, index) => {
+            const row = inner(menu, "A02", [350, y, 118, 32]);
+            row.style.borderRadius = "6px";
+            row.style.filter =
+              index === HOUR ? "url(#unhighlight)" : "url(#highlight)";
+            return row;
+          });
+
+          const LIBRARY = [64, 80, 672, 640];
+          const opening = layer("A04", LIBRARY);
+          const SEARCH = [80, 182, 610, 44];
+          const search = layer("A05", SEARCH);
+          // Untyped characters of "EMA", right edges of E, M and A.
+          const typed = [128, 141.5, 148.5];
+          const untyped = cover([119, 194, 34, 20], PAGE, search);
+          const results = layer("A05", [65, 226, 670, 493]);
+          const detail = layer("A06", [65, 127, 670, 592]);
+          const closing = layer("A06", LIBRARY);
+          for (const dialog of [opening, closing])
+            dialog.style.borderRadius = "10px";
+
+          const INPUTS = [176, 255.5, 448, 289];
+          const STYLE = [176, 183, 448, 434];
+          const inputs = layer("A08", INPUTS);
+          const reset = cover([400, 446, 110, 20], PAGE, inputs);
+          const lengthCover = cover([524, 443, 40, 24], "#1c1c1c", inputs);
+          const length = value(inputs, 531, 460.3);
+          const style = layer("A09", STYLE);
+          const widthCover = cover([524, 424, 40, 24], "#1c1c1c", style);
+          const width = value(style, 531, 441.2);
+          const styleClosing = layer("A09", STYLE);
+          for (const dialog of [inputs, style, styleClosing]) {
+            dialog.style.borderRadius = "10px";
+            dialog.style.transformOrigin = "50% 50%";
+          }
+
+          const backdrop = (element, k) => {
+            element.style.filter = k
+              ? `blur(${8 * k}px) brightness(${1 - 0.524 * k})`
+              : "";
+          };
+          /** Opacity and scale of a dialog that opens at `start` and closes at `end`. */
+          const dialog = (t, start, end) => {
+            const open = out(ramp(t, start, 0.2));
+            const close = inOut(ramp(t, end, 0.18));
+            const k = Math.min(open, 1 - close);
+            return [
+              k,
+              `scale(${t < end ? 0.96 + 0.04 * open : 1 - 0.03 * close})`,
+            ];
+          };
+
+          return (t, pointer) => {
+            for (const element of Object.values(base)) show(element, 0);
+            for (const element of [
+              menu,
+              opening,
+              search,
+              results,
+              detail,
+              closing,
+              inputs,
+              style,
+              styleClosing,
+            ])
+              show(element, 0);
+
+            // A01 → A03: Interval menu, hover rows, select 1h; the chart redraws.
+            const redraw = ramp(t, at["select-1h"] + 0.06, 0.08);
+            const menuOpen = out(ramp(t, at["open-interval"] + 0.02, 0.12));
+            const menuClose = ramp(t, at["select-1h"] + 0.03, 0.1);
+            if (t < at["open-library"] + 0.22) {
+              // The open menu's capture also carries the market's next tick.
+              show(menuOpen < 1 ? base.A01 : base.A02, 1);
+              show(base.A03, redraw);
+              backdrop(base.A03, out(ramp(t, at["open-library"] + 0.02, 0.2)));
+            }
+            if (menuOpen > 0 && menuClose < 1) {
+              show(
+                menu,
+                menuOpen * (1 - menuClose),
+                `translateY(${-4 * (1 - menuOpen)}px) scale(${0.97 + 0.03 * menuOpen})`,
+              );
+              const over = rows.findIndex((row) =>
+                inside(pointer, [350, row.at[1], 118, 32]),
+              );
+              rows.forEach((row, index) =>
+                show(
+                  row,
+                  index === HOUR
+                    ? over === HOUR
+                      ? 0
+                      : 1
+                    : index === over
+                      ? 1
+                      : 0,
+                ),
+              );
+            }
+
+            // Study library: Discover, typed search, EMA detail, Add to chart.
+            const [library, libraryTransform] = dialog(
+              t,
+              at["open-library"] + 0.02,
+              at["add-to-chart"] + 0.03,
+            );
+            if (t >= at["open-library"] && t < at["open-library"] + 0.22)
+              show(opening, library, libraryTransform);
+            if (
+              t >= at["open-library"] + 0.22 &&
+              t < at["add-to-chart"] + 0.03
+            ) {
+              show(base.A04, 1);
+              const keys = Math.floor((t - at["type-ema"]) / 0.1) + 1;
+              if (keys > 0) {
+                show(search, 1);
+                untyped.style.left = `${typed[Math.min(keys, 3) - 1] - SEARCH[0]}px`;
+                show(untyped, keys < 3 ? 1 : 0);
+              }
+              show(results, ramp(t, at["type-ema"] + 0.32, 0.14));
+              show(detail, ramp(t, at["open-ema"] + 0.04, 0.12));
+            }
+            if (t >= at["add-to-chart"] + 0.03 && t < at["open-settings"]) {
+              const close = inOut(ramp(t, at["add-to-chart"] + 0.03, 0.18));
+              show(base.A07, 1);
+              backdrop(base.A07, 1 - close);
+              show(closing, library, libraryTransform);
+            }
+
+            // Series settings: Inputs Length 14 → 50, Save, Style width 1.5 → 3.
+            const [settings, settingsTransform] = dialog(
+              t,
+              at["open-settings"] + 0.02,
+              at["close-settings"] + 0.03,
+            );
+            if (t >= at["open-settings"] && t < at["style-tab"] + 0.04) {
+              const opened = t >= at["open-settings"] + 0.22;
+              show(opened ? base.A08 : base.A07, 1);
+              backdrop(base.A07, opened ? 0 : settings);
+              show(
+                inputs,
+                opened ? 1 : settings,
+                opened ? "" : settingsTransform,
+              );
+              const edit = at["edit-length"];
+              const keys = t < edit + 0.18 ? 0 : t < edit + 0.28 ? 1 : 2;
+              show(reset, keys ? 0 : 1);
+              show(lengthCover, keys < 2 ? 1 : 0);
+              lengthCover.style.left = `${(keys ? 541 : 524) - INPUTS[0]}px`;
+              lengthCover.style.width = `${keys ? 23 : 40}px`;
+              setValue(length, keys ? "" : "14", t >= edit + 0.06);
+            }
+            if (
+              t >= at["style-tab"] + 0.04 &&
+              t < at["close-settings"] + 0.03
+            ) {
+              show(base.A09, 1);
+              show(style, 1);
+              const edit = at["edit-width"];
+              show(widthCover, t < edit + 0.18 ? 1 : 0);
+              setValue(width, t < edit + 0.18 ? "1.5" : "", t >= edit + 0.06);
+            }
+            if (t >= at["close-settings"] + 0.03) {
+              const close = inOut(ramp(t, at["close-settings"] + 0.03, 0.18));
+              show(base.A10, 1);
+              backdrop(base.A10, 1 - close);
+              show(styleClosing, settings, settingsTransform);
+            }
+          };
+        },
+
+        "agent-indicator": () => {
+          const base = Object.fromEntries(
+            ["B01", "B08", "B09", "B10", "B11"].map((id) => [id, layer(id)]),
+          );
+          // Composer: B02's rows spliced to the typed line count, centered like the native empty chat.
+          const prompt = film.events.find(
+            ({ id }) => id === "type-prompt",
+          ).text;
+          // The complete request is readable at B02's checkpoint; the pause lasts until finish-prompt.
+          const typed =
+            film.shots.find(({ id }) => id === "B02").checkpoint - 0.1;
+          const blank = cover([490, 236, 300, 210], PAGE);
+          const heading = layer("B02", [497, 240, 290, 36]);
+          const composerTop = layer("B02", [496, 295, 290, 84]);
+          const composerBottom = layer("B02", [496, 379, 290, 58]);
+          const untyped = cover([0, 0, 0, 24], "#212121", composerTop);
+          const sendHover = layer("B03", [739, 392, 36, 36]);
+          const SEND = [739, 392, 36, 36];
+          // Measured glyph advances place each typed character on its captured line.
+          const canvas = document.createElement("canvas").getContext("2d");
+          let advance = () => 0;
+          const measured = document.fonts.load("16px Inter").then(() => {
+            canvas.font = "16px Inter";
+            // Calibrated to the captured first line's ink width.
+            const scale =
+              (698.5 - 510.5) / canvas.measureText(prompt[0].trimEnd()).width;
+            advance = (text) => canvas.measureText(text).width * scale;
+          });
+
+          const submitted = layer("B04", [481, 0, 319, 800]);
+          const arriveHeader = layer("B05", [0, 0, 481, 60]);
+          const arriveBlank = cover([0, 60, 481, 740], PAGE);
+          const arriveChart = layer("B05", [0, 60, 481, 740]);
+          const arriveChat = layer("B05", [481, 0, 319, 800]);
+          const readyChart = layer("B06", [0, 60, 481, 740]);
+          const replyTop = layer("B06", [481, 0, 319, 300]);
+          const replyBody = layer("B06", [481, 300, 319, 390]);
+          const replyComposer = layer("B06", [481, 690, 319, 110]);
+          const closeHover = layer("B07", [752, 12, 36, 36]);
+          const CLOSE = [752, 12, 36, 36];
+
+          // Closing Copilot: the panel and header group slide right as the chart reflows.
+          const headerGroupCover = cover([600, 8, 190, 44], PAGE);
+          const oldChart = layer("B07", [0, 48, 481, 752]);
+          const headerGroup = layer("B07", [296, 0, 185, 48]);
+          const panel = layer("B07", [481, 0, 319, 800]);
+
+          const wideChart = layer("B10", [0, 36, 800, 764]);
+          const workspaceCover = cover([404, 60, 384, 728], PAGE);
+          const workspace = layer("B11", [404, 60, 384, 728]);
+          workspace.style.borderRadius = "10px";
+          const wrapped = layer("B12", [404, 90, 384, 698]);
+
+          const scene = (t, pointer) => {
+            for (const element of Object.values(base)) show(element, 0);
+            for (const element of [
+              blank,
+              heading,
+              composerTop,
+              composerBottom,
+              sendHover,
+              submitted,
+              arriveHeader,
+              arriveBlank,
+              arriveChart,
+              arriveChat,
+              readyChart,
+              replyTop,
+              replyBody,
+              replyComposer,
+              closeHover,
+              headerGroupCover,
+              oldChart,
+              headerGroup,
+              panel,
+              wideChart,
+              workspaceCover,
+              workspace,
+              wrapped,
+            ])
+              show(element, 0);
+
+            if (t < at["close-copilot"] + 0.03) {
+              show(base.B01, 1);
+              // Typing: one key per frame-ish, wrapping and growing like the native composer.
+              const total = prompt.join("").length;
+              const keys =
+                t < at["type-prompt"]
+                  ? 0
+                  : Math.ceil(
+                      total *
+                        ramp(t, at["type-prompt"], typed - at["type-prompt"]),
+                    );
+              if (keys > 0 && t < at["submitted"] + 0.1) {
+                let line = 0;
+                let rest = keys;
+                while (line < 2 && rest > prompt[line].length)
+                  rest -= prompt[line++].length;
+                const lines = line + 1;
+                const lift = 12 * (lines - 1);
+                show(blank, 1);
+                show(heading, 1, `translateY(${12 * (3 - lines)}px)`);
+                composerTop.style.top = `${319 - lift}px`;
+                composerTop.style.height = `${12 + 24 * lines}px`;
+                show(composerTop, 1);
+                show(
+                  composerBottom,
+                  1,
+                  `translateY(${319 - lift + 12 + 24 * lines - 379}px)`,
+                );
+                untyped.style.left = `${510.5 + advance(prompt[line].slice(0, rest)) - 496}px`;
+                untyped.style.top = `${12 + 24 * line}px`;
+                untyped.style.width = `${780 - 510.5 - advance(prompt[line].slice(0, rest))}px`;
+                show(untyped, 1);
+                if (lines === 3 && inside(pointer, SEND)) show(sendHover, 1);
+              }
+              show(submitted, ramp(t, at["submitted"], 0.1));
+
+              // The Agent's chart arrives full height, then its indicator and reply.
+              if (t >= at["chart-arrives"]) {
+                show(arriveHeader, 1);
+                show(arriveBlank, 1);
+                show(arriveChart, out(ramp(t, at["chart-arrives"], 0.2)));
+                show(arriveChat, 1);
+              }
+              show(readyChart, ramp(t, at["indicator-ready"], 0.16));
+              const reply = out(ramp(t, at["reply"], 0.22));
+              show(replyTop, reply);
+              show(replyBody, reply, `translateY(${8 * (1 - reply)}px)`);
+              show(replyComposer, reply);
+              if (inside(pointer, CLOSE) && t >= at["reply"])
+                show(closeHover, 1);
+            }
+
+            const close = inOut(ramp(t, at["close-copilot"] + 0.03, 0.3));
+            if (t >= at["close-copilot"] + 0.03 && t < at["workspace"]) {
+              show(base.B08, 1);
+              if (close < 1) {
+                show(headerGroupCover, 1);
+                show(oldChart, 1 - close);
+                show(headerGroup, 1, `translateX(${330.5 * close}px)`);
+                show(panel, 1, `translateX(${320 * close}px)`);
+              }
+              // Hovering the legend reveals its actions; the code action shows its tooltip.
+              show(base.B09, ramp(t, at["hover-legend"] - 0.1, 0.1));
+              show(base.B10, ramp(t, at["hover-code"] - 0.14, 0.14));
+            }
+
+            // Open code docks Workspace to the chart's right, then word wrap reflows the source.
+            if (t >= at["workspace"]) {
+              const dock = out(ramp(t, at["workspace"], 0.3));
+              show(base.B11, 1);
+              show(wideChart, 1 - inOut(ramp(t, at["workspace"], 0.22)));
+              show(workspaceCover, dock < 1 ? 1 : 0);
+              show(workspace, dock, `translateX(${24 * (1 - dock)}px)`);
+              show(wrapped, ramp(t, at["word-wrap"] + 0.03, 0.12));
+            }
+          };
+          scene.ready = measured;
+          return scene;
+        },
+      };
+
+      const scene = scenes[filmId]();
+      stage.append(...rings);
+      stage.insertAdjacentHTML(
+        "beforeend",
+        `<svg id="cursor" width="15" height="22" viewBox="-1 -1 15 22" aria-hidden="true">
+          <path d="M0.5 0.5V16.6L4.4 12.9L6.9 18.9L9.6 17.8L7.1 11.9H12.4Z"
+            fill="#fff" stroke="#111" stroke-width="1.1" stroke-linejoin="round" />
+        </svg>`,
+      );
+      const cursor = document.getElementById("cursor");
+
+      /** Draws the frame at `t` seconds; every visual value is a pure function of `t`. */
+      function renderAt(t) {
+        t = ((t % film.duration) + film.duration) % film.duration;
+        const pointer = pointerAt(t);
+        scene(t, pointer);
+        let press = 0;
+        clicks.forEach(({ at: time, click }, index) => {
+          const k = ramp(t, time, 0.4);
+          const ring = rings[index];
+          const size = 8 + 22 * out(k);
+          Object.assign(ring.style, {
+            left: `${click[0] - size / 2}px`,
+            top: `${click[1] - size / 2}px`,
+            width: `${size}px`,
+            height: `${size}px`,
+          });
+          show(ring, k > 0 && k < 1 ? 0.8 * (1 - k) : 0);
+          press = Math.max(
+            press,
+            Math.sin(Math.PI * ramp(t, time - 0.05, 0.14)),
+          );
+        });
+        // The arrow's tip sits 1.5px inside its SVG box.
+        cursor.style.transform = `translate(${pointer[0] - 1.5}px, ${pointer[1] - 1.5}px) scale(${1 - 0.12 * press})`;
+        cursor.style.transformOrigin = "1.5px 1.5px";
+      }
+
+      window.renderAt = renderAt;
+      window.film = {
+        id: filmId,
+        fps: manifest.fps,
+        output: manifest.output,
+        duration: film.duration,
+        rushed,
+        moves,
+        checkpoints: film.shots.map(({ id, checkpoint }) => ({
+          id,
+          frame: Math.round(checkpoint * manifest.fps),
+        })),
+      };
+      window.ready = Promise.all([
+        ...images.map((image) => image.decode()),
+        document.fonts.load("14px Inter"),
+        scene.ready,
+      ]).then(() => renderAt(0));
+
+      if (!new URLSearchParams(location.search).has("render")) {
+        window.ready.then(() => {
+          const origin = performance.now();
+          const frame = (now) => {
+            renderAt((now - origin) / 1000);
+            requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        });
+      }
+    </script>
+  </body>
+</html>
