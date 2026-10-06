@@ -26,6 +26,37 @@ const hit = (
 const list = () =>
   db.runPromise(Transactor.run(symbologyResource.transitions.listAll()));
 
+test("native IDs preserve same-symbol listings and stable Resource IDs across metadata changes", async () => {
+  const listings = [10244, 55090].map((id) => ({
+    ...hit("SPCX", "USD", "openchart", "NASDAQ"),
+    listing: { id, symbol: "SPCX", currency: "USD", venue: "NASDAQ" },
+  }));
+  await db.runPromise(Transactor.run(upsertListings(listings)));
+  const before = await list();
+  expect(before).toHaveLength(2);
+  await db.runPromise(Transactor.run(upsertListings(listings)));
+  expect(await list()).toEqual(before);
+  const updated = {
+    ...listings[0]!,
+    listing: { ...listings[0]!.listing, symbol: "NEW", venue: "NYSE" },
+  };
+  await db.runPromise(Transactor.run(upsertListings([updated])));
+  expect(await list()).toEqual([
+    {
+      ...before[0],
+      listing: updated.listing,
+      revision: 2,
+      updatedAt: expect.any(Number),
+    },
+    before[1],
+  ]);
+  const saved = await list();
+  await expect(
+    db.runPromise(Transactor.run(upsertListings([updated, updated]))),
+  ).rejects.toThrow("duplicate identities");
+  expect(await list()).toEqual(saved);
+});
+
 test("read-only Resource retains stable IDs/revisions and distinct provider/venue identities", async () => {
   expect(symbologyResource.readOnly).toBe(true);
   expect(Object.keys(symbologyResource.transitionDefinitions)).not.toContain(

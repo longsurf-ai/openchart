@@ -1,5 +1,9 @@
 // Purpose: Persist and query saved listings exclusively through caller transactions.
-import { Listing, type ProviderListing } from "@openchart/market";
+import {
+  Listing,
+  providerListingKey,
+  type ProviderListing,
+} from "@openchart/market";
 import type { SymbolSearchRequest, SymbolIndexRequest } from "@openchart/feed";
 import type { ListFilter } from "@openchart/server/lib/resource/list-schema";
 import { listWindowSql } from "@openchart/server/lib/resource/pagination-sql";
@@ -24,8 +28,6 @@ const written = (row: typeof table.$inferSelect | undefined) =>
     ? Effect.succeed(toRow(row))
     : Effect.die("Symbology write returned no row");
 const sameListing = Schema.toEquivalence(Listing);
-const key = (listing: Listing) =>
-  JSON.stringify([listing.symbol, listing.venue ?? null]);
 
 /** Framework CRUD remains complete internally; readOnly controls the public surface. */
 export const symbologyStore: Store<
@@ -122,10 +124,7 @@ export const writeListings = Effect.fn("Symbology.writeListings")(function* (
     .from(table)
     .where(inArray(table.provider, providers));
   const identities = new Map(
-    existing.map((row) => [
-      JSON.stringify([row.provider, row.listingKey]),
-      row,
-    ]),
+    existing.map((row) => [providerListingKey(row), row]),
   );
   const seen = new Set<string>();
   for (const hit of hits) {
@@ -138,7 +137,7 @@ export const writeListings = Effect.fn("Symbology.writeListings")(function* (
       return yield* Effect.die(
         "Symbology snapshot contains an out-of-scope listing",
       );
-    const identity = JSON.stringify([hit.provider, key(hit.listing)]);
+    const identity = providerListingKey(hit);
     if (seen.has(identity))
       return yield* Effect.die(
         "Symbology source returned duplicate identities",
@@ -162,7 +161,7 @@ export const writeListings = Effect.fn("Symbology.writeListings")(function* (
       if (
         (scope.filter.quoteAsset === undefined ||
           row.listing.currency === scope.filter.quoteAsset) &&
-        !seen.has(JSON.stringify([row.provider, row.listingKey]))
+        !seen.has(providerListingKey(row))
       )
         yield* symbologyStore.remove(tx, row.id);
     }

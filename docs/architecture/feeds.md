@@ -224,7 +224,10 @@ results determine the completed search, including an empty result or failure.
 The read-only `symbology` Resource owns one listing table. Generic public writes
 are hidden; backend-only transitions upsert observations or atomically replace a
 complete provider/filter scope. IDs and revisions stay unchanged for identical
-listings. Listing identity is `(provider, symbol, venue-or-null)`; counts derive
+listings. Listing identity is `(provider, listing.id)` when a native ID exists,
+otherwise `(provider, symbol, venue-or-null)`. Distinct native IDs can share a
+symbol and venue. `common/market` owns the consumer key; SQLite constraints use
+the same identity. Counts derive
 from committed rows and survive provider disablement and backend restarts.
 
 `feed.symbology.index({providerId: 'binance', filter: {quoteAsset: 'USDT'}})`

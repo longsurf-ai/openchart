@@ -15,6 +15,7 @@ const index = migrations.findIndex(
 if (index < 1)
   throw new Error("Widget layout migration requires a predecessor");
 const predecessor = migrations.slice(0, index);
+const throughLayout = migrations.slice(0, index + 1);
 
 test("preserves existing placements and Chart graphs, appends missing Charts, and advances each affected Dashboard once", async () => {
   await Effect.runPromise(
@@ -74,19 +75,12 @@ test("preserves existing placements and Chart graphs, appends missing Charts, an
       const before = yield* Effect.forEach(tables, (table) =>
         db.all(sql`SELECT * FROM ${sql.identifier(table)}`),
       );
-      yield* DatabaseMigration.apply(db);
-      yield* DatabaseMigration.apply(db);
+      yield* DatabaseMigration.applyOnly(db, throughLayout);
+      yield* DatabaseMigration.applyOnly(db, throughLayout);
       const after = yield* Effect.forEach(tables, (table) =>
         db.all(sql`SELECT * FROM ${sql.identifier(table)}`),
       );
-      // A later migration backfills the market bindings' output as price.
-      expect(after).toEqual(
-        before.map((rows, index) =>
-          tables[index] === "chart_series"
-            ? rows.map((row) => ({ ...(row as object), output: "price" }))
-            : rows,
-        ),
-      );
+      expect(after).toEqual(before);
       expect(
         yield* db.all(
           sql`SELECT id, revision, created_at, updated_at FROM dashboard ORDER BY id`,
@@ -214,7 +208,9 @@ test("a failure after backfill restores the old placement table and migration le
       );
       const dashboards = yield* db.all(sql`SELECT * FROM dashboard`);
       expect(
-        Exit.isFailure(yield* Effect.exit(DatabaseMigration.apply(db))),
+        Exit.isFailure(
+          yield* Effect.exit(DatabaseMigration.applyOnly(db, throughLayout)),
+        ),
       ).toBe(true);
       expect(
         yield* db.all(

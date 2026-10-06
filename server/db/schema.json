@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "500fe1e4-d15f-4557-8214-e3401f223483",
-  "prevIds": ["750fa4f0-6505-4848-b3d1-e7a526291db4"],
+  "id": "c3f861a3-d4e3-4d18-8831-d16cf3798a70",
+  "prevIds": ["500fe1e4-d15f-4557-8214-e3401f223483"],
   "ddl": [
     {
       "name": "agent_permission_grants",
@@ -1952,7 +1952,7 @@
       "autoincrement": false,
       "default": null,
       "generated": {
-        "as": "(json_array(json_extract(listing, '$.symbol'), json_extract(listing, '$.venue')))",
+        "as": "(case when json_extract(listing, '$.id') is not null then json_array(json_extract(listing, '$.id')) else json_array(json_extract(listing, '$.symbol'), json_extract(listing, '$.venue')) end)",
         "type": "stored"
       },
       "name": "listing_key",
@@ -2956,7 +2956,7 @@
           "isExpression": false
         },
         {
-          "value": "json_array(json_extract(\"listing\", '$.symbol'), json_extract(\"listing\", '$.venue'), json_extract(\"listing\", '$.currency'))",
+          "value": "case when json_extract(\"listing\", '$.id') is not null then json_array(json_extract(\"listing\", '$.id')) else json_array(json_extract(\"listing\", '$.symbol'), json_extract(\"listing\", '$.venue')) end",
           "isExpression": true
         },
         {
@@ -2967,7 +2967,7 @@
       "isUnique": true,
       "where": null,
       "origin": "manual",
-      "name": "drawing_scope_gesture_unique",
+      "name": "drawing_listing_gesture_unique",
       "entityType": "indexes",
       "table": "drawing"
     },

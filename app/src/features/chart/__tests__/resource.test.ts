@@ -55,6 +55,34 @@ const resource = (): ChartResource => ({
   links: [],
 });
 
+it("compares distinct native listings sharing a ticker and only rejects the same identity", () => {
+  const first: ProviderListing = {
+    provider: ProviderId.make("openchart"),
+    listing: { id: 10244, symbol: "SPCX", venue: "NASDAQ", currency: "USD" },
+  };
+  const second = { ...first, listing: { ...first.listing, id: 55090 } };
+  const cell = addComparison(createCell(first, options), second, capabilities);
+  expect(cell.marketSources.map((source) => source.listing.id)).toEqual([
+    10244, 55090,
+  ]);
+  expect(() =>
+    addComparison(
+      cell,
+      { ...second, listing: { ...second.listing, symbol: "RENAMED" } },
+      capabilities,
+    ),
+  ).toThrow("already on");
+  const chart = { ...resource(), cells: [cell] };
+  const sourceId = cell.marketSources[1]!.id;
+  expect(
+    replaceMarketSource(chart, cell.id, sourceId, second, capabilities)
+      .cells[0]!.marketSources[1]!.listing.id,
+  ).toBe(55090);
+  expect(() =>
+    replaceMarketSource(chart, cell.id, sourceId, first, capabilities),
+  ).toThrow("already on");
+});
+
 it("removes a comparison input only with its last display and permits adding it again", () => {
   const original = addComparison(
     createCell(listing("AAPL"), options),

@@ -518,4 +518,11 @@ export const migrations = [
     checksum:
       "6c1c182e2e07cc4e51c87adcd488b53a1a2c431e8dd8a5e35e665b79d2a8ea78",
   },
+  {
+    ...(await import("./migration/20261006040216_native-listing-identity"))
+      .default,
+    filename: "20261006040216_native-listing-identity.ts",
+    checksum:
+      "d2aa23d15ad1595c6b67fc62f70c5bd4e73439cf4bc9d3d45f24592f831bfdf6",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];

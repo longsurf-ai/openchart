@@ -71,6 +71,31 @@ const definition = (
   operator,
   inputs,
 });
+
+test("a drawing alert requires the same native listing ID even when symbols match", () => {
+  const original = drawing("horizontal_line", [anchor(0, 100)]);
+  const item = { ...original, listing: { ...original.listing, id: 10244 } };
+  const rule = definition(item);
+  expect(() =>
+    drawingTeaDefinition(item, {
+      ...rule,
+      inputs: { ...inputs, listing: { ...item.listing, id: 55090 } },
+    }),
+  ).toThrow("same drawing and market");
+  expect(() =>
+    drawingTeaDefinition(item, {
+      ...rule,
+      inputs: {
+        ...inputs,
+        listing: {
+          ...item.listing,
+          name: "Updated metadata",
+          symbol: "RENAMED",
+        },
+      },
+    }),
+  ).not.toThrow();
+});
 type Sample = {
   time: number;
   close: number;
