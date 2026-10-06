@@ -1,6 +1,7 @@
 // Purpose: Connect the Dashboard route to its feature, chart selection and widget registry.
 import { useAssistantContext } from "@assistant-ui/react";
-import { useOutletContext, useParams } from "react-router";
+import { Link, useOutletContext, useParams } from "react-router";
+import { Button } from "@openchart/app/components/ui/button";
 import type { AppRouteContext } from "@openchart/app/app/route-context";
 import { DashboardView } from "@openchart/app/features/dashboard/components/dashboard-view";
 import { ChartSelectionProvider } from "@openchart/app/features/chart/components/selection-provider";
@@ -24,6 +25,13 @@ export function DashboardPage() {
         id={dashboardId}
         transport={transport}
         registry={widgetRegistry}
+        missingAction={
+          <Button variant="outline" asChild>
+            <Link to="/app" replace>
+              Go to home
+            </Link>
+          </Button>
+        }
         renderHeader={(dashboard, disabled, addWidget, addChart) => (
           <DashboardHeader
             dashboard={dashboard}

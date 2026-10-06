@@ -169,7 +169,7 @@ it("closes a captured picker when its placement is removed without retargeting i
   await act(() =>
     client.setQueryData(
       dashboardQueryOptions(transport, dashboard.id).queryKey,
-      { ...dashboard, widgets: [] },
+      () => ({ ...dashboard, widgets: [] }),
     ),
   );
   await waitFor(() =>

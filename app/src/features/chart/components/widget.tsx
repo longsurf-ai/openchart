@@ -18,6 +18,7 @@ function ChartPlacement({ children }: PropsWithChildren) {
   const query = useQuery({
     ...dashboardQueryOptions(transport, dashboardId),
     select: (dashboard) => {
+      if (!dashboard) return null;
       const placement = dashboard.widgets.find(
         (item) => item.id === placementId,
       );
@@ -31,6 +32,7 @@ function ChartPlacement({ children }: PropsWithChildren) {
     },
   });
   const chartId = query.data?.chartId;
+  if (query.data === null) return null;
   if (query.isPending)
     return (
       <p role="status" className="p-4 text-sm text-muted-foreground">

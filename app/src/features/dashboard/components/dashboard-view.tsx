@@ -5,6 +5,12 @@ import { useContainerWidth } from "react-grid-layout";
 
 import { Button } from "@openchart/app/components/ui/button";
 import {
+  Empty,
+  EmptyContent,
+  EmptyHeader,
+  EmptyTitle,
+} from "@openchart/app/components/ui/empty/empty";
+import {
   dashboardMutationOptions,
   dashboardQueryOptions,
 } from "@openchart/app/features/dashboard/api/queries";
@@ -26,10 +32,13 @@ export function DashboardView({
   transport,
   registry,
   renderHeader,
+  missingAction,
 }: {
   id: string;
   transport: AppTransport;
   registry: Readonly<Record<string, WidgetDefinition | undefined>>;
+  /** App-owned navigation shown when the Dashboard no longer exists. */
+  missingAction?: ReactNode;
   renderHeader: (
     dashboard: Dashboard | undefined,
     disabled: boolean,
@@ -107,6 +116,19 @@ export function DashboardView({
       setRecovering(false);
     }
   };
+
+  if (dashboard.data === null)
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-background">
+        {renderHeader(undefined, true, addWidget, addChart)}
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>This dashboard is no longer available</EmptyTitle>
+          </EmptyHeader>
+          {missingAction ? <EmptyContent>{missingAction}</EmptyContent> : null}
+        </Empty>
+      </div>
+    );
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-background">

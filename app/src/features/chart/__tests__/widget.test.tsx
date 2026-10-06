@@ -123,6 +123,28 @@ it("keeps the mounted provider subtree when a Dashboard background refresh fails
   client.clear();
 });
 
+it("releases the chart runtime when its Dashboard disappears during a refresh", async () => {
+  const { client, get, key, content } = setup();
+  const dispose = vi.fn();
+  function Runtime() {
+    useEffect(() => dispose, []);
+    return <p>Mounted chart</p>;
+  }
+  const view = render(content(<Runtime />));
+  expect(screen.getByText("Mounted chart")).toBeVisible();
+  get.mockRejectedValue(
+    Object.assign(new Error("Dashboard not found"), {
+      data: { code: "NOT_FOUND" },
+    }),
+  );
+  await act(() => client.refetchQueries({ queryKey: key }));
+  await waitFor(() => expect(dispose).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText("Mounted chart")).not.toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  view.unmount();
+  client.clear();
+});
+
 it.each(["missing", "duplicate"] as const)(
   "sends a %s chart binding to the Host boundary before mounting",
   (kind) => {
@@ -134,10 +156,10 @@ it.each(["missing", "duplicate"] as const)(
       resourceId:
         kind === "missing" ? undefined : dashboard.widgets[0]!.resourceId,
     };
-    client.setQueryData(key, {
+    client.setQueryData(key, () => ({
       ...dashboard,
       widgets: [...dashboard.widgets, placement],
-    });
+    }));
     const view = render(content(<p>Mounted chart</p>, placement.id));
     expect(screen.getByRole("alert")).toHaveTextContent(
       kind === "missing" ? "has no chart" : "already displayed",
