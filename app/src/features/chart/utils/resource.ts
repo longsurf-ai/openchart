@@ -1,6 +1,6 @@
 // Purpose: Edit chart structure once while preserving source, series, pane, and link identities.
 import type { BarsCapabilities, Resolution } from "@openchart/feed";
-import type { ProviderListing } from "@openchart/market";
+import { providerListingKey, type ProviderListing } from "@openchart/market";
 
 import {
   chartIds,
@@ -205,9 +205,7 @@ export function addComparison(
 ): CellDefinition {
   if (
     cell.marketSources.some(
-      (source) =>
-        source.provider === selected.provider &&
-        source.listing.symbol === selected.listing.symbol,
+      (source) => providerListingKey(source) === providerListingKey(selected),
     )
   )
     throw new Error("This symbol is already on this chart.");
@@ -307,8 +305,7 @@ export function replaceMarketSource(
     cell.marketSources.some(
       (source) =>
         source.id !== sourceId &&
-        source.provider === selected.provider &&
-        source.listing.symbol === selected.listing.symbol,
+        providerListingKey(source) === providerListingKey(selected),
     )
   )
     throw new Error("This symbol is already on this chart.");

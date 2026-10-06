@@ -97,7 +97,7 @@ test("draft echoes preserve selection and undo; new disk text replaces the docum
 
 test.each([
   "---\ntitle: Keep this\n---\n\n# Document\n",
-  "hello<br>world\n",
+  "| Item | Value |\n| --- | --- |\n| A | <br /> |\n",
   "Read [reference][link].\n\n[link]: https://example.com\n",
 ])(
   "unsupported formatting switches to source without changing the draft: %s",
@@ -125,4 +125,15 @@ test("GFM tables, task lists and code blocks remain visually editable", async ()
   ).toBeInTheDocument();
   expect(props.onUnavailable).not.toHaveBeenCalled();
   expect(props.onChange).not.toHaveBeenCalled();
+});
+
+test("empty table cells remain visually editable and save without placeholders", async () => {
+  const { props, view } = await setup(
+    "|   | Total |\n| --- | --- |\n| Cost |   |\n",
+  );
+  expect(props.onUnavailable).not.toHaveBeenCalled();
+  act(() => view.dispatch(view.state.tr.insertText("Edited ", 4)));
+  expect(props.onChange).toHaveBeenLastCalledWith(
+    expect.stringMatching(/^\| Edited\s+\| Total \|\n.*\| Cost\s+\|\s+\|\n$/s),
+  );
 });

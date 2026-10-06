@@ -1,0 +1,19 @@
+WEBVTT
+
+00:00.000 --> 00:02.820
+Select and copy your Pine Script in TradingView.
+
+00:02.820 --> 00:05.450
+Paste it into the OpenChart agent sidebar and ask for a Tea version.
+
+00:05.450 --> 00:07.120
+Send the prompt. The agent converts the script.
+
+00:07.120 --> 00:09.400
+Open the generated Tea file in Workspace.
+
+00:09.400 --> 00:11.900
+Open a Workspace widget beside your chart and choose Add to chart.
+
+00:11.900 --> 00:14.650
+The NVDA chart shows the indicator's plots, shades and annotations.

@@ -1,6 +1,6 @@
 # Symbology Resource
 
-- One saved provider-native listing per `(provider, symbol, venue)`; no instrument or cross-provider identity merge.
+- One saved listing per `(provider, listing.id)` when a native ID exists; otherwise `(provider, symbol, venue)`. Distinct native IDs may share a symbol and venue. No instrument or cross-provider identity merge.
 - `readOnly` hides public CRUD. Only search/count reads are registered custom transitions. Backend upsert/replacement exports never enter the public router.
 - Search observations only upsert. Complete index snapshots replace exactly their provider/filter scope in one transaction; failures preserve the prior catalog.
 - Unchanged listings retain ID/revision. Counts derive from rows; jobs belong to Feed and are not persisted here.

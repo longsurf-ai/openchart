@@ -70,6 +70,26 @@ export const ProviderListing = Schema.Struct({
 });
 export type ProviderListing = typeof ProviderListing.Type;
 
+/**
+ * Stable consumer key for a provider-native listing. A native ID is authoritative;
+ * providers without IDs use their symbol and venue. Names, currency and other
+ * reference metadata never change identity. This pure function expects a provider
+ * identifier and decoded Listing, performs no I/O and owns no resources.
+ * @example providerListingKey({ provider: ProviderId.make("openchart"), listing: { id: 55090, symbol: "SPCX", currency: "USD" } });
+ */
+export function providerListingKey({
+  provider,
+  listing,
+}: {
+  readonly provider: string;
+  readonly listing: Listing;
+}): string {
+  return JSON.stringify([
+    provider,
+    listing.id ?? [listing.symbol, listing.venue ?? null],
+  ]);
+}
+
 // Specialized Listings
 
 /** Option terms added to a native listing. */

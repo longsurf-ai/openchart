@@ -405,12 +405,18 @@ test("Agent Drawing identity conflicts are transactional and use listing identit
     entity: { revision: second.entity.revision + 1 },
   });
   expect(committed).toHaveBeenCalledTimes(1);
+  expect(
+    await save({ ...input, listing: { ...input.listing, currency: "EUR" } }),
+  ).toMatchObject({
+    status: "rejected",
+    code: "resource.state_invalid",
+    issues: [{ code: "drawing.unique_identity", path: "/data/id" }],
+  });
   const anotherDashboard = await create("Other drawing scope");
   for (const scope of [
     { dashboardId: anotherDashboard.entity.id },
     { provider: "binance" },
     { listing: { ...input.listing, symbol: "MSFT" } },
-    { listing: { ...input.listing, currency: "EUR" } },
     { listing: { ...input.listing, venue: "" } },
     { listing: { ...input.listing, venue: "NMS" } },
   ]) {

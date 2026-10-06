@@ -1,5 +1,6 @@
 // Purpose: Own the durable provider-scoped listing index.
 import type { Listing } from "@openchart/market";
+import { listingKeySql } from "@openchart/server/lib/listing-key";
 import {
   resourceEnvelopeChecks,
   resourceEnvelopeColumns,
@@ -13,7 +14,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-/** One saved listing per provider/native symbol/venue; no cross-provider identity merge. */
+/** One saved listing per provider/native ID, or symbol/venue when no ID exists. */
 export const symbologyTable = sqliteTable(
   "symbology",
   {
@@ -22,10 +23,7 @@ export const symbologyTable = sqliteTable(
     listing: text("listing", { mode: "json" }).$type<Listing>().notNull(),
     listingKey: text("listing_key")
       .notNull()
-      .generatedAlwaysAs(
-        sql`json_array(json_extract(listing, '$.symbol'), json_extract(listing, '$.venue'))`,
-        { mode: "stored" },
-      ),
+      .generatedAlwaysAs(listingKeySql(sql`listing`), { mode: "stored" }),
   },
   (table) => [
     ...resourceEnvelopeChecks("symbology", table),

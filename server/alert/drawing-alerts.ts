@@ -4,6 +4,7 @@ import {
   FIB_RETRACEMENT_LEVELS,
 } from "@openchart/chart-core/drawing/geometry";
 import { drawingBoundary } from "@openchart/chart-core/drawing/boundary";
+import { providerListingKey } from "@openchart/market";
 import type { DrawingAlertDefinition } from "@openchart/server/resources/alert-rule/schema";
 import type { DrawingEntity } from "@openchart/server/resources/drawing";
 import * as Tea from "@openchart/tea";
@@ -96,7 +97,7 @@ export function drawingTeaDefinition(
   warmupBars: number;
   readyOutput: string;
 } {
-  const { data, provider, listing } = drawing;
+  const { data } = drawing;
   const boundary = drawingBoundary(data);
   const input = definition.inputs;
   const invalid = (message: string): never => {
@@ -104,10 +105,7 @@ export function drawingTeaDefinition(
   };
   if (
     drawing.id !== definition.drawingId ||
-    provider !== input.provider ||
-    listing.symbol !== input.listing.symbol ||
-    listing.venue !== input.listing.venue ||
-    listing.currency !== input.listing.currency
+    providerListingKey(drawing) !== providerListingKey(input)
   )
     invalid("Drawing and alert must refer to the same drawing and market");
   const horizontal =

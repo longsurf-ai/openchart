@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.1.12",
+    "date": "2026-10-05",
+    "items": [
+      "New chart tours show how to change intervals, tune studies and create indicators with the Agent.",
+      "Open Indicators or add a Workspace widget to see how to convert Pine Script into a chart indicator.",
+      "New installs ask to enable notifications before starting the dashboard tour.",
+      "Fixed provider sign-in failures leaving expired links and instructions on screen.",
+      "Fixed symbol searches failing when distinct listings share the same symbol and venue.",
+      "Fixed Markdown tables with empty cells opening in Source instead of the visual editor."
+    ]
+  },
+  {
     "version": "0.1.11",
     "date": "2026-10-05",
     "items": [

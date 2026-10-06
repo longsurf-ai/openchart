@@ -347,7 +347,7 @@ unchanged branches are shared. React selects objects directly with useStore / us
   calendar objects, and millisecond timestamps. Old drawing coordinates are converted by a one-time forward migration; the runtime never guesses the format or unit.
   An annotation always stores the event's original time. Layout picks the last bar in the loaded timeline that is not later than the event,
   and does not snap to a future bar. Beyond the loaded endpoints it is hidden, and the coverage of the last bar is not inferred.
-  The database guarantees that `data.id` is unique within one dashboard/provider/listing (symbol, venue, currency); a conflict returns a `/data/id` diagnostic.
+  The database guarantees that `data.id` is unique within one dashboard/provider/listing (native ID, otherwise symbol and venue); a conflict returns a `/data/id` diagnostic. Different native listing IDs never share drawing projections, even when their symbols match.
   Existing duplicate identities make the forward migration fail atomically; it never deletes drawings or changes identities automatically. Deleting a Dashboard cascades; deleting a Chart does not affect drawings.
 - The Resource main role is projected to the series object.role, and core identifies the actual ID and its pane.
   The frontend does not translate a Resource ID into the magic string main.

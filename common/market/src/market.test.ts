@@ -2,9 +2,56 @@
 
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { Listing, ProviderId, TradingDay } from "./index";
+import { Listing, ProviderId, TradingDay, providerListingKey } from "./index";
 
 describe("market vocabulary", () => {
+  it("uses provider and native listing ID independently of display metadata", () => {
+    const first = {
+      provider: ProviderId.make("openchart"),
+      listing: { id: 10244, symbol: "SPCX", venue: "NASDAQ", currency: "USD" },
+    };
+    expect(providerListingKey(first)).not.toBe(
+      providerListingKey({
+        ...first,
+        listing: { ...first.listing, id: 55090 },
+      }),
+    );
+    expect(providerListingKey(first)).toBe(
+      providerListingKey({
+        ...first,
+        listing: {
+          ...first.listing,
+          symbol: "RENAMED",
+          venue: "NEW",
+          currency: "CAD",
+        },
+      }),
+    );
+    expect(providerListingKey(first)).not.toBe(
+      providerListingKey({
+        ...first,
+        provider: ProviderId.make("another"),
+      }),
+    );
+    const withoutId = {
+      ...first,
+      listing: { symbol: "SPCX", venue: "NASDAQ", currency: "USD" },
+    };
+    expect(providerListingKey(first)).not.toBe(providerListingKey(withoutId));
+    expect(providerListingKey(withoutId)).not.toBe(
+      providerListingKey({
+        ...withoutId,
+        listing: { ...withoutId.listing, venue: "NYSE" },
+      }),
+    );
+    expect(providerListingKey(withoutId)).toBe(
+      providerListingKey({
+        ...withoutId,
+        listing: { ...withoutId.listing, currency: "CAD", name: "New name" },
+      }),
+    );
+  });
+
   it("decodes listings and branded provider ids", () => {
     const listing = Schema.decodeUnknownSync(Listing)({
       symbol: "BTCUSDT",

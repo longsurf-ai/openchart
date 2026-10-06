@@ -1,0 +1,36 @@
+//@version=6
+indicator("NVDA Trend Ribbon", overlay = true)
+
+// Three trend speeds and two volatility envelopes, all on the price chart.
+fastLength = input.int(8, "Fast EMA", minval = 1)
+basisLength = input.int(21, "Basis EMA", minval = 1)
+slowLength = input.int(34, "Slow EMA", minval = 1)
+atrLength = input.int(14, "ATR length", minval = 1)
+bandWidth = input.float(1.5, "Band width", minval = 0.1)
+
+fast = ta.ema(close, fastLength)
+basis = ta.ema(close, basisLength)
+slow = ta.ema(close, slowLength)
+width = ta.atr(atrLength) * bandWidth
+trendUp = fast >= slow
+crossUp = ta.crossover(fast, slow)
+crossDown = ta.crossunder(fast, slow)
+
+// Stable colors preserve the same appearance when the script is converted.
+pFast = plot(fast, "Fast EMA", color = #62D6BB, linewidth = 2)
+pBasis = plot(basis, "Basis EMA", color = #EDC475, linewidth = 2)
+pSlow = plot(slow, "Slow EMA", color = #B39DDB, linewidth = 2)
+pUpper = plot(basis + width, "Upper band", color = #53BFA7)
+pOuterUpper = plot(basis + width * 1.5, "Outer upper band", color = color.new(#53BFA7, 55))
+pLower = plot(basis - width, "Lower band", color = #A38ACD)
+pOuterLower = plot(basis - width * 1.5, "Outer lower band", color = color.new(#A38ACD, 55))
+
+// Layered shades separate the trend ribbon from the outer volatility bands.
+fill(pFast, pSlow, color = trendUp ? color.new(#62D6BB, 78) : color.new(#E68C98, 78), title = "Trend ribbon")
+fill(pUpper, pOuterUpper, color = color.new(#53BFA7, 86), title = "Upper shade")
+fill(pLower, pOuterLower, color = color.new(#A38ACD, 86), title = "Lower shade")
+fill(pUpper, pLower, color = color.new(#8AA5C9, 96), title = "Inner shade")
+
+// Annotate confirmed transitions only; a developing candle cannot confirm one.
+plotshape(barstate.isconfirmed and crossUp, "Trend turns up", style = shape.triangleup, location = location.bottom, color = #62D6BB, text = "TREND UP", textcolor = #62D6BB, size = size.small, force_overlay = true)
+plotshape(barstate.isconfirmed and crossDown, "Trend turns down", style = shape.triangledown, location = location.top, color = #E68C98, text = "TREND DOWN", textcolor = #E68C98, size = size.small, force_overlay = true)

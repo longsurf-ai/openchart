@@ -24,6 +24,7 @@
     "./events": "./events/index.ts",
     "./lib/errors": "./lib/errors/index.ts",
     "./lib/hose": "./lib/hose/index.ts",
+    "./lib/listing-key": "./lib/listing-key.ts",
     "./lib/resource": "./lib/resource/index.ts",
     "./lib/resource/*": "./lib/resource/*.ts",
     "./lib/trpc": "./lib/trpc/trpc.ts",

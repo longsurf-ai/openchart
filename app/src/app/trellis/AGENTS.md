@@ -30,5 +30,5 @@ Onboarding workflows, defined as data and run by `OnboardingHost`.
   seen step indexes. Desktop starts `starter` for new profiles
   through onboarding `view.json`; its IDs are checked against that content.
 - Videos are square 720px faststart MP4s without audio, on #111111 or, for
-  macOS prompts, a dark wallpaper; mostly website films cut to product
-  behavior; these files are the source.
+  macOS prompts, a dark wallpaper. The starter's chart films render from
+  native captures in `starter/films/`; other videos are their own source.

@@ -50,7 +50,7 @@ test("compiles Resource schemas into migration, schema, and registry", async () 
   // Mirror the real server layout: the checked-in snapshot already contains
   // every Resource table, so their schemas must be present or Drizzle Kit
   // sees a drop and stops for an interactive rename prompt. Resource schemas
-  // import the envelope helpers through the package's own exports.
+  // import the envelope and listing identity helpers through package exports.
   await cp(resolve(import.meta.dirname, ".."), resolve(server, "db"), {
     recursive: true,
   });
@@ -71,6 +71,10 @@ test("compiles Resource schemas into migration, schema, and registry", async () 
     recursive: true,
     filter: (source) => !source.endsWith(".test.ts"),
   });
+  await cp(
+    resolve(import.meta.dirname, "../../lib/listing-key.ts"),
+    resolve(server, "lib/listing-key.ts"),
+  );
   await cp(
     resolve(import.meta.dirname, "../../resources"),
     resolve(server, "resources"),
