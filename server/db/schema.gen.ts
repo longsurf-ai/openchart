@@ -546,7 +546,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`updated_at\` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
           \`provider\` text NOT NULL,
           \`listing\` text NOT NULL,
-          \`listing_key\` text GENERATED ALWAYS AS (json_array(json_extract(listing, '$.symbol'), json_extract(listing, '$.venue'))) STORED NOT NULL,
+          \`listing_key\` text GENERATED ALWAYS AS (case when json_extract(listing, '$.id') is not null then json_array(json_extract(listing, '$.id')) else json_array(json_extract(listing, '$.symbol'), json_extract(listing, '$.venue')) end) STORED NOT NULL,
           CONSTRAINT "symbology_id_check" CHECK("id" IS NOT NULL),
           CONSTRAINT "symbology_revision_check" CHECK("revision" >= 1),
           CONSTRAINT "symbology_created_at_check" CHECK("created_at" >= 0),
@@ -664,7 +664,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         "CREATE INDEX `chart_dashboard_index` ON `chart` (`dashboard_id`);",
       );
       yield* tx.run(
-        "CREATE UNIQUE INDEX `drawing_scope_gesture_unique` ON `drawing` (`dashboard_id`,`provider`,json_array(json_extract(\"listing\", '$.symbol'), json_extract(\"listing\", '$.venue'), json_extract(\"listing\", '$.currency')),json_extract(\"data\", '$.id'));",
+        "CREATE UNIQUE INDEX `drawing_listing_gesture_unique` ON `drawing` (`dashboard_id`,`provider`,case when json_extract(\"listing\", '$.id') is not null then json_array(json_extract(\"listing\", '$.id')) else json_array(json_extract(\"listing\", '$.symbol'), json_extract(\"listing\", '$.venue')) end,json_extract(\"data\", '$.id'));",
       );
       yield* tx.run(
         "CREATE INDEX `drawing_dashboard_provider_index` ON `drawing` (`dashboard_id`,`provider`);",

@@ -1,7 +1,7 @@
 // Purpose: Select actual provider-scoped listings from the existing merged symbol search.
 import { offersRetry } from "@openchart/app/lib/feed/transport";
 import type { BarsCapabilities } from "@openchart/feed";
-import type { ProviderListing } from "@openchart/market";
+import { providerListingKey, type ProviderListing } from "@openchart/market";
 import { useMutation } from "@tanstack/react-query";
 import { useDeferredValue, useState } from "react";
 
@@ -123,7 +123,7 @@ export function SymbolSearch({
         {listings?.map((hit) => (
           <button
             type="button"
-            key={`${hit.provider}:${hit.listing.symbol}:${hit.listing.venue}`}
+            key={providerListingKey(hit)}
             disabled={selection.isPending}
             className="grid w-full grid-cols-[5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:bg-accent disabled:pointer-events-none disabled:opacity-50"
             onClick={() => selection.mutate(hit)}

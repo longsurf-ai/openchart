@@ -2,6 +2,7 @@
 import type { Drawing } from "@openchart/chart-core/drawing/types";
 import { defineId } from "@openchart/identifier";
 import type { Listing } from "@openchart/market";
+import { listingKeySql } from "@openchart/server/lib/listing-key";
 import { dashboardTable } from "@openchart/server/resources/dashboard/schema";
 import {
   resourceEnvelopeChecks,
@@ -38,10 +39,10 @@ export const drawingTable = sqliteTable(
     check("drawing_provider_check", sql`length(${table.provider}) > 0`),
     check("drawing_listing_check", sql`json_valid(${table.listing})`),
     check("drawing_data_check", sql`json_valid(${table.data})`),
-    uniqueIndex("drawing_scope_gesture_unique").on(
+    uniqueIndex("drawing_listing_gesture_unique").on(
       table.dashboardId,
       table.provider,
-      sql`json_array(json_extract(${table.listing}, '$.symbol'), json_extract(${table.listing}, '$.venue'), json_extract(${table.listing}, '$.currency'))`,
+      listingKeySql(table.listing),
       sql`json_extract(${table.data}, '$.id')`,
     ),
     index("drawing_dashboard_provider_index").on(

@@ -24,6 +24,57 @@ function runtime(filename = ":memory:") {
   );
 }
 
+test("live and indexed searches both retain listings with identical symbols and distinct native IDs", async () => {
+  const rt = runtime();
+  try {
+    const listings = Schema.decodeUnknownSync(Schema.Array(ProviderListing))([
+      {
+        provider: "openchart",
+        listing: {
+          id: 10244,
+          symbol: "SPCX",
+          name: "The SPAC and New Issue ETF",
+          venue: "NASDAQ",
+          currency: "USD",
+        },
+      },
+      {
+        provider: "openchart",
+        listing: {
+          id: 55090,
+          symbol: "SPCX",
+          name: "Space Exploration Technologies Corp.",
+          venue: "NASDAQ",
+          currency: "USD",
+        },
+      },
+      {
+        provider: "yfinance",
+        listing: { symbol: "SPCX", venue: "NMS", currency: "USD" },
+      },
+    ]);
+    const owner = await rt.runPromise(SymbologyIndex);
+    const search = vi.fn(() => Effect.succeed(listings.slice(0, 2)));
+    const feed = owner.provision([
+      { providerId: listings[0]!.provider, search },
+      {
+        providerId: listings[2]!.provider,
+        search: () => Effect.succeed([listings[2]!]),
+      },
+    ]);
+    const query = { query: "spcx", limit: 30, indexed: false };
+    const live = await rt.runPromise(feed.search(query));
+    expect(live).toHaveLength(3);
+    expect(live).toEqual(expect.arrayContaining([...listings]));
+    expect(
+      await rt.runPromise(feed.search({ ...query, indexed: true })),
+    ).toEqual(live);
+    expect(search).toHaveBeenCalledTimes(1);
+  } finally {
+    await rt.dispose();
+  }
+});
+
 test("shutdown interrupts an unfinished run; restart retains listings and resets runtime status", async () => {
   const filename = `${temporaryHome()}/symbols.sqlite3`;
   const rt = runtime(filename);

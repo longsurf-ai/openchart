@@ -11,7 +11,7 @@ Owns completed drawing geometry, style and visibility as independent Resources.
 - `data.id` is the client-minted gesture identity; the Resource envelope owns the
   server ID and revision. Drafts, selection, hover and caches remain in the renderer.
 - SQLite enforces unique `data.id` within dashboard/provider/listing identity
-  (symbol, venue, currency); listing metadata and JSON key order do not distinguish
+  (native ID, otherwise symbol and venue); listing metadata and JSON key order do not distinguish
   drawings. Store translates this index's conflict to `/data/id` diagnostics.
   Conflicting historical rows fail migration atomically; never silently discard
   drawings or rewrite their identities.

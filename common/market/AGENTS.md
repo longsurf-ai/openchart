@@ -10,6 +10,8 @@ these; this package owns no request, transport, or operation contract.
 - Listing identity is provider-scoped. `ProviderListing` (`{provider, listing}`)
   is the identity consumers pass around; a bare Listing means nothing without
   its ProviderId, and no cross-provider equivalence is encoded here.
+  `providerListingKey` uses the native listing ID when present, otherwise symbol
+  and venue. Names and currency are reference metadata, not identity.
 - Timestamps are Unix milliseconds. TradingDay sessions are atomic
   (`regular`, `pre`, `post`, `overnight`); `extended` and `24h` are query
   selectors, never stored sessions. Bar queries expose exactly `regular`,

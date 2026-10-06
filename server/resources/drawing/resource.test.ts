@@ -10,6 +10,47 @@ import { temporaryHome } from "@openchart/server/home.test-utils";
 import { ConfigProvider } from "effect";
 import { expect, test } from "vitest";
 
+test("same-symbol native listings own separate drawings and duplicate gestures still fail within one listing", async () => {
+  const runtime = makeRuntime({
+    home: temporaryHome(),
+    databasePath: ":memory:",
+    config: ConfigProvider.fromUnknown({}),
+  });
+  const caller = router.createCaller({ runtime });
+  try {
+    const dashboard = await caller.resources.dashboard.create({ name: "SPCX" });
+    const body = {
+      dashboardId: dashboard.id,
+      provider: "openchart",
+      listing: { id: 10244, symbol: "SPCX", venue: "NASDAQ", currency: "USD" },
+      data: Drawing.create("horizontal_line", [{ time: 1, price: 100 }], {
+        id: "gesture",
+      }),
+    };
+    const first = await caller.resources.drawing.create(body);
+    const second = await caller.resources.drawing.create({
+      ...body,
+      listing: { ...body.listing, id: 55090 },
+    });
+    expect(first.id).not.toBe(second.id);
+    await expect(
+      caller.resources.drawing.create({
+        ...body,
+        listing: { ...body.listing, symbol: "RENAMED", name: "Updated name" },
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(
+      (
+        await caller.resources.drawing.list({
+          filter: { dashboardId: dashboard.id },
+        })
+      ).items,
+    ).toEqual([first, second]);
+  } finally {
+    await runtime.dispose();
+  }
+});
+
 test("annotation writes accept only epoch seconds, including label anchors, before persistence", async () => {
   const runtime = makeRuntime({
     home: temporaryHome(),
