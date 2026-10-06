@@ -48,6 +48,8 @@
     --indicator-amber: hsl(42 92% 42%);
     --indicator-green: hsl(142 64% 36%);
     --indicator-muted: hsl(220 8% 44%);
+    --ai-gradient-start: hsl(240 70% 62%);
+    --ai-gradient-end: hsl(17 85% 58%);
     --chart-grid: hsl(216 14% 86%);
     --chart-text: hsl(220 8% 42%);
     --chart-panel: hsl(216 18% 95%);
@@ -109,6 +111,8 @@
     --indicator-amber: hsl(46 86% 62%);
     --indicator-green: hsl(142 48% 54%);
     --indicator-muted: hsl(220 7% 63%);
+    --ai-gradient-start: hsl(240 100% 80%);
+    --ai-gradient-end: hsl(17 100% 77%);
     --chart-grid: hsl(225 6% 16%);
     --chart-text: hsl(220 5% 54%);
     --chart-panel: hsl(225 8% 11%);
