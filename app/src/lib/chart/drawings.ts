@@ -1,6 +1,6 @@
 // Purpose: Persist drawing edits through Resource RPCs and the shared Query cache.
 import type { Drawing } from "@openchart/chart-core/drawing/types";
-import type { ProviderListing } from "@openchart/market";
+import { providerListingKey, type ProviderListing } from "@openchart/market";
 import {
   mutationOptions,
   queryOptions,
@@ -26,13 +26,7 @@ export type DrawingResource = Awaited<
 
 /** Listing reference metadata is not part of its provider-scoped identity. @example drawingScopeKey(scope); */
 export function drawingScopeKey(scope: DrawingScope) {
-  return JSON.stringify([
-    scope.dashboardId,
-    scope.provider,
-    scope.listing.symbol,
-    scope.listing.venue ?? null,
-    scope.listing.currency,
-  ]);
+  return JSON.stringify([scope.dashboardId, providerListingKey(scope)]);
 }
 
 /** Read every page of drawings for a dashboard and provider. @example useQuery(drawingList(transport, scope)); */

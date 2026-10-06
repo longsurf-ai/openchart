@@ -29,10 +29,10 @@ function writeError(error: SqlError | EffectDrizzleQueryError) {
   if (
     isSqlError(cause) &&
     cause.reason._tag === "UniqueViolation" &&
-    cause.reason.constraint === "index 'drawing_scope_gesture_unique'"
+    cause.reason.constraint === "index 'drawing_listing_gesture_unique'"
   ) {
     const reason =
-      "Drawing data.id must be unique within its dashboard, provider and listing (symbol, venue, currency). Update the existing Drawing Resource or choose a new data.id.";
+      "Drawing data.id must be unique within its dashboard and provider-native listing. Update the existing Drawing Resource or choose a new data.id.";
     return new ResourceStateInvalid({
       resource: "drawing",
       reason,

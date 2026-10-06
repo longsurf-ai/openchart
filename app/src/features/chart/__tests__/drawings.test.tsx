@@ -125,7 +125,7 @@ it.each(["trend_line", "annotation"] as const)(
     const scope: DrawingScope = {
       dashboardId: "dsh_test",
       provider: ProviderId.make("test"),
-      listing: { symbol: "AAPL", currency: "USD" },
+      listing: { id: 10244, symbol: "SPCX", currency: "USD" },
     };
     const first = runtime("first"),
       second = runtime("second");
@@ -236,13 +236,11 @@ it.each(["trend_line", "annotation"] as const)(
         v2.ChartStateModel.drawingItems(state)[0]!.style.lineWidth = 5;
       }),
     );
-    view.rerender(
-      tree({ ...scope, listing: { symbol: "MSFT", currency: "USD" } }),
-    );
+    view.rerender(tree({ ...scope, listing: { ...scope.listing, id: 55090 } }));
     await waitFor(() =>
       expect(rows[0]!.data).toMatchObject({ style: { lineWidth: 5 } }),
     );
-    expect(rows[0]!.listing.symbol).toBe("AAPL");
+    expect(rows[0]!.listing.id).toBe(10244);
     await waitFor(() => expect(items(first)).toHaveLength(0));
     await waitFor(() =>
       expect(items(second)[0]!).toMatchObject({ style: { lineWidth: 5 } }),
