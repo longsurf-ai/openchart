@@ -2,6 +2,7 @@
 import type { OnboardingAction } from "./actions";
 import type { OnboardingView } from "./views";
 import { starterWorkflow } from "./workflows/starter/workflow";
+import { pineConversionWorkflow } from "./workflows/pine-conversion/workflow";
 
 /** One step: what brings the user to the thing it explains, and what it shows there. */
 export type OnboardingStep = {
@@ -25,6 +26,7 @@ export type OnboardingWorkflow = { readonly steps: readonly OnboardingStep[] };
  */
 export const onboardingWorkflows = {
   starter: starterWorkflow,
+  "pine-conversion": pineConversionWorkflow,
 } satisfies Record<string, OnboardingWorkflow>;
 
 /** A workflow this build can run. */

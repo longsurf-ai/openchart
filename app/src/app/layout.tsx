@@ -41,6 +41,7 @@ import type {
 import { useAppHost } from "@openchart/app/lib/host/host";
 
 import { LeftSidebar } from "./left-sidebar";
+import { usePineConversionOnboarding } from "./onboarding";
 import { OnboardingHost } from "./trellis/host";
 import { useOnboardingProgress } from "./trellis/progress";
 import { CloudOfferCard } from "@openchart/app/features/billing/components/cloud-offer-card";
@@ -79,9 +80,8 @@ function AppLayoutContent({
   const host = useAppHost();
   // The Cloud offer waits for billing access and never competes with onboarding.
   const account = useAccount(transport);
-  const onboarding = useOnboardingProgress(
-    (state) => state.workflow !== undefined,
-  );
+  const onOpenIndicators = usePineConversionOnboarding(transport);
+  const onboarding = useOnboardingProgress((state) => state.workflow);
   useEffect(
     () =>
       host.onBillingReturn(() => {
@@ -174,7 +174,11 @@ function AppLayoutContent({
                 }
               >
                 <WorkspaceFileMergeProvider>
-                  <IndicatorLibraryProvider transport={transport}>
+                  <IndicatorLibraryProvider
+                    transport={transport}
+                    onOpen={onOpenIndicators}
+                    suspended={onboarding === "pine-conversion"}
+                  >
                     <Outlet context={routeContext} />
                   </IndicatorLibraryProvider>
                 </WorkspaceFileMergeProvider>
@@ -205,7 +209,9 @@ function AppLayoutContent({
             <OnboardingHost transport={transport} />
             <CloudOfferCard
               transport={transport}
-              paused={onboarding || account.data?.status !== "signed-in"}
+              paused={
+                Boolean(onboarding) || account.data?.status !== "signed-in"
+              }
             />
           </WorkspaceFileNavigation.Provider>
         </UnsavedChangesProvider>

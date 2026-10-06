@@ -84,7 +84,7 @@ function OpenLibrary() {
   );
 }
 
-function mount() {
+function mount(onOpen?: () => void) {
   const transport = {
     url: "http://library.test",
     rpc: {
@@ -97,15 +97,24 @@ function mount() {
     defaultOptions: { queries: { retry: false } },
   });
   const context = AuiConfig({ modelContext: ModelContextClient() });
-  return render(
+  const content = (suspended = false) => (
     <QueryClientProvider client={queryClient}>
       <AuiProvider config={context}>
-        <IndicatorLibraryProvider transport={transport}>
+        <IndicatorLibraryProvider
+          transport={transport}
+          onOpen={onOpen}
+          suspended={suspended}
+        >
           <OpenLibrary />
         </IndicatorLibraryProvider>
       </AuiProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(content());
+  return {
+    ...view,
+    suspend: (value: boolean) => view.rerender(content(value)),
+  };
 }
 
 async function open(user: ReturnType<typeof userEvent.setup>) {
@@ -123,6 +132,37 @@ beforeEach(() => {
   mocks.create.mockResolvedValue({ id: "ses_library" });
   mocks.submit.mockResolvedValue(undefined);
   mocks.defaultWorkspace.mockResolvedValue("wsp_default");
+});
+
+test("notifies shell composition only when the library is explicitly opened", async () => {
+  const onOpen = vi.fn();
+  const user = userEvent.setup();
+  mount(onOpen);
+  expect(onOpen).not.toHaveBeenCalled();
+  await open(user);
+  expect(onOpen).toHaveBeenCalledTimes(1);
+  await user.type(
+    screen.getByRole("textbox", { name: "Search studies or create your own" }),
+    "EMA",
+  );
+  expect(onOpen).toHaveBeenCalledTimes(1);
+});
+
+test("shell onboarding temporarily hides the library, retaining its draft and restoring focus", async () => {
+  const onOpen = vi.fn();
+  const user = userEvent.setup();
+  const view = mount(onOpen);
+  const input = await open(user);
+  await user.type(input, "Keep my EMA draft");
+  view.suspend(true);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  view.suspend(false);
+  const resumed = await screen.findByRole("textbox", {
+    name: "Search studies or create your own",
+  });
+  expect(resumed).toHaveValue("Keep my EMA draft");
+  await waitFor(() => expect(resumed).toHaveFocus());
+  expect(onOpen).toHaveBeenCalledTimes(1);
 });
 
 test("typing searches without execution; IME Enter does nothing and Enter sends the original draft", async () => {
