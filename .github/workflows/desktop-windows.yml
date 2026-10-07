@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies using Git Bash
         run: just install --frozen-lockfile
       - name: Verify platform contracts and native integrations
-        run: just test-core platform/desktop/src/targets.test.ts platform/desktop/src/main.test.ts platform/desktop/src/squirrel.test.ts platform/desktop/scripts platform/desktop/tests/native-executable.test.ts server/models/onboarding common/models/src/providers/antigravity
+        run: just test-core platform/desktop/src/targets.test.ts platform/desktop/src/main.test.ts platform/desktop/src/squirrel.test.ts platform/desktop/scripts platform/desktop/tests/native-executable.test.ts server/models/onboarding common/models/src/providers/antigravity common/models/src/providers/claude-code/adapter/environment.test.ts
       - name: Build unsigned Windows installer and update packages
         id: build
         run: |
