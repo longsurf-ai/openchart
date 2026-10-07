@@ -70,6 +70,7 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           OPENCHART_WINDOWS_RUNTIME_PROBE_REPORT: platform/desktop/.artifacts/antigravity-windows-probe.json
+          OPENCHART_WINDOWS_RUNTIME_PROBE_RETAIN_FIXTURE: "1"
         run: just desktop-windows-probe
       - name: Verify relocated production package
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

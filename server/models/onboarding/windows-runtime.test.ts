@@ -77,7 +77,6 @@ test.skipIf(
     const report = {
       probe: "antigravity-windows-conpty",
       phase: "environment" as ProbePhase,
-      fixtureCleanupOwner: "parent-process",
       version: PROVIDER_MANIFEST[ANTIGRAVITY]["win32-x64"]!.version,
       downloadAndVersionVerified: false,
       terminalStarted: false,
@@ -85,7 +84,7 @@ test.skipIf(
       codePromptSeen: false,
       networkFailureSeen: false,
       authenticationPromptReady: false,
-      cleanupComplete: false,
+      terminalExitObserved: false,
       elapsedMilliseconds: 0,
       failure: null as string | null,
     };
@@ -106,7 +105,6 @@ test.skipIf(
     let terminal: IPty | undefined;
     let outputListener: { dispose(): void } | undefined;
     let exitListener: { dispose(): void } | undefined;
-    let exited = false;
     let resolveExit!: () => void;
     const exit = new Promise<void>((resolve) => {
       resolveExit = resolve;
@@ -190,7 +188,7 @@ test.skipIf(
             }
           });
           exitListener = terminal.onExit(() => {
-            exited = true;
+            report.terminalExitObserved = true;
             resolveExit();
           });
           await checkpoint("authentication");
@@ -209,7 +207,7 @@ test.skipIf(
           if (!report.authenticationPromptReady) {
             report.failure = report.networkFailureSeen
               ? "cli-network-failure"
-              : exited
+              : report.terminalExitObserved
                 ? "cli-exited-before-authentication-prompt"
                 : report.authorizationUrlSeen || report.codePromptSeen
                   ? "incomplete-authentication-prompt"
@@ -225,8 +223,12 @@ test.skipIf(
     } finally {
       try {
         await checkpoint("terminal-cleanup");
-        if (terminal) await stopWindowsTerminal(terminal, exit, () => exited);
-        report.cleanupComplete = !terminal || exited;
+        if (terminal)
+          await stopWindowsTerminal(
+            terminal,
+            exit,
+            () => report.terminalExitObserved,
+          );
       } catch {
         report.failure = "terminal-cleanup-failed";
       } finally {
@@ -243,11 +245,11 @@ test.skipIf(
     expect(report).toMatchObject({
       downloadAndVersionVerified: true,
       authenticationPromptReady: true,
-      cleanupComplete: true,
+      terminalExitObserved: true,
     });
   },
   // Preserve the 30s install signal, 20s prompt wait and 5s+2s+2s terminal
   // cleanup timers, allowing overhead for native calls, filesystem and reports.
-  // The parent command removes its fixture after this native owner process exits.
+  // The parent command reports whether it removed the fixture or retained it for CI teardown.
   90_000,
 );

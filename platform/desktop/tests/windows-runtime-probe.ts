@@ -1,13 +1,30 @@
-// Purpose: Own the live Windows probe's fixture until its Vitest/native process has exited.
+// Purpose: Scope the live Windows probe's fixture to its local owner or an explicitly opted-in hosted CI job.
 import { execFile, spawn } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, win32 } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 
 if (process.platform !== "win32")
   throw new Error("The Windows runtime probe requires Windows.");
+
+const retainFixture =
+  process.env.OPENCHART_WINDOWS_RUNTIME_PROBE_RETAIN_FIXTURE === "1";
+let fixtureParent = tmpdir();
+if (retainFixture) {
+  const runnerTemp = process.env.RUNNER_TEMP;
+  if (
+    process.env.GITHUB_ACTIONS !== "true" ||
+    process.env.RUNNER_ENVIRONMENT !== "github-hosted" ||
+    !runnerTemp ||
+    !isAbsolute(runnerTemp)
+  )
+    throw new Error(
+      "Retaining a probe fixture requires GitHub-hosted Actions and an absolute RUNNER_TEMP.",
+    );
+  fixtureParent = runnerTemp;
+}
 
 const require = createRequire(import.meta.url);
 const vitest = join(
@@ -15,7 +32,7 @@ const vitest = join(
   "vitest.mjs",
 );
 const directory = await mkdtemp(
-  join(tmpdir(), "openchart-windows-antigravity-"),
+  join(fixtureParent, "openchart-windows-antigravity-"),
 );
 const areas = new Set([
   "home",
@@ -56,12 +73,11 @@ for (;;) {
 }
 `;
 let testExitCode = 1;
-let fixtureCleanupComplete = false;
+let fixtureDisposition: "removed" | "retained-for-runner-teardown" | "failed" =
+  retainFixture ? "retained-for-runner-teardown" : "failed";
 let fixtureCleanupDiagnostic:
   | { code: string; syscall: string; area: string; timedOut: boolean }
   | undefined;
-let processesReferencingFixture:
-  Array<{ name: string; pid: number }> | undefined;
 try {
   const child = spawn(
     process.execPath,
@@ -83,108 +99,54 @@ try {
 } catch {
   console.error("The Windows runtime probe process could not complete.");
 } finally {
-  // The process that loaded node-pty is gone. A separate, bounded cleanup
-  // process removes only this wrapper's unique fixture, never a caller's path.
-  try {
-    await promisify(execFile)(
-      process.execPath,
-      ["--input-type=module", "-e", cleanupProgram, directory],
-      { windowsHide: true, timeout: 15_000, maxBuffer: 16_384 },
-    );
-    fixtureCleanupComplete = true;
-  } catch (cause) {
-    const failure = cause as { stderr?: string; killed?: boolean };
-    fixtureCleanupDiagnostic = {
-      code: "UNKNOWN",
-      syscall: "unknown",
-      area: "other",
-      timedOut: failure.killed === true,
-    };
+  // Browser authentication can outlive the CLI. Hosted CI explicitly leaves its
+  // fixture for job/VM teardown; local use must still prove bounded removal.
+  if (!retainFixture) {
     try {
-      const last = JSON.parse(
-        failure.stderr?.trim().split("\n").at(-1) ?? "null",
-      ) as { code?: unknown; syscall?: unknown; area?: unknown } | null;
-      if (typeof last?.code === "string" && /^[A-Z_]{1,40}$/.test(last.code))
-        fixtureCleanupDiagnostic.code = last.code;
-      if (
-        typeof last?.syscall === "string" &&
-        /^[a-z]{1,24}$/.test(last.syscall)
-      )
-        fixtureCleanupDiagnostic.syscall = last.syscall;
-      if (typeof last?.area === "string" && areas.has(last.area))
-        fixtureCleanupDiagnostic.area = last.area;
-    } catch {
-      /* A stalled filesystem call may have returned no error yet. */
-    }
-    console.error(
-      "The Windows runtime probe fixture could not be removed:",
-      JSON.stringify(fixtureCleanupDiagnostic),
-    );
-    try {
-      // Inspect only processes referencing this fixture. Never emit executable
-      // paths or command lines, which can contain browser authorization URLs.
-      const { stdout } = await promisify(execFile)(
-        win32.join(
-          process.env.SystemRoot ?? "C:\\Windows",
-          "System32",
-          "WindowsPowerShell",
-          "v1.0",
-          "powershell.exe",
-        ),
-        [
-          "-NoLogo",
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          String.raw`
-$ErrorActionPreference = 'Stop'
-$root = $env:OPENCHART_WINDOWS_RUNTIME_PROBE_DIRECTORY
-$found = @(Get-CimInstance Win32_Process | Where-Object {
-  $_.ProcessId -ne $PID -and (
-    ($_.CommandLine -and $_.CommandLine.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
-    ($_.ExecutablePath -and $_.ExecutablePath.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0)
-  )
-} | Select-Object -First 20 @{Name='name';Expression={$_.Name}}, @{Name='pid';Expression={$_.ProcessId}})
-ConvertTo-Json -InputObject $found -Compress
-`,
-        ],
-        {
-          env: {
-            ...process.env,
-            OPENCHART_WINDOWS_RUNTIME_PROBE_DIRECTORY: directory,
-          },
-          windowsHide: true,
-          timeout: 5_000,
-          maxBuffer: 16_384,
-        },
+      await promisify(execFile)(
+        process.execPath,
+        ["--input-type=module", "-e", cleanupProgram, directory],
+        { windowsHide: true, timeout: 15_000, maxBuffer: 16_384 },
       );
-      const records = JSON.parse(stdout) as Array<{
-        name: string;
-        pid: number;
-      }>;
-      if (Array.isArray(records))
-        processesReferencingFixture = records
-          .filter(
-            (record) =>
-              typeof record?.name === "string" &&
-              /^[A-Za-z0-9_. -]{1,80}$/.test(record.name) &&
-              Number.isSafeInteger(record.pid) &&
-              record.pid > 0,
-          )
-          .map(({ name, pid }) => ({ name, pid }));
-    } catch {
-      console.error("Fixture process reference inspection was unavailable.");
+      fixtureDisposition = "removed";
+    } catch (cause) {
+      const failure = cause as { stderr?: string; killed?: boolean };
+      fixtureCleanupDiagnostic = {
+        code: "UNKNOWN",
+        syscall: "unknown",
+        area: "other",
+        timedOut: failure.killed === true,
+      };
+      try {
+        const last = JSON.parse(
+          failure.stderr?.trim().split("\n").at(-1) ?? "null",
+        ) as { code?: unknown; syscall?: unknown; area?: unknown } | null;
+        if (typeof last?.code === "string" && /^[A-Z_]{1,40}$/.test(last.code))
+          fixtureCleanupDiagnostic.code = last.code;
+        if (
+          typeof last?.syscall === "string" &&
+          /^[a-z]{1,24}$/.test(last.syscall)
+        )
+          fixtureCleanupDiagnostic.syscall = last.syscall;
+        if (typeof last?.area === "string" && areas.has(last.area))
+          fixtureCleanupDiagnostic.area = last.area;
+      } catch {
+        /* A stalled filesystem call may have returned no error yet. */
+      }
+      console.error(
+        "The Windows runtime probe fixture could not be removed:",
+        JSON.stringify(fixtureCleanupDiagnostic),
+      );
     }
   }
   console.info(
     "Antigravity Windows probe owner:",
     JSON.stringify({
       testExitCode,
-      fixtureCleanupComplete,
+      fixtureDisposition,
       fixtureCleanupDiagnostic,
-      processesReferencingFixture,
     }),
   );
 }
 process.exitCode =
-  testExitCode !== 0 ? testExitCode : fixtureCleanupComplete ? 0 : 1;
+  testExitCode !== 0 ? testExitCode : fixtureDisposition === "failed" ? 1 : 0;

@@ -135,15 +135,33 @@ be recorded as such. Smoke results and screenshots live under
 `platform/desktop/.artifacts`.
 
 On Windows, `just desktop-windows-probe` checks the pinned Antigravity CLI's
-authorization URL and code prompt under real ConPTY without authenticating. The
-probe verifies terminal shutdown; its parent command removes the isolated fixture
-only after the Vitest/native process exits, with a 15-second cleanup deadline.
-Either probe failure or fixture cleanup failure fails the command. Direct opt-in
-test execution requires `OPENCHART_WINDOWS_RUNTIME_PROBE_DIRECTORY` naming an
-existing empty directory whose parent process owns cleanup. Status checkpoints
-contain no authorization URLs, codes or credentials. Earlier in-process removal
-stalled after terminal shutdown; the underlying Windows filesystem cause remains
-unproven.
+authorization URL and code prompt under real ConPTY without authenticating.
+`terminalExitObserved` proves that the native exit callback fired, not that all
+internal PTY resources were released. Local use removes the fixture after the
+Vitest process exits: whole-removal retries have one 10-second window and a
+15-second process deadline. Probe failures and local cleanup failures fail the
+command. Direct opt-in test execution requires
+`OPENCHART_WINDOWS_RUNTIME_PROBE_DIRECTORY` naming an existing empty directory
+whose parent process owns cleanup.
+
+The hosted Windows workflow explicitly sets
+`OPENCHART_WINDOWS_RUNTIME_PROBE_RETAIN_FIXTURE=1`. This mode requires
+`GITHUB_ACTIONS=true`, `RUNNER_ENVIRONMENT=github-hosted`, and an absolute
+`RUNNER_TEMP`, using GitHub's [documented environment contract](https://docs.github.com/en/actions/reference/workflows-and-actions/variables).
+It creates a unique fixture under `RUNNER_TEMP` and reports
+`fixtureDisposition=retained-for-runner-teardown`. The directory belongs to the
+ephemeral job/VM lifetime, and in-probe directory cleanup is **not verified**.
+GitHub documents temporary-directory cleanup at job boundaries, subject to
+filesystem permissions, and [fresh hosted VMs](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners).
+Any probe/test failure still fails the command. Local and self-hosted use cannot
+enable this mode. Status checkpoints contain no authorization URLs, codes or
+credentials.
+
+The pinned CLI opens an external browser during authentication. A persistent busy
+file was observed under the isolated `LOCALAPPDATA` after terminal exit; its OS
+owner remains unproven. Manual Windows acceptance must still cover repeated
+sign-in/cancellation, application-owned process/handle lifetimes, and eventual
+temporary-directory release after the relevant applications exit.
 
 Automated smoke uses fake model accounts. Live Google/Clerk sign-in, real provider
 credentials, notifications and actual upgrades remain separate acceptance checks.
