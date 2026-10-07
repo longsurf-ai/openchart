@@ -5,6 +5,11 @@ and Windows Intel/AMD (`win32-x64`). Build both Mac targets on a signing Mac and
 Windows on Windows. Run repository commands from the root. Packaging, verification
 and publication are separate steps; merging a PR does not publish an update.
 
+The pinned [Electron 44 runtime](https://github.com/electron/electron/blob/v44.2.0/README.md#platform-support)
+requires macOS 13 or newer, or Windows 10 or newer. Native provider prerequisites
+and the tested OS matrix belong in each release's validation record; an Electron
+platform binary alone does not prove every provider on every supported OS release.
+
 ## Prerequisites
 
 Use the Node version in `.node-version`, Bun `1.4.2`, and `just`. Windows builds
