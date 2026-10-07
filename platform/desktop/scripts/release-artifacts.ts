@@ -26,6 +26,31 @@ export const BuildReceipt = z.strictObject({
 });
 export type BuildReceipt = z.infer<typeof BuildReceipt>;
 
+/**
+ * Decodes Squirrel's UTF-8 RELEASES file, including Windows BOM/CRLF output.
+ * Requires flat NuGet filenames, SHA-1 digests and safe integer byte counts;
+ * malformed/empty manifests throw before publication. Does not alter feed bytes.
+ * @example parseSquirrelReleases('0123456789012345678901234567890123456789 OpenChart-1.2.3-full.nupkg 123');
+ */
+export function parseSquirrelReleases(source: string) {
+  if (!source.trim()) throw new Error("Windows RELEASES is empty");
+  return source
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => {
+      const match = /^([a-f0-9]{40})\s+([A-Za-z0-9._-]+\.nupkg)\s+(\d+)$/i.exec(
+        line.trim(),
+      );
+      if (!match || !Number.isSafeInteger(Number(match[3])))
+        throw new Error("Invalid Squirrel RELEASES entry");
+      return {
+        sha1: match[1]!.toLowerCase(),
+        name: match[2]!,
+        size: Number(match[3]),
+      };
+    });
+}
+
 /** Streams a file into a SHA-256 digest; stream errors reject and the stream closes itself. @example await sha256('/build/app.zip'); */
 export async function sha256(file: string): Promise<string> {
   const hash = createHash("sha256");

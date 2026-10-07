@@ -4,10 +4,12 @@ import { CLAUDE_CODE, CODEX } from "@openchart/models/model-tiers";
 import { createInstallations } from "@openchart/server/models/onboarding/installation";
 import { PROVIDER_MANIFEST } from "@openchart/server/models/onboarding/manifest";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import {
   cp,
   mkdir,
   mkdtemp,
+  open,
   readdir,
   readFile,
   realpath,
@@ -25,6 +27,7 @@ import {
   relative,
 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import {
   _electron,
   expect,
@@ -38,6 +41,74 @@ assert(
   sourceExecutable && isAbsolute(sourceExecutable),
   "Supply an absolute Electron executable path",
 );
+const buildHost = `${process.platform}-${process.arch}`;
+// Select managed fixture identities from the supplied executable. Reading the
+// single Mach-O slice and Windows PE header never executes application code
+// and does not depend on Electron's RunAsNode fuse.
+let runtime: { platform: string; arch: string };
+if (process.platform === "darwin") {
+  const { stdout } = await promisify(execFile)(
+    "/usr/bin/lipo",
+    ["-archs", sourceExecutable],
+    { timeout: 10_000 },
+  );
+  const architectures = stdout.trim().split(/\s+/);
+  assert.equal(
+    architectures.length,
+    1,
+    "Smoke requires one supported Mac architecture",
+  );
+  const arch = architectures[0] === "x86_64" ? "x64" : architectures[0];
+  assert(
+    arch === "arm64" || arch === "x64",
+    "Unsupported Mac executable architecture",
+  );
+  runtime = { platform: "darwin", arch };
+} else if (process.platform === "win32") {
+  const file = await open(sourceExecutable, "r");
+  try {
+    const header = Buffer.alloc(64);
+    const dos = await file.read(header, 0, header.length, 0);
+    assert.equal(dos.bytesRead, 64, "Truncated Windows executable header");
+    assert.equal(
+      header.toString("ascii", 0, 2),
+      "MZ",
+      "Expected a Windows executable",
+    );
+    const signature = Buffer.alloc(6);
+    const pe = await file.read(
+      signature,
+      0,
+      signature.length,
+      header.readUInt32LE(60),
+    );
+    assert.equal(pe.bytesRead, 6, "Truncated Windows PE signature");
+    assert.equal(
+      signature.readUInt32LE(0),
+      0x4550,
+      "Expected a Windows PE signature",
+    );
+    assert.equal(
+      signature.readUInt16LE(4),
+      0x8664,
+      "Smoke requires a Windows x64 executable",
+    );
+    runtime = { platform: "win32", arch: "x64" };
+  } finally {
+    await file.close();
+  }
+} else throw new Error("Desktop release smoke supports macOS and Windows");
+assert.equal(
+  runtime.platform,
+  process.platform,
+  "Smoke requires the executable's native operating system",
+);
+assert.equal(
+  typeof runtime.arch,
+  "string",
+  "Electron did not report its architecture",
+);
+const runtimeTarget = `${runtime.platform}-${runtime.arch}`;
 const environment = process.argv[3] ?? "production";
 assert(environment === "development" || environment === "production");
 const keychain = process.argv[4] ?? "mock";
@@ -54,7 +125,7 @@ const profile = await realpath(
   await mkdtemp(join(tmpdir(), "openchart-desktop-smoke-")),
 );
 const sourceBundle =
-  process.platform === "darwin"
+  runtime.platform === "darwin"
     ? dirname(dirname(dirname(sourceExecutable)))
     : dirname(sourceExecutable);
 const bundle = join(profile, basename(sourceBundle));
@@ -448,7 +519,7 @@ async function launch(): Promise<Page> {
     args: [
       `--user-data-dir=${userData}`,
       `--openchart-home=${home}`,
-      ...(process.platform === "darwin" && keychain === "mock"
+      ...(runtime.platform === "darwin" && keychain === "mock"
         ? ["--use-mock-keychain"]
         : []),
     ],
@@ -465,16 +536,24 @@ async function launch(): Promise<Page> {
     processErrors.push(chunk.toString());
   });
   assert(await application.evaluate(({ app }) => app.isPackaged));
+  assert.deepEqual(
+    await application.evaluate(() => ({
+      platform: process.platform,
+      arch: process.arch,
+    })),
+    runtime,
+    "Launched Electron must match the executable used to seed native providers",
+  );
   const appPath = await application.evaluate(({ app }) => app.getAppPath());
   assert.equal(
     appPath,
     join(
       bundle,
-      process.platform === "darwin" ? "Contents/Resources" : "resources",
+      runtime.platform === "darwin" ? "Contents/Resources" : "resources",
       "app.asar",
     ),
   );
-  if (process.platform === "win32") {
+  if (runtime.platform === "win32") {
     // Resolve from the relocated ASAR inside the real Electron main process:
     // this verifies node-pty's native addon, DLL and worker packaging together.
     packagedConpty = await application.evaluate(({ app }) => {
@@ -558,7 +637,7 @@ async function launch(): Promise<Page> {
 
 /** Checks Mac header spacing and clicks its controls with the sidebar open and closed. */
 async function verifyMacHeader(page: Page, route: "chat" | "settings") {
-  if (process.platform !== "darwin") return;
+  if (runtime.platform !== "darwin") return;
   const header = page.locator(".jan-chat-header");
   const sidebarHeader = page.locator(
     '[data-sidebar="header"] > div:first-child',
@@ -599,16 +678,15 @@ try {
   await mkdir(home, { recursive: true });
   await mkdir(nativeState, { recursive: true });
   await mkdir(nativeBin, { recursive: true });
-  const platform = `${process.platform}-${process.arch}`;
   await writeFile(
     join(nativeState, "version"),
-    PROVIDER_MANIFEST[CODEX][platform]!.version,
+    PROVIDER_MANIFEST[CODEX][runtimeTarget]!.version,
   );
   const fixture = await readFile(
     new URL("./native-cli-fixture.cjs", import.meta.url),
     "utf8",
   );
-  const executableSuffix = process.platform === "win32" ? ".exe" : "";
+  const executableSuffix = runtime.platform === "win32" ? ".exe" : "";
   await writeNativeExecutable(
     join(nativeBin, `codex${executableSuffix}`),
     fixture,
@@ -616,16 +694,20 @@ try {
   // Claude remains explicitly signed out; no real native account is used.
   await writeNativeExecutable(
     join(nativeBin, `claude${executableSuffix}`),
-    `console.log(process.argv.includes("--version") ? "${PROVIDER_MANIFEST[CLAUDE_CODE][platform]!.version} (Claude Code)" : JSON.stringify({loggedIn: false}));`,
+    `console.log(process.argv.includes("--version") ? "${PROVIDER_MANIFEST[CLAUDE_CODE][runtimeTarget]!.version} (Claude Code)" : JSON.stringify({loggedIn: false}));`,
   );
   // Seed completed managed fixtures before startup reconciliation can download real CLIs.
-  const installations = createInstallations(join(home, "model-providers"));
+  const installations = createInstallations(
+    join(home, "model-providers"),
+    PROVIDER_MANIFEST,
+    runtimeTarget,
+  );
   for (const [providerID, filename] of [
     [CODEX, "codex"],
     [CLAUDE_CODE, "claude"],
   ] as const) {
     const target = installations.executables[providerID];
-    const artifact = PROVIDER_MANIFEST[providerID][platform]!;
+    const artifact = PROVIDER_MANIFEST[providerID][runtimeTarget]!;
     const root = target.slice(0, -artifact.executable.length);
     await mkdir(dirname(target), { recursive: true });
     await cp(join(nativeBin, `${filename}${executableSuffix}`), target);
@@ -658,12 +740,12 @@ try {
   assert.equal(modelResponse.status(), 200);
   assert(Array.isArray((await modelResponse.json()).result.data));
   const windowButtons =
-    process.platform === "darwin"
+    runtime.platform === "darwin"
       ? await application!.evaluate(({ BrowserWindow }) =>
           BrowserWindow.getAllWindows()[0]!.getWindowButtonPosition(),
         )
       : undefined;
-  if (process.platform === "darwin")
+  if (runtime.platform === "darwin")
     assert.deepEqual(windowButtons, { x: 20, y: 23 });
   const chatHeader = await verifyMacHeader(page, "chat");
 
@@ -772,7 +854,7 @@ try {
     return app.getAppMetrics().find((metric) => metric.pid === pid)?.sandboxed;
   });
   // Electron exposes OS sandbox status on macOS and Windows.
-  if (process.platform !== "linux") assert.equal(isolation, true);
+  assert.equal(isolation, true);
   assert.deepEqual(
     await page.evaluate("({require: typeof require, process: typeof process})"),
     {
@@ -835,6 +917,8 @@ try {
 
   const result = {
     executable: sourceExecutable,
+    runtimeTarget,
+    buildHost,
     keychain,
     relocatedBundle: bundle,
     packagedConpty,

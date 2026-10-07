@@ -16,7 +16,11 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { z } from "zod";
-import { BuildReceipt, sha256 } from "./release-artifacts.ts";
+import {
+  BuildReceipt,
+  sha256,
+  parseSquirrelReleases,
+} from "./release-artifacts.ts";
 import {
   parseTarget,
   releaseRoot,
@@ -154,19 +158,11 @@ export async function preparePublication(
       `${target}: installer or feed missing`,
     );
     if (windows) {
-      const entries = (await readFile(join(folder, feed), "utf8"))
-        .trim()
-        .split(/\r?\n/);
-      assert(entries.length > 0, "Windows RELEASES is empty");
+      const entries = parseSquirrelReleases(
+        await readFile(join(folder, feed), "utf8"),
+      );
       const referenced = new Set<string>();
-      for (const entry of entries) {
-        const match = /^([a-f0-9]{40}) ([A-Za-z0-9._-]+\.nupkg) (\d+)$/i.exec(
-          entry,
-        );
-        assert(match, "Invalid Squirrel RELEASES entry");
-        const digest = match[1]!;
-        const name = match[2]!;
-        const size = match[3]!;
+      for (const { sha1: digest, name, size } of entries) {
         assert(
           name === `OpenChart-${version}-full.nupkg`,
           "Unexpected Windows update package/version",

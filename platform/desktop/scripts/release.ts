@@ -1,9 +1,12 @@
 // Purpose: Turn a notarized app into installable downloads and Electron's static update feed.
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
   mkdir,
   readFile,
   readdir,
+  stat,
   mkdtemp,
   rename,
   rm,
@@ -19,7 +22,10 @@ import {
   targetPlatform,
   type DesktopTarget,
 } from "../src/targets.ts";
-import { writeBuildReceipt } from "./release-artifacts.ts";
+import {
+  parseSquirrelReleases,
+  writeBuildReceipt,
+} from "./release-artifacts.ts";
 import { verifyNativeFiles } from "./native-files.ts";
 import { windowsSigning } from "./windows-signing.ts";
 import { promisify } from "node:util";
@@ -239,11 +245,21 @@ async function createWindowsRelease(
       );
     const feed = await readFile(join(output, "RELEASES"), "utf8");
     const packageName = files.find((name) => name.endsWith("-full.nupkg"))!;
+    const entries = parseSquirrelReleases(feed);
+    if (entries.length !== 1 || entries[0]!.name !== packageName)
+      throw new Error(
+        `Squirrel feed does not identify ${packageName}: ${JSON.stringify(entries)}`,
+      );
+    const packageFile = join(output, packageName);
+    const digest = createHash("sha1");
+    for await (const chunk of createReadStream(packageFile))
+      digest.update(chunk);
     if (
-      !feed.split(/\r?\n/).some((line) => line.split(/\s+/)[1] === packageName)
+      digest.digest("hex") !== entries[0]!.sha1 ||
+      (await stat(packageFile)).size !== entries[0]!.size
     )
       throw new Error(
-        "Squirrel feed does not identify the generated full package",
+        "Squirrel feed checksum or size does not match the update package",
       );
     if (signing === "signed") {
       // Squirrel modifies its updater while releasifying. Verify the final payload,

@@ -133,13 +133,16 @@ describe("Antigravity native configuration", () => {
 });
 
 describe("Antigravity native relay", () => {
+  // Cold system PowerShell startup on a shared runner is native integration;
+  // Vitest's five-second default is not a product latency contract. The close
+  // helper still bounds the process wait to ten seconds inside this deadline.
   it("exits successfully without a request's environment", async () => {
     const child = relay({});
     const output: Buffer[] = [];
     child.stdout.on("data", (chunk: Buffer) => output.push(chunk));
     expect(await closed(child)).toEqual([0, null]);
     expect(Buffer.concat(output)).toHaveLength(0);
-  });
+  }, 15_000);
 
   it("copies raw bytes in both directions after the token line", async () => {
     const host = await rawHost();
