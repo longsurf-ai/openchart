@@ -54,6 +54,8 @@ export interface AntigravityLanguageModelOptions {
   continuation: Continuation;
   /** Aborts every request when the provider is disposed. */
   disposal: AbortSignal;
+  /** The provider awaits these request acquisitions and child-process lifetimes during disposal. */
+  pendingProcesses: Set<Promise<void>>;
 }
 
 /**
@@ -81,6 +83,27 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
   ): Promise<Awaited<ReturnType<LanguageModelV4["doStream"]>>> {
     call.abortSignal?.throwIfAborted();
     this.options.disposal.throwIfAborted();
+    let release!: () => void;
+    const lifetime = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.options.pendingProcesses.add(lifetime);
+    const closed = () => {
+      this.options.pendingProcesses.delete(lifetime);
+      release();
+    };
+    try {
+      return await this.startStream(call, closed);
+    } catch (error) {
+      closed();
+      throw error;
+    }
+  }
+
+  private async startStream(
+    call: LanguageModelV4CallOptions,
+    closed: () => void,
+  ): Promise<Awaited<ReturnType<LanguageModelV4["doStream"]>>> {
     const request =
       (await parseProviderOptions({
         provider: ANTIGRAVITY_PROVIDER,
@@ -154,7 +177,6 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
       if (settled) return;
       settled = true;
       call.abortSignal?.removeEventListener("abort", interrupt);
-      this.options.disposal.removeEventListener("abort", interrupt);
       host?.close();
       finish();
     };
@@ -182,6 +204,11 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
         finished: (id, name, output, isError) =>
           translator.hostToolFinished(id, name, output, isError),
       });
+    }
+    if (call.abortSignal?.aborted || this.options.disposal.aborted) {
+      host?.close();
+      call.abortSignal?.throwIfAborted();
+      this.options.disposal.throwIfAborted();
     }
     const child = spawn(executable, args, {
       cwd: request.cwd,
@@ -220,6 +247,9 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
     });
     const interrupt = () => {
       translator.markInterrupted();
+      // Release the relay as well: it may otherwise keep inherited pipes open
+      // while the CLI is waiting for a tool response or shutting down.
+      host?.close();
       if (interrupted || !running()) return;
       interrupted = true;
       terminate("SIGINT");
@@ -276,8 +306,10 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
     child.on("close", () => {
       clearTimeout(killTimer);
       clearTimeout(closeTimer);
+      this.options.disposal.removeEventListener("abort", interrupt);
       lines.close();
       translator.end(stderr.trim());
+      closed();
     });
     return {
       stream,

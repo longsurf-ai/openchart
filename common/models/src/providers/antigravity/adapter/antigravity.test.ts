@@ -1,5 +1,12 @@
 // Purpose: Drives the Antigravity adapter against a scripted fake CLI through the real AI SDK stream, conformer, and MCP relay.
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import {
   spawn,
   type ExecFileOptions,
@@ -58,6 +65,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 const FAKE_CLI = `
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import readline from "node:readline";
 
 const dir = process.env.FAKE_AGY_DIR;
@@ -69,6 +77,7 @@ process.on("SIGINT", () => { interrupted = true; });
 let stdin = "";
 for await (const chunk of process.stdin) stdin += chunk;
 fs.appendFileSync(dir + "/calls.jsonl", JSON.stringify({
+  pid: process.pid,
   argv: process.argv.slice(2),
   cwd: process.cwd(),
   stdin,
@@ -80,8 +89,10 @@ async function callTool(name, args) {
   const config = JSON.parse(fs.readFileSync(
     process.env.HOME + "/.gemini/config/mcp_config.json", "utf8")).mcpServers.openchart;
   const relay = spawn(config.command, config.args, { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+  const relayClosed = once(relay, 'close');
   const pending = new Map();
-  readline.createInterface({ input: relay.stdout }).on("line", (line) => {
+  const lines = readline.createInterface({ input: relay.stdout });
+  lines.on("line", (line) => {
     const message = JSON.parse(line);
     pending.get(message.id)?.(message);
   });
@@ -96,7 +107,10 @@ async function callTool(name, args) {
   const listed = await request("tools/list", {});
   const called = await request("tools/call", { name, arguments: args });
   relay.stdin.end();
+  lines.close();
+  relay.stdout.destroy();
   relay.kill();
+  await relayClosed;
   fs.appendFileSync(dir + "/mcp.jsonl", JSON.stringify({ initialize, unknown, listed, called }) + "\\n");
 }
 
@@ -114,6 +128,7 @@ for (const step of scenario) {
     fs.writeFileSync(dir + '/descendant.pid', String(descendant.pid));
   }
   else if (step.untilInterrupted) while (!interrupted) await new Promise((r) => setTimeout(r, 5));
+  else if (step.delayAfterInterrupt) await new Promise((r) => setTimeout(r, step.delayAfterInterrupt));
   else if (step.exit !== undefined) process.exit(step.exit);
 }
 `;
@@ -161,6 +176,7 @@ async function script(...scenarios: Step[][]) {
 
 /** One fake CLI run as it recorded itself. */
 interface CliRun {
+  pid: number;
   argv: string[];
   cwd: string;
   stdin: string;
@@ -348,10 +364,8 @@ describe("Antigravity adapter", () => {
       },
     });
     const [call] = await records<CliRun>("calls.jsonl");
+    expect(await realpath(call!.cwd)).toBe(await realpath(directory));
     expect(call).toMatchObject({
-      cwd: await import("node:fs/promises").then((fs) =>
-        fs.realpath(directory),
-      ),
       relay: false,
       autoUpdate: "true",
       argv: [
@@ -1035,5 +1049,37 @@ describe("Antigravity adapter", () => {
     await provider.dispose();
     expect(() => provider.languageModel("gemini-3.1-pro")).toThrow(/disposed/);
     await expect(provider.discoverModels()).rejects.toThrow(/disposed/);
+  });
+
+  it("disposal waits for a CLI that remains alive after its final stream result", async () => {
+    await script([
+      ...reply("finished"),
+      { untilInterrupted: true },
+      { delayAfterInterrupt: 100 },
+    ]);
+    const { provider, model } = setup();
+    const { stream } = await model.doStream({
+      prompt: [user("finish")],
+    } as LanguageModelV4CallOptions);
+    expect((await drain(stream)).at(-1)).toMatchObject({
+      type: "finish",
+      finishReason: { unified: "stop" },
+    });
+    const [call] = await records<CliRun>("calls.jsonl");
+    expect(() => process.kill(call!.pid, 0)).not.toThrow();
+    await provider.dispose();
+    expect(() => process.kill(call!.pid, 0)).toThrow();
+  });
+
+  it("disposal awaits in-flight stream acquisition without spawning after disposal", async () => {
+    const { provider, model } = setup();
+    const pending = Promise.resolve(
+      model.doStream({ prompt: [user("start")] } as LanguageModelV4CallOptions),
+    ).catch((error: unknown) => error);
+    await provider.dispose();
+    expect(await pending).toMatchObject({
+      message: "Antigravity provider is disposed",
+    });
+    expect(await records<CliRun>("calls.jsonl")).toEqual([]);
   });
 });

@@ -42,12 +42,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: vendor/tea/package-lock.json
       - name: Install Tea's supported npm version
         run: npm install --global npm@11.11.1
       - uses: extractions/setup-just@v2
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.2"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: desktop-bun-${{ runner.os }}-
       - name: Install dependencies using Git Bash
         run: just install --frozen-lockfile
       - name: Verify platform contracts and native integrations
