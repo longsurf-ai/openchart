@@ -52,9 +52,9 @@ Component-private hooks stay beside their component. Features never import each 
   App shares native operations through AppHostProvider; consumers use useAppHost.
   Use `just desktop` and Computer Use for UI debugging; there is no browser entry.
   `features/account` owns
-  the account gate, sidebar Profile link, read-only Clerk identity and local Auth handoff.
-  The workspace opens once a Clerk session exists and no other user's local
-  account is present; the Cloud key handoff finishes in the background.
+  the sidebar Profile link, the Clerk sign-in modal button, read-only Clerk identity and local Auth handoff.
+  The workspace never waits for an account; a Clerk session's Cloud key handoff
+  finishes in the background, and Cloud consumers wait for the local account.
   Native Clerk adapters stay in Desktop. MSW is test-only.
 - `lib/transport/transport.ts` owns the backend connection (origin, optional token), tRPC,
   SSE, and one shared HoseClient. Feed and Tea own only their requests/channels;

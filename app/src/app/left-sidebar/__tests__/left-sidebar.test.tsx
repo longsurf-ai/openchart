@@ -12,6 +12,7 @@ import { testAppHost } from "@openchart/app/testing/test-utils";
 
 vi.mock("@clerk/react", () => ({
   UserAvatar: () => <span />,
+  useClerk: () => ({ openSignIn: vi.fn() }),
   useUser: () => ({ user: { fullName: "Xiaowen Zhang" } }),
 }));
 // The sections above the footer have their own tests.

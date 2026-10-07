@@ -7,6 +7,8 @@ import type {
 } from "@openchart/app/lib/transport/transport";
 import { Button } from "@openchart/app/components/ui/button";
 import { Switch } from "@openchart/app/components/ui/form/switch";
+import { SignInButton } from "@openchart/app/features/account/sign-in-button";
+import { useAccount } from "@openchart/app/features/account/use-account";
 
 const accessKey = ["provider-access"] as const;
 const labels = {
@@ -27,6 +29,7 @@ export function useRefreshProviderAccess(transport: AppTransport) {
 }
 
 /** Access chooses the action; only a granted access check exposes the enabled preference.
+ * Access is rechecked whenever the local account changes, e.g. after modal sign-in.
  * @example <ProviderAccessControl transport={transport} id="binance" name="Binance" enabled onChange={save} disabled={false} />
  */
 export function ProviderAccessControl({
@@ -46,8 +49,10 @@ export function ProviderAccessControl({
 }) {
   const navigate = useNavigate();
   const refresh = useRefreshProviderAccess(transport);
+  const local = useAccount(transport).data;
+  const account = local?.status === "signed-in" ? local.user.id : null;
   const access = useQuery({
-    queryKey: [...accessKey, id],
+    queryKey: [...accessKey, id, account],
     queryFn: ({ signal }) =>
       transport.rpc.providers.checkAccess.query({ providerId: id }, { signal }),
     gcTime: 0,
@@ -73,7 +78,9 @@ export function ProviderAccessControl({
       </Button>
     );
   if (access.data.status === "required")
-    return (
+    return access.data.action === "sign-in" ? (
+      <SignInButton />
+    ) : (
       <Button size="sm" onClick={() => navigate("/app/settings/subscription")}>
         {labels[access.data.action]}
       </Button>

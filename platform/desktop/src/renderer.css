@@ -33,13 +33,3 @@
   :is([role="dialog"], [role="alertdialog"], [data-slot="floating-viewer"]) {
   app-region: no-drag;
 }
-
-/* The account gate has no header, so its background moves the window while
-   Clerk's sign-in card and gate controls keep receiving clicks. */
-.desktop-macos [data-account-gate] {
-  app-region: drag;
-}
-
-.desktop-macos [data-account-gate] :is(button, a, input, .cl-rootBox) {
-  app-region: no-drag;
-}

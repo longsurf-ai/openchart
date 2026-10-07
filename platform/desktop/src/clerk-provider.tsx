@@ -7,7 +7,7 @@ import { signInTestAccount } from "./test-account";
 
 /**
  * Signs the shared development test user in once per window, without UI, so
- * the account gate continues with the usual key handoff. Failures are logged
+ * the account connection continues with the usual key handoff. Failures are logged
  * and leave the normal sign-in visible.
  */
 function TestAccountSignIn({ email }: { email: string }) {
@@ -15,7 +15,7 @@ function TestAccountSignIn({ email }: { email: string }) {
   const { signIn } = useSignIn();
   const started = useRef(false);
   useEffect(() => {
-    // Once per window: signing out keeps the gate available for manual testing.
+    // Once per window: signing out keeps the sign-in modal available for manual testing.
     if (!isLoaded || isSignedIn || started.current) return;
     started.current = true;
     signInTestAccount(signIn, email).catch((error: unknown) => {
@@ -39,7 +39,7 @@ export function createClerkProvider(
     <ClerkProvider
       publishableKey={publishableKey}
       allowedRedirectProtocols={["openchart:", "openchart-dev:"]}
-      // Sign-in renders inside the account gate; Clerk never navigates the app.
+      // Sign-in renders in Clerk's modal; Clerk never navigates the app.
       routerPush={() => {}}
       routerReplace={() => {}}
       appearance={accountAppearance}

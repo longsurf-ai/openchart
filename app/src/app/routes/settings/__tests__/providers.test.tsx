@@ -21,6 +21,7 @@ import type { AppTransport } from "@openchart/app/lib/transport/transport";
 
 const rpc = vi.hoisted(() => ({
   providers: { checkAccess: { query: vi.fn() }, refresh: { mutate: vi.fn() } },
+  access: { auth: { getState: { query: vi.fn() } } },
   feed: {
     symbology: { indexStatus: { query: vi.fn() }, index: { mutate: vi.fn() } },
   },
@@ -29,7 +30,18 @@ const rpc = vi.hoisted(() => ({
 const updateConfig = vi.hoisted(() => vi.fn());
 const preference = vi.hoisted(() => ({ openchart: true }));
 const navigate = vi.hoisted(() => vi.fn());
-const transport = { rpc };
+const clerk = vi.hoisted(() => ({ openSignIn: vi.fn() }));
+const listeners = new Set<(frame: unknown) => void>();
+const transport = {
+  rpc,
+  events: {
+    subscribe: ({ next }: { next: (frame: unknown) => void }) => {
+      listeners.add(next);
+      return { unsubscribe: () => listeners.delete(next) };
+    },
+  },
+};
+vi.mock("@clerk/react", () => ({ useClerk: () => clerk }));
 vi.mock("react-router", () => ({
   useOutletContext: () => ({ transport }),
   useNavigate: () => navigate,
@@ -54,6 +66,7 @@ vi.mock("@openchart/app/app/routes/settings/settings-page", () => ({
 let client: QueryClient;
 beforeEach(() => {
   preference.openchart = true;
+  rpc.access.auth.getState.query.mockResolvedValue({ status: "signed-out" });
   rpc.providers.checkAccess.query.mockResolvedValue({ status: "granted" });
   rpc.providers.refresh.mutate.mockResolvedValue(undefined);
   client = createQueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -230,6 +243,36 @@ test.each([
     expect(updateConfig).not.toHaveBeenCalled();
   },
 );
+
+test("sign-in opens Clerk's modal, and signing in rechecks access", async () => {
+  rpc.providers.checkAccess.query.mockImplementation(async ({ providerId }) =>
+    providerId === "openchart"
+      ? { status: "required", action: "sign-in" }
+      : { status: "granted" },
+  );
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "Sign in" }));
+  expect(clerk.openSignIn).toHaveBeenCalledOnce();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(
+    screen.queryByRole("switch", { name: "Enable OpenChart Cloud" }),
+  ).not.toBeInTheDocument();
+
+  rpc.access.auth.getState.query.mockResolvedValue({
+    status: "signed-in",
+    user: { id: "user_1" },
+  });
+  rpc.providers.checkAccess.query.mockResolvedValue({ status: "granted" });
+  act(() => {
+    for (const next of listeners)
+      next({ kind: "event", event: { type: "integration.updated" } });
+  });
+  expect(
+    await screen.findByRole("switch", { name: "Enable OpenChart Cloud" }),
+  ).toBeChecked();
+  expect(rpc.providers.refresh.mutate).not.toHaveBeenCalled();
+  expect(updateConfig).not.toHaveBeenCalled();
+});
 
 test("access failures offer retry without inventing a subscription requirement", async () => {
   rpc.providers.checkAccess.query.mockImplementation(async ({ providerId }) => {

@@ -159,9 +159,9 @@ account-scoped OpenChart API client; runtime injects its reset callback into Aut
 single bar pages and acquired live activity; it owns endpoint paths, serialization,
 JSON/Arrow validation, unit conversion and response identity checks. Datasets consume
 decoded values and own complete pagination, DataFrames and liveness monitoring.
-OpenChart access checks cloud admission before publishing ready Datasets. The app
-requires sign-in, so missing or rejected credentials remain errors; a 403 queries
-Billing to explain the required action. A failed
+OpenChart access checks cloud admission before publishing ready Datasets. A missing
+credential means no account is signed in and requires sign-in; rejected credentials
+remain errors; a 403 queries Billing to explain the required action. A failed
 billing lookup or a denial for an active/trialing subscription remains an error,
 never a Subscribe offer. Billing summaries cannot grant data access. Account reset cancels private
 work and re-evaluates readiness; ordinary provider-disable drains accepted updates.

@@ -9,11 +9,12 @@ Delivery needs no renderer window or network audio. Native macOS banner duration
 remains an OS preference: Persistent keeps banners visible until dismissed.
 
 `platform/desktop` packages the shared App with Electron and hosts the complete
-OpenChart server. It bundles Clerk's public configuration and shows Clerk sign-in until a Clerk
-session exists; the shared workspace then opens unless the local account belongs to
-another user, while the Cloud key handoff finishes in the background. The
-sidebar links to Settings → Profile, which shows read-only Clerk identity and
-sign-out. Account
+OpenChart server. It bundles Clerk's public configuration; the shared workspace
+opens without an account. Every "Sign in" action opens Clerk's sign-in modal;
+once signed in, the sidebar links to Settings → Profile, which shows read-only
+Clerk identity and sign-out. A Clerk session's Cloud
+key handoff finishes in the background and is refused while the local account
+belongs to another user. Account
 operations call [Access](access.md) directly over tRPC; Electron supplies Clerk's
 native bridge.
 
@@ -37,7 +38,7 @@ only DOM libraries, Node/Vite types and local file selection. Editors and
 ## Run and package
 
 Run from the repository root using Node 24 and Bun for dependency installation. The local
-workspace includes a public Clerk development key; the workspace requires sign-in.
+workspace includes a public Clerk development key; OpenChart Cloud requires sign-in.
 
 ```sh
 just install
@@ -56,7 +57,7 @@ the installed layout and static frontend without production credentials.
 
 `test-account` passes `--openchart-test-account` to Electron; only development
 builds honor it. The window then signs in `openchart-dev+clerk_test@longsurf.ai`
-with Clerk's fixed test code, and the account gate saves its key as usual.
+with Clerk's fixed test code, and the account connection saves its key as usual.
 `just desktop test-account` uses its own `.artifacts/dev-profile-test-account`,
 so the developer's own signed-in profile is never involved. The
 user must exist in the development Clerk instance with test mode on. Add the

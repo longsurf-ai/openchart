@@ -69,14 +69,28 @@ const subscribed = (
   cancelAt: null,
 });
 
-test("missing and rejected credentials are errors without billing", async () => {
-  for (const status of [0, 401]) {
-    const f = fixture(status);
-    await expect(Effect.runPromise(f.check)).rejects.toMatchObject({
-      reason: { _tag: "Dataset.AccessDenied" },
-    });
-    expect(f.getSubscription).not.toHaveBeenCalled();
-  }
+test("a missing credential requires sign-in without billing", async () => {
+  const f = fixture(0);
+  expect(await Effect.runPromise(f.check)).toEqual({
+    status: "required",
+    action: "sign-in",
+  });
+  expect(f.getSubscription).not.toHaveBeenCalled();
+});
+
+test("rejected and unresolvable credentials are errors without billing", async () => {
+  const rejected = fixture(401);
+  await expect(Effect.runPromise(rejected.check)).rejects.toMatchObject({
+    reason: { _tag: "Dataset.AccessDenied" },
+  });
+  expect(rejected.getSubscription).not.toHaveBeenCalled();
+  const unavailable = fixture();
+  unavailable.client.getCapabilities = () =>
+    Effect.fail(new CredentialUnavailable({ reason: "unavailable" }));
+  await expect(Effect.runPromise(unavailable.check)).rejects.toMatchObject({
+    reason: { _tag: "Dataset.Unavailable" },
+  });
+  expect(unavailable.getSubscription).not.toHaveBeenCalled();
 });
 
 test("admission grants access without interpreting a billing summary", async () => {

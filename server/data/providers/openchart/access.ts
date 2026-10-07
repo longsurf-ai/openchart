@@ -7,6 +7,7 @@ import { OpenChartClient } from "./client";
 import { openchartError } from "./errors";
 
 /** Cloud admission grants access; billing only explains a denial. Failures never imply no subscription.
+ * No saved credential means no account is signed in, which requires sign-in without asking billing.
  * An account reset aborts the client request, and Billing rejects results for a changed key.
  * @example const checkAccess = yield* makeAccessCheck;
  */
@@ -20,6 +21,14 @@ export const makeAccessCheck = Effect.gen(function* () {
       return yield* client.getCapabilities().pipe(
         Effect.as({ status: "granted" } as const),
         Effect.catch((error) => {
+          if (
+            error._tag === "OpenChart.CredentialUnavailable" &&
+            error.reason === "missing"
+          )
+            return Effect.succeed({
+              status: "required",
+              action: "sign-in",
+            } as const);
           if (error._tag !== "OpenChartRejected" || error.status !== 403)
             return Effect.fail(openchartError(error));
           return billing.getSubscription().pipe(

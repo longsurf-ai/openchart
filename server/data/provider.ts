@@ -11,10 +11,11 @@ export const ProviderAccess = Schema.Union([
   /** The user must act first; Settings shows `action` instead of the switch. */
   Schema.Struct({
     status: Schema.Literal("required"),
-    /** subscribe: no subscription, or it ended.
+    /** sign-in: no account is signed in, so there is no credential to check.
+     * subscribe: no subscription, or it ended.
      * manage-subscription: a subscription needs fixing, e.g. past_due or paused.
      */
-    action: Schema.Literals(["subscribe", "manage-subscription"]),
+    action: Schema.Literals(["sign-in", "subscribe", "manage-subscription"]),
   }),
 ]);
 /** Confirmed access facts; failed checks remain in the error channel. */

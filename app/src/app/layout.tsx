@@ -27,7 +27,6 @@ import { useAgent } from "@openchart/app/lib/agent/use-agent";
 import { AgentProvider } from "@openchart/app/lib/agent/provider";
 import { DashboardActionDialog } from "@openchart/app/features/dashboard/dashboard-action-dialog";
 import { AccountConnectionProvider } from "@openchart/app/features/account/account-connection";
-import { AccountGate } from "@openchart/app/features/account/account-gate";
 import { useKeyboardShortcut } from "@openchart/app/hooks/use-keyboard-shortcut";
 import { UnsavedChangesProvider } from "@openchart/app/lib/unsaved-changes/unsaved-changes";
 import { WorkspaceFileNavigation } from "@openchart/app/lib/workspace/workspace";
@@ -46,7 +45,6 @@ import { OnboardingHost } from "./trellis/host";
 import { useOnboardingProgress } from "./trellis/progress";
 import { CloudOfferCard } from "@openchart/app/features/billing/components/cloud-offer-card";
 import { useAccount } from "@openchart/app/features/account/use-account";
-import { WorkspaceBackdrop } from "./workspace-backdrop";
 import type { AppRouteContext } from "./route-context";
 import "./layout.css";
 import { FeedProvider } from "@openchart/app/lib/feed/provider";
@@ -241,17 +239,12 @@ export function AppLayout({
               initialTheme={initialTheme}
             />
             <AccountConnectionProvider transport={services.transport}>
-              <AccountGate
+              <AppLayoutContent
+                key={attempt}
                 transport={services.transport}
-                backdrop={<WorkspaceBackdrop />}
-              >
-                <AppLayoutContent
-                  key={attempt}
-                  transport={services.transport}
-                  connectionError={connectionError}
-                  reconnect={reconnect}
-                />
-              </AccountGate>
+                connectionError={connectionError}
+                reconnect={reconnect}
+              />
             </AccountConnectionProvider>
           </TeaClientContext.Provider>
         ) : (

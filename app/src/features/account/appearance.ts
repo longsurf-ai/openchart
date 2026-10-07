@@ -2,7 +2,7 @@
 import type { ClerkProvider } from "@clerk/react";
 import type { ComponentProps } from "react";
 
-/** Shared by the host's Clerk provider, the account gate's sign-in and account profile. */
+/** Shared by the host's Clerk provider and every Clerk component, including the sign-in modal. */
 export const accountAppearance = {
   variables: {
     colorPrimary: "var(--primary)",
@@ -20,5 +20,10 @@ export const accountAppearance = {
     fontFamily: "inherit",
     fontSize: "var(--text-sm)",
     borderRadius: "var(--radius)",
+  },
+  elements: {
+    // Clerk top-aligns its modal; auto margins center it like the app's
+    // dialogs and still let the backdrop scroll when the window is short.
+    modalContent: { marginBlock: "auto" },
   },
 } satisfies ComponentProps<typeof ClerkProvider>["appearance"];

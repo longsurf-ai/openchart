@@ -7,10 +7,10 @@
   DropdownControl on narrow screens. Alerts uses the same frame; change it there.
 - settingsSections owns UI routes, labels, icons and order, never persisted
   configuration. Config remains backend truth.
-- Profile shows read-only Clerk identity and sign-out; account data stays out of Config.
-- Subscription scopes Billing to the gated account; neither lives in Config.
+- Profile offers sign-in, or read-only Clerk identity and sign-out; account data stays out of Config.
+- Subscription scopes Billing to the signed-in account; neither lives in Config.
 - Data Provider actions come from provider-owned access checks, including while
-  disabled. Errors offer retry; billing actions route to Subscription.
+  disabled. Errors offer retry; sign-in opens Clerk's modal, billing opens Subscription.
   Subscription changes refresh activation without changing enabled preferences.
 - Changelog uses Desktop-bundled AppHost entries; never fetch release notes.
   Use a version/date rail and bullets in one settings Card.

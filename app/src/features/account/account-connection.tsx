@@ -1,9 +1,10 @@
-// Purpose: Connect each Clerk session to the local account once and own sign-out for the account gate.
+// Purpose: Connect each Clerk session to the local account once and own sign-out.
 import { useClerk, useSession, useUser } from "@clerk/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 
+import { useErrorToast } from "@openchart/app/hooks/use-error-toast";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 
 import { createSignInFlow } from "./sign-in";
@@ -27,7 +28,7 @@ function useAccountConnectionState(transport: AppTransport) {
   const flow = attempt.flow;
   const refresh = () => queries.invalidateQueries({ queryKey: accountKey });
   const completion = useMutation({
-    // The gate reports failures with Retry once the workspace is open.
+    // Reported below with Retry while the session it belongs to is active.
     meta: { silent: true },
     mutationFn: () => flow.complete(),
     onSettled: refresh,
@@ -38,8 +39,8 @@ function useAccountConnectionState(transport: AppTransport) {
     meta: { errorTitle: "Couldn’t finish signing out" },
     mutationFn: async () => {
       flow.setActive(false);
-      // Ending the Clerk session first closes the gate; a local failure then
-      // leaves a signed-out gate instead of one that restores the old key.
+      // Ending the Clerk session first stops a new handoff; a local failure
+      // then leaves Clerk signed out instead of restoring the old key.
       await clerk.signOut();
       await transport.rpc.access.auth.logout.mutate();
     },
@@ -48,15 +49,20 @@ function useAccountConnectionState(transport: AppTransport) {
   });
   const complete = completion.mutate;
   const signingOut = logout.isPending;
+  const active = Boolean(user && session) && !signingOut;
+  useErrorToast(active ? completion.error : undefined, {
+    id: "account-connection",
+    title: "Couldn’t finish signing in",
+    retry: () => complete(),
+  });
   useEffect(() => {
-    const active = Boolean(user && session) && !signingOut;
     flow.setActive(active);
     if (active && started.current !== attempt) {
       started.current = attempt;
       complete();
     }
     return () => flow.setActive(false);
-  }, [attempt, complete, flow, session, signingOut, user]);
+  }, [active, attempt, complete, flow]);
 
   return { completion, logout };
 }
@@ -68,8 +74,10 @@ const AccountConnectionContext = createContext<
 /**
  * Connects every Clerk session to the local account exactly once: an existing
  * matching account is kept, a saved key is restored, otherwise a new key is
- * handed off. Sign-out and unmount stop pending SDK results. Mount above the
- * account gate so sign-out survives the workspace unmounting.
+ * handed off. The workspace stays usable signed out; Cloud consumers wait for
+ * the local account instead. A failed handoff, including one refused because
+ * the local account belongs to another user, is a toast with Retry. Sign-out
+ * and unmount stop pending SDK results.
  * @example <AccountConnectionProvider transport={transport}>{children}</AccountConnectionProvider>
  */
 export function AccountConnectionProvider({
@@ -88,7 +96,7 @@ export function AccountConnectionProvider({
 }
 
 /**
- * Shares the session handoff and sign-out with the gate and Profile; requires its provider.
+ * Shares the session handoff and sign-out with Profile; requires its provider.
  * @example const { logout } = useAccountConnection();
  */
 export function useAccountConnection() {
