@@ -348,11 +348,13 @@ async function verifySettings(page: Page) {
     (await readFile(join(nativeState, "requests"), "utf8")).includes("chat"),
   );
   const sessionId = new URL(page.url()).pathname.split("/").at(-1);
-  const currentTitle = await page
-    .locator('[data-sidebar="menu-button"][aria-current="page"]')
-    .getAttribute("title");
+  // Auto-title can finish after the reply; resolve the active row at click time.
   await page
-    .getByRole("button", { name: `Options for ${currentTitle}`, exact: true })
+    .locator('[data-sidebar="menu-item"]')
+    .filter({
+      has: page.locator('[data-sidebar="menu-button"][aria-current="page"]'),
+    })
+    .getByRole("button", { name: /^Options for / })
     .click();
   await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
   const sessionTitle = "Native provider smoke";
