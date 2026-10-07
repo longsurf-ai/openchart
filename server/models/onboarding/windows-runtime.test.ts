@@ -11,6 +11,18 @@ import { createInstallations } from "./installation";
 import { PROVIDER_MANIFEST } from "./manifest";
 import { stopWindowsTerminal } from "./terminal-cleanup";
 
+type ProbePhase =
+  | "environment"
+  | "installation"
+  | "installation-complete"
+  | "terminal-import"
+  | "terminal-start"
+  | "authentication"
+  | "authentication-complete"
+  | "terminal-cleanup"
+  | "directory-cleanup"
+  | "complete";
+
 /** Retain only observations; authorization URLs and codes must never enter test logs or reports. */
 function observePrompt(output: string) {
   return {
@@ -52,6 +64,7 @@ test.skipIf(
     const startedAt = Date.now();
     const report = {
       probe: "antigravity-windows-conpty",
+      phase: "environment" as ProbePhase,
       version: PROVIDER_MANIFEST[ANTIGRAVITY]["win32-x64"]!.version,
       downloadAndVersionVerified: false,
       terminalStarted: false,
@@ -63,6 +76,20 @@ test.skipIf(
       elapsedMilliseconds: 0,
       failure: null as string | null,
     };
+    async function checkpoint(phase: ProbePhase) {
+      report.phase = phase;
+      report.elapsedMilliseconds = Date.now() - startedAt;
+      // Persist observations before long operations too, so an outer test
+      // timeout leaves its last phase. No captured CLI output is included.
+      console.info("Antigravity Windows feasibility:", JSON.stringify(report));
+      if (!reportPath) return;
+      try {
+        await mkdir(path.dirname(reportPath), { recursive: true });
+        await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n");
+      } catch {
+        report.failure ??= "probe-report-write-failed";
+      }
+    }
     let directory: string | undefined;
     let terminal: IPty | undefined;
     let outputListener: { dispose(): void } | undefined;
@@ -73,6 +100,7 @@ test.skipIf(
       resolveExit = resolve;
     });
     try {
+      await checkpoint("environment");
       directory = await mkdtemp(
         path.join(tmpdir(), "openchart-windows-antigravity-"),
       );
@@ -96,6 +124,7 @@ test.skipIf(
       );
       const downloadDeadline = AbortSignal.timeout(30_000);
       try {
+        await checkpoint("installation");
         // Installation validates the complete SHA-512 archive and runs the exact managed --version.
         await installations.install(ANTIGRAVITY, downloadDeadline, () => {});
         report.downloadAndVersionVerified = true;
@@ -112,9 +141,12 @@ test.skipIf(
                 ? "provider-version-mismatch"
                 : "download-or-install-failed";
       }
+      await checkpoint("installation-complete");
       if (!report.failure) {
         try {
+          await checkpoint("terminal-import");
           const pty = await import("node-pty");
+          await checkpoint("terminal-start");
           terminal = pty.spawn(
             installations.executables[ANTIGRAVITY],
             ["-p", "/usage"],
@@ -152,6 +184,7 @@ test.skipIf(
             exited = true;
             resolveExit();
           });
+          await checkpoint("authentication");
           const promptDeadline = new AbortController();
           try {
             await Promise.race([
@@ -173,6 +206,7 @@ test.skipIf(
                   ? "incomplete-authentication-prompt"
                   : "authentication-prompt-timeout";
           }
+          await checkpoint("authentication-complete");
         } catch {
           report.failure = "conpty-start-or-execution-failed";
         }
@@ -181,6 +215,7 @@ test.skipIf(
       report.failure ??= "probe-environment-failed";
     } finally {
       try {
+        await checkpoint("terminal-cleanup");
         if (terminal) await stopWindowsTerminal(terminal, exit, () => exited);
         report.cleanupComplete = !terminal || exited;
       } catch {
@@ -189,6 +224,7 @@ test.skipIf(
         outputListener?.dispose();
         exitListener?.dispose();
         vi.unstubAllEnvs();
+        await checkpoint("directory-cleanup");
         if (directory) {
           try {
             await rm(directory, {
@@ -202,20 +238,7 @@ test.skipIf(
             report.failure = "temporary-directory-cleanup-failed";
           }
         }
-        report.elapsedMilliseconds = Date.now() - startedAt;
-        // Only fixed status strings, booleans, version and duration leave the process.
-        console.info(
-          "Antigravity Windows feasibility:",
-          JSON.stringify(report),
-        );
-        if (reportPath) {
-          try {
-            await mkdir(path.dirname(reportPath), { recursive: true });
-            await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n");
-          } catch {
-            report.failure = "probe-report-write-failed";
-          }
-        }
+        await checkpoint("complete");
       }
     }
     if (report.failure)
@@ -228,5 +251,7 @@ test.skipIf(
       cleanupComplete: true,
     });
   },
-  65_000,
+  // Preserve the 30s install signal, 20s prompt wait and 5s+2s+2s terminal
+  // cleanup timers, allowing overhead for native calls, filesystem and reports.
+  90_000,
 );

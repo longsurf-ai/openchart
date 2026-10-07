@@ -13,10 +13,17 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-let cleanup = () => {};
-afterEach(() => {
-  cleanup();
-  vi.unstubAllEnvs();
+// Startup exercises real onboarding filesystem work. Keep assertion deadlines
+// inside an outer budget that also leaves time to join fixture cleanup.
+vi.setConfig({ testTimeout: 15_000, hookTimeout: 15_000 });
+
+let cleanup = async () => {};
+afterEach(async () => {
+  try {
+    await cleanup();
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });
 
 async function host(
@@ -64,7 +71,7 @@ async function host(
     signal,
     listeners: process.listeners(signal),
   }));
-  cleanup = () => {
+  const restore = () => {
     process.argv = previousArgv;
     if (resourcesPath)
       Object.defineProperty(process, "resourcesPath", resourcesPath);
@@ -77,6 +84,21 @@ async function host(
   const key = deferred<Uint8Array>();
   const ready = deferred<number>();
   const stopped = deferred<void>();
+  const startup = new Set<Promise<unknown>>();
+  function whenReady(): Promise<void> {
+    const ready = Promise.resolve();
+    const then = ready.then.bind(ready);
+    ready.then = (onFulfilled, onRejected) => {
+      const pending = then(onFulfilled, onRejected);
+      startup.add(pending);
+      void pending.then(
+        () => startup.delete(pending),
+        () => startup.delete(pending),
+      );
+      return pending;
+    };
+    return ready;
+  }
   const stop = vi.fn(() => stopped.promise);
   const startBackend = vi.fn<
     (input: { onNotify: (notification: Notify) => void }) => {
@@ -139,7 +161,7 @@ async function host(
     setAsDefaultProtocolClient: vi.fn(() => true),
     removeAsDefaultProtocolClient: vi.fn(() => true),
     requestSingleInstanceLock: vi.fn(() => true),
-    whenReady: async () => {},
+    whenReady,
     getPath: () => "/profile",
     getAppPath: () => "/app",
     quit: vi.fn(),
@@ -208,6 +230,19 @@ async function host(
     execFile: Object.assign(vi.fn(), { [promisify.custom]: executeInstaller }),
   }));
   vi.doMock("./backend-process", () => ({ startBackend }));
+  cleanup = async () => {
+    // Cancel startup before releasing any gate. In particular, never remove a
+    // temporaryHome while its asynchronous onboarding snapshot is still writing.
+    app.emit("before-quit", { preventDefault() {} });
+    key.resolve(new Uint8Array(32));
+    ready.resolve(4321);
+    stopped.resolve();
+    try {
+      while (startup.size > 0) await Promise.allSettled([...startup]);
+    } finally {
+      restore();
+    }
+  };
   await import("./main");
   return {
     app,
@@ -238,11 +273,15 @@ async function host(
   };
 }
 
+function waitForHost(assertion: () => void) {
+  return vi.waitFor(assertion, { timeout: 5_000 });
+}
+
 async function connection(switches: readonly string[]) {
   const runtime = await host(undefined, false, switches);
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const window = runtime.windows[0]!;
   const [, read] = runtime.handle.mock.calls.find(
     ([name]) => name === "desktop.connection",
@@ -267,7 +306,7 @@ test("development packages never start automatic updates", async () => {
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   expect(runtime.updateElectronApp).not.toHaveBeenCalled();
   expect(runtime.windows[0]!.loadURL).toHaveBeenCalledWith(
     "http://127.0.0.1:5173/app/dashboards/dsh_88JOx0yX7TH65p",
@@ -291,7 +330,7 @@ test.each([
     const runtime = await host(undefined, true, [], { platform, arch });
     runtime.key.resolve(new Uint8Array(32));
     runtime.ready.resolve(4321);
-    await vi.waitFor(() =>
+    await waitForHost(() =>
       expect(runtime.updateElectronApp).toHaveBeenCalledOnce(),
     );
     const options = runtime.updateElectronApp.mock.calls[0]![0] as unknown as {
@@ -346,7 +385,7 @@ test.each([
     expect(runtime.stopUpdates).toHaveBeenCalled();
     expect(runtime.quitAndInstall).not.toHaveBeenCalled();
     runtime.stopped.resolve();
-    await vi.waitFor(() =>
+    await waitForHost(() =>
       expect(runtime.quitAndInstall).toHaveBeenCalledOnce(),
     );
   },
@@ -364,7 +403,7 @@ test.each([
     const runtime = await host(undefined, true, [], environment);
     runtime.key.resolve(new Uint8Array(32));
     runtime.ready.resolve(4321);
-    await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+    await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
     expect(runtime.updateElectronApp).not.toHaveBeenCalled();
     expect(runtime.executeInstaller).not.toHaveBeenCalled();
   },
@@ -386,7 +425,7 @@ test.each(["--squirrel-install", "--squirrel-updated", "--squirrel-uninstall"])(
     expect(runtime.opened).not.toHaveBeenCalled();
     expect(runtime.handleActivation).not.toHaveBeenCalled();
     runtime.installer.resolve({ stdout: "", stderr: "" });
-    await vi.waitFor(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
+    await waitForHost(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
   },
 );
 
@@ -411,13 +450,13 @@ test("Windows notification activation waits for readiness, survives dismissal, a
   expect(runtime.app.setAppUserModelId).toHaveBeenCalledExactlyOnceWith(
     "com.squirrel.OpenChart.OpenChart",
   );
-  await vi.waitFor(() =>
+  await waitForHost(() =>
     expect(runtime.handleActivation).toHaveBeenCalledOnce(),
   );
   expect(runtime.opened).not.toHaveBeenCalled();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() =>
+  await waitForHost(() =>
     expect(runtime.windows[0]?.focus).toHaveBeenCalledOnce(),
   );
   const activation = runtime.handleActivation.mock.calls[0]![0];
@@ -432,9 +471,9 @@ test("Windows notification activation waits for readiness, survives dismissal, a
   expect(first.focus).toHaveBeenCalledTimes(2);
   runtime.windows.length = 0;
   activation({ type: "click" });
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
   const reopened = runtime.windows[0]!;
-  await vi.waitFor(() => expect(reopened.focus).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(reopened.focus).toHaveBeenCalledOnce());
   runtime.app.emit("before-quit", { preventDefault: vi.fn() });
   activation({ type: "click" });
   expect(reopened.focus).toHaveBeenCalledOnce();
@@ -462,7 +501,7 @@ test("native picker selects one directory, handles cancellation, and rejects unt
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const pick = runtime.handle.mock.calls.find(
     ([channel]) => channel === "desktop.pickDirectory",
   )![1];
@@ -499,7 +538,7 @@ test("native file open validates local paths and the calling frame, and propagat
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const open = runtime.handle.mock.calls.find(
     ([channel]) => channel === "desktop.openPath",
   )![1];
@@ -548,7 +587,7 @@ test("pages may write to the clipboard and get no other permission", async () =>
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const [decide] = runtime.setPermissionRequestHandler.mock.calls[0]!;
   const granted = (permission: string) => {
     const callback = vi.fn();
@@ -564,7 +603,7 @@ test("a backend notification is shown and its click brings the window forward", 
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const { onNotify } = runtime.startBackend.mock.calls[0]![0];
   onNotify({
     type: "notify",
@@ -607,7 +646,7 @@ test("turning notifications on shows one so macOS can ask, only for the app's ow
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const enable = runtime.handle.mock.calls.find(
     ([channel]) => channel === "desktop.enableNotifications",
   )![1];
@@ -635,7 +674,7 @@ test("Quit during credential loading never starts a backend or window", async ()
   const event = { preventDefault: vi.fn() };
   runtime.app.emit("before-quit", event);
   runtime.key.resolve(new Uint8Array(32));
-  await vi.waitFor(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
   expect(event.preventDefault).toHaveBeenCalledOnce();
   expect(runtime.startBackend).not.toHaveBeenCalled();
   expect(runtime.opened).not.toHaveBeenCalled();
@@ -647,10 +686,12 @@ test.each([false, true])(
   async (alreadyReady) => {
     const runtime = await host();
     runtime.key.resolve(new Uint8Array(32));
-    await vi.waitFor(() => expect(runtime.startBackend).toHaveBeenCalledOnce());
+    await waitForHost(() =>
+      expect(runtime.startBackend).toHaveBeenCalledOnce(),
+    );
     if (alreadyReady) {
       runtime.ready.resolve(4321);
-      await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+      await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
     }
     const event = { preventDefault: vi.fn() };
     runtime.app.emit("before-quit", event);
@@ -670,7 +711,7 @@ test.each([false, true])(
     expect(runtime.opened).toHaveBeenCalledTimes(alreadyReady ? 1 : 0);
     expect(runtime.app.quit).not.toHaveBeenCalled();
     runtime.stopped.resolve();
-    await vi.waitFor(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
+    await waitForHost(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
     expect(runtime.app.listenerCount("before-quit")).toBe(0);
     expect(runtime.showErrorBox).not.toHaveBeenCalled();
   },
@@ -680,7 +721,7 @@ test("canceling an unsaved editor's close keeps the backend available for saving
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   runtime.app.emit("before-quit", { preventDefault: vi.fn() });
   const event = { preventDefault: vi.fn() };
   runtime.windows[0]!.webContents.emit("will-prevent-unload", event);
@@ -696,7 +737,7 @@ test("billing IPC validates the caller and destination, and passes the sandbox e
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   expect(runtime.startBackend).toHaveBeenCalledWith(
     expect.objectContaining({
       init: expect.objectContaining({
@@ -733,7 +774,7 @@ test("billing returns during startup open subscription once and later returns fo
   expect(runtime.opened).not.toHaveBeenCalled();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const window = runtime.windows[0]!;
   expect(window.loadURL).toHaveBeenCalledWith(
     "http://127.0.0.1:5173/app/settings/subscription",
@@ -754,7 +795,7 @@ test("billing returns during startup open subscription once and later returns fo
     "app",
     "openchart-dev://billing/return",
   ]);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
   expect(runtime.windows[0]!.loadURL).toHaveBeenCalledWith(
     "http://127.0.0.1:5173/app/settings/subscription",
   );

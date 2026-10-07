@@ -1,9 +1,15 @@
 // Purpose: Validates and streams bounded ZIP provider archives into an unpublished payload.
 import { createWriteStream } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, open as openFile } from "node:fs/promises";
 import path from "node:path";
+import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { open, type Entry, type ZipFile } from "yauzl";
+import {
+  fromRandomAccessReader,
+  RandomAccessReader,
+  type Entry,
+  type ZipFile,
+} from "yauzl";
 
 const maximumUnpackedBytes = 2 * 1024 * 1024 * 1024;
 const maximumEntries = 10_000;
@@ -13,6 +19,7 @@ const maximumEntries = 10_000;
  * Validates all names, types and cumulative sizes before writing, rejects Windows
  * aliases and duplicate paths, and closes streams/archive handles on failure or
  * cancellation. The installation owner removes the unpublished payload on error.
+ * File-close failures reject independently of any earlier archive-read error.
  * @example await extractZip(archive, payload, "flat", signal);
  */
 export async function extractZip(
@@ -22,16 +29,7 @@ export async function extractZip(
   signal: AbortSignal,
 ) {
   signal.throwIfAborted();
-  const zip = await new Promise<ZipFile>((resolve, reject) => {
-    open(
-      archive,
-      { lazyEntries: true, autoClose: false, strictFileNames: true },
-      (error, value) => {
-        if (error) reject(error);
-        else resolve(value!);
-      },
-    );
-  });
+  const { zip, closeFile } = await openArchive(archive);
   // Keep an error listener throughout the lifetime, including streamed reads.
   let archiveError: Error | undefined;
   zip.on("error", (error: Error) => (archiveError = error));
@@ -126,7 +124,82 @@ export async function extractZip(
     }
   } finally {
     signal.removeEventListener("abort", abort);
-    zip.close();
-    await closed;
+    try {
+      zip.close();
+      await closed;
+    } finally {
+      await closeFile();
+    }
+  }
+}
+
+/** Keeps file closure separate from ZIP read errors, which yauzl emits only once. */
+async function openArchive(archive: string) {
+  const file = await openFile(archive, "r");
+  const streams = new Set<Readable>();
+  const streamClosures: Promise<void>[] = [];
+  const closeFile = async () => {
+    for (const stream of streams) stream.destroy();
+    await Promise.all(streamClosures);
+    await file.close();
+  };
+  // The public reader's close drains yauzl's references; this owner then closes
+  // the actual file and observes its Promise even after an earlier ZIP error.
+  const reader = new (class extends RandomAccessReader {
+    override _readStreamForRange(start: number, end: number) {
+      const stream = file.createReadStream({
+        start,
+        end: end - 1,
+        autoClose: false,
+      });
+      streams.add(stream);
+      streamClosures.push(
+        new Promise<void>((resolve) => {
+          stream.once("close", () => {
+            streams.delete(stream);
+            resolve();
+          });
+        }),
+      );
+      // autoClose:false keeps the shared fd open, but the stream's FileHandle
+      // reference must still be released when its range ends.
+      stream.once("end", () => stream.destroy());
+      return stream;
+    }
+    override read(
+      buffer: Buffer,
+      offset: number,
+      length: number,
+      position: number,
+      callback: (error: Error | null) => void,
+    ) {
+      void file.read(buffer, offset, length, position).then(
+        ({ bytesRead }) =>
+          callback(
+            bytesRead === length
+              ? null
+              : new Error("Unexpected end of ZIP archive."),
+          ),
+        (cause: Error) => callback(cause),
+      );
+    }
+  })();
+  try {
+    const size = (await file.stat()).size;
+    const zip = await new Promise<ZipFile>((resolve, reject) => {
+      fromRandomAccessReader(
+        reader,
+        size,
+        { lazyEntries: true, autoClose: false, strictFileNames: true },
+        (error, value) => {
+          if (error) reject(error);
+          else resolve(value!);
+        },
+      );
+    });
+    return { zip, closeFile };
+  } catch (cause) {
+    await closeFile();
+    throw cause;
   }
 }

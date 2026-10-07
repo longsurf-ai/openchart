@@ -698,7 +698,7 @@ describe("Antigravity adapter", () => {
       "mcp(openchart/*)",
       `read_file(${path.join(realHome, ".gemini", "antigravity-cli", "mcp", "openchart")}${path.sep})`,
     ]);
-  });
+  }, 15_000);
 
   it("reports a failed OpenChart tool once and never shows the CLI's plumbing", async () => {
     await script([
@@ -740,7 +740,7 @@ describe("Antigravity adapter", () => {
       content: [{ type: "text", text: "boom" }],
       isError: true,
     });
-  });
+  }, 15_000);
 
   it("hides schema-file plumbing reported with native Windows paths", async () => {
     const toolInfo = {

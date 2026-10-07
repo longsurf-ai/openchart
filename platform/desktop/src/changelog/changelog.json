@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.16",
+    "date": "2026-10-07",
+    "items": [
+      "Fixed Antigravity installation getting stuck after a file error on Windows."
+    ]
+  },
+  {
     "version": "0.1.15",
     "date": "2026-10-07",
     "items": [
