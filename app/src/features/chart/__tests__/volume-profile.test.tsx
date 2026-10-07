@@ -1081,6 +1081,8 @@ it("names the resolution the visible range's profile reads in its legend", async
     { wrapper },
   );
   await waitFor(() => expect(legend).toHaveTextContent("Visible range · 15m"));
+  // The label renders before the run subscribes; wait for its observation.
+  await waitFor(() => expect(sink()).toBeDefined());
   // Those bars can't be served, so the profile reads the next coarser ones.
   act(() => sink().error(unservable()));
   await waitFor(() => expect(legend).toHaveTextContent("Visible range · 30m"));
@@ -1158,6 +1160,7 @@ it("saves the visible range profile's settings and colors its parts in Style", a
     { wrapper },
   );
   await waitFor(() => expect(legend).toHaveTextContent("Visible range · 15m"));
+  await waitFor(() => expect(sink()).toBeDefined());
   act(() => sink().next(snapshotOf(today - 20 * day, today + day)));
   await user.click(
     within(legend).getByRole("button", { name: "Series settings" }),
