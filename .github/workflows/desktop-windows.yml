@@ -2,7 +2,7 @@ name: Desktop Windows
 
 on:
   push:
-    branches: [main, seanxwzhang/desktop-multiplatform]
+    branches: [main]
   pull_request:
     paths:
       - "platform/desktop/**"
@@ -17,6 +17,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  OPENCHART_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
   group: desktop-windows-${{ github.event.pull_request.number || github.ref }}
@@ -39,6 +42,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          ref: ${{ env.OPENCHART_SOURCE_SHA }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
@@ -78,7 +82,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: OpenChart-win32-x64-unsigned-${{ github.sha }}
+          name: OpenChart-win32-x64-unsigned-${{ env.OPENCHART_SOURCE_SHA }}
           path: platform/desktop/out/release/${{ steps.build.outputs.version }}/win32-x64/
           if-no-files-found: warn
           retention-days: 30
@@ -86,7 +90,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-windows-evidence-${{ github.sha }}
+          name: desktop-windows-evidence-${{ env.OPENCHART_SOURCE_SHA }}
           include-hidden-files: true
           path: |
             platform/desktop/.artifacts/*.json

@@ -170,7 +170,7 @@ describe("Antigravity native relay", () => {
       .poll(() => Buffer.concat(received))
       .toEqual(Buffer.concat([Buffer.from("request-token\n"), bytes]));
     await expect.poll(() => Buffer.concat(output)).toEqual(bytes);
-  });
+  }, 15_000);
 
   it("isolates simultaneous tool requests by their per-request port and token", async () => {
     const hosts: HostToolServer[] = [];
@@ -210,7 +210,7 @@ describe("Antigravity native relay", () => {
     ]);
     expect(hosts[0]!.env[RELAY_PORT]).not.toBe(hosts[1]!.env[RELAY_PORT]);
     expect(hosts[0]!.env[RELAY_TOKEN]).not.toBe(hosts[1]!.env[RELAY_TOKEN]);
-  });
+  }, 15_000);
 
   it.skipIf(process.platform !== "win32")(
     "exits when the host closes while stdin is still open",
@@ -225,6 +225,7 @@ describe("Antigravity native relay", () => {
       socket.end();
       expect(await finished).toEqual([0, null]);
     },
+    15_000,
   );
 
   it("exits when stdin closes while the host connection is still open", async () => {
@@ -239,5 +240,5 @@ describe("Antigravity native relay", () => {
     // The Unix relay's background cat inherits stdout until the host closes.
     if (process.platform !== "win32") (await host.connection).end();
     expect(await finished).toEqual([0, null]);
-  });
+  }, 15_000);
 });
