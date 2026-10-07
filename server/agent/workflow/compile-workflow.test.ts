@@ -15,6 +15,14 @@ export default defineWorkflow({
   run: ({ question }) => Effect.succeed(question.toUpperCase()),
 });`;
 
+test("checks a Windows-path snapshot and resolves the bundled SDK without a disk module", () => {
+  const filename = "C:\\Users\\Test User\\studies\\€ research.workflow.ts";
+  expect(compileWorkflow(source, filename)).toContain("question.toUpperCase()");
+  expect(() =>
+    compileWorkflow(source.replace("toUpperCase()", "toFixed(2)"), filename),
+  ).toThrow(/TS2551/);
+});
+
 test("checks the supplied snapshot with SDK types despite workspace files and config", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "workflow-source-"));
   try {

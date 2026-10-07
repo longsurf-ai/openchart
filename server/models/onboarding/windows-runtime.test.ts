@@ -1,17 +1,15 @@
 // Purpose: Opt-in Windows feasibility evidence for the real pinned Antigravity CLI and ConPTY, without authenticating.
-import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { promisify, stripVTControlCharacters } from "node:util";
+import { stripVTControlCharacters } from "node:util";
 import type { IPty } from "node-pty";
 import { expect, test, vi } from "vitest";
 import { ANTIGRAVITY } from "@openchart/models/model-tiers";
 import { createInstallations } from "./installation";
 import { PROVIDER_MANIFEST } from "./manifest";
-
-const execute = promisify(execFile);
+import { stopWindowsTerminal } from "./terminal-cleanup";
 
 /** Retain only observations; authorization URLs and codes must never enter test logs or reports. */
 function observePrompt(output: string) {
@@ -183,25 +181,7 @@ test.skipIf(
       report.failure ??= "probe-environment-failed";
     } finally {
       try {
-        if (terminal && !exited) {
-          try {
-            await execute(
-              path.win32.join(
-                process.env.SystemRoot ?? "C:\\Windows",
-                "System32",
-                "taskkill.exe",
-              ),
-              ["/PID", String(terminal.pid), "/T", "/F"],
-              { windowsHide: true, timeout: 5_000, maxBuffer: 16_384 },
-            );
-          } catch {
-            if (!exited) report.failure = "process-tree-termination-failed";
-          } finally {
-            if (!exited) terminal.kill();
-          }
-          await Promise.race([exit, delay(2_000, undefined, { ref: false })]);
-          if (!exited) report.failure = "terminal-cleanup-timeout";
-        }
+        if (terminal) await stopWindowsTerminal(terminal, exit, () => exited);
         report.cleanupComplete = !terminal || exited;
       } catch {
         report.failure = "terminal-cleanup-failed";

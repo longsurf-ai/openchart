@@ -947,6 +947,26 @@ try {
   );
   const page = application?.windows()[0];
   if (page) {
+    // The packaged fixture owns this synthetic conversation. Open failed tool
+    // details before capturing so CI reports the actual workflow diagnostic.
+    try {
+      const failedWorkflows = page.getByRole("button", {
+        name: /^Failed: workflow/,
+      });
+      for (const button of await failedWorkflows.all())
+        if ((await button.getAttribute("aria-expanded")) === "false")
+          await button.click({ timeout: 3_000 });
+      const detail = (
+        await page.getByRole("main").innerText({ timeout: 3_000 })
+      ).slice(-16_000);
+      console.error("Packaged smoke main content:\n", detail);
+      await writeFile(join(artifacts, "desktop-main-failure.txt"), detail);
+    } catch (diagnosticError) {
+      console.error(
+        "Could not capture failed workflow details",
+        diagnosticError,
+      );
+    }
     await Promise.allSettled([
       page.screenshot({ path: join(artifacts, "desktop-failure.png") }),
       page

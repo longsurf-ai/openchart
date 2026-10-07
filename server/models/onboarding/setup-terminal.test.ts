@@ -175,6 +175,24 @@ test("retains terminal failures and releases event listeners", async () => {
   expect(f.exitDisposed).toHaveBeenCalledOnce();
 });
 
+test("cancellation tolerates taskkill losing the race to ConPTY's delayed exit", async () => {
+  const f = await fixture();
+  native.taskkill.mockRejectedValue(new Error("Process already terminated"));
+  let completed = false;
+  const cancellation = Effect.runPromise(Fiber.interrupt(f.fiber)).then(() => {
+    completed = true;
+  });
+  await vi.waitFor(() => expect(native.taskkill).toHaveBeenCalledOnce());
+  expect(completed).toBe(false);
+  expect(f.terminal.kill).not.toHaveBeenCalled();
+  f.exit(1);
+  await cancellation;
+  expect(f.job.state.status).toBe("cancelled");
+  expect(f.terminal.kill).not.toHaveBeenCalled();
+  expect(f.outputDisposed).toHaveBeenCalledOnce();
+  expect(f.exitDisposed).toHaveBeenCalledOnce();
+});
+
 test("input write failures end setup and terminate the owned process tree", async () => {
   const f = await fixture();
   f.terminal.write.mockImplementation(() => {

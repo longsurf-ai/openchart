@@ -294,6 +294,9 @@ const run = promisify(execFile);
 const repository = "longsurf-ai/openchart";
 const releaseSchema = z.object({
   id: z.number(),
+  tag_name: z.string(),
+  draft: z.boolean(),
+  target_commitish: z.string(),
   assets: z.array(
     z.object({ name: z.string(), digest: z.string().nullable().optional() }),
   ),
@@ -320,10 +323,78 @@ async function github(path: string): Promise<unknown | undefined> {
   }
 }
 
-function operatorTransport(notes: string): PublicationTransport {
+/**
+ * Creates the operator's gh/Wrangler transport without performing I/O. Method
+ * calls use the operator's existing credentials and propagate command/network
+ * errors. GitHub reads include drafts, verify source provenance before uploads,
+ * and inspect REST asset digests by release ID; temporary upload files are owned
+ * and removed by each operation. No credentials are copied into artifacts.
+ * @example await publishPlan(plan, operatorTransport(notes));
+ */
+export function operatorTransport(notes: string): PublicationTransport {
   const readRelease = async (version: string) => {
-    const value = await github(`releases/tags/v${version}`);
-    return value === undefined ? undefined : releaseSchema.parse(value);
+    let id: number;
+    try {
+      // REST's tag endpoint excludes drafts. gh resolves their pending tag too;
+      // read the resulting REST ID to retain GitHub's authoritative asset digests.
+      const { stdout } = await run(
+        "gh",
+        [
+          "release",
+          "view",
+          `v${version}`,
+          "--repo",
+          repository,
+          "--json",
+          "databaseId",
+        ],
+        { maxBuffer: 8 * 1024 * 1024 },
+      );
+      id = z
+        .object({ databaseId: z.number().int().positive() })
+        .parse(JSON.parse(stdout)).databaseId;
+    } catch (cause) {
+      if (
+        cause &&
+        typeof cause === "object" &&
+        "stderr" in cause &&
+        /^release not found\s*$/i.test(String(cause.stderr).trim())
+      )
+        return undefined;
+      throw cause;
+    }
+    const release = releaseSchema.parse(await github(`releases/${id}`));
+    assert(release.tag_name === `v${version}`, "GitHub release tag mismatch");
+    return release;
+  };
+  const verifyRelease = async (version: string, commit: string) => {
+    const reference = await github(`git/ref/tags/v${version}`);
+    if (reference !== undefined) {
+      const objectSchema = z.object({
+        object: z.object({ type: z.string(), sha: z.string() }),
+      });
+      let object = objectSchema.parse(reference).object;
+      for (let depth = 0; object.type === "tag" && depth < 5; depth++)
+        object = objectSchema.parse(
+          await github(`git/tags/${object.sha}`),
+        ).object;
+      assert(
+        object.type === "commit" && object.sha === commit,
+        "GitHub tag points to a different source commit",
+      );
+    }
+    const release = await readRelease(version);
+    if (release?.draft)
+      assert(
+        release.target_commitish === commit,
+        "GitHub draft targets a different source commit",
+      );
+    else if (release)
+      assert(
+        reference !== undefined,
+        "Published GitHub release is missing its source tag",
+      );
+    return release;
   };
   return {
     async objectDigest(key) {
@@ -377,30 +448,15 @@ function operatorTransport(notes: string): PublicationTransport {
       );
     },
     async release(version, commit) {
-      const reference = await github(`git/ref/tags/v${version}`);
-      if (reference !== undefined) {
-        const objectSchema = z.object({
-          object: z.object({ type: z.string(), sha: z.string() }),
-        });
-        let object = objectSchema.parse(reference).object;
-        for (let depth = 0; object.type === "tag" && depth < 5; depth++)
-          object = objectSchema.parse(
-            await github(`git/tags/${object.sha}`),
-          ).object;
-        assert(
-          object.type === "commit" && object.sha === commit,
-          "GitHub tag points to a different source commit",
-        );
-      }
       return Object.fromEntries(
-        (await readRelease(version))?.assets.map((asset) => [
+        (await verifyRelease(version, commit))?.assets.map((asset) => [
           asset.name,
           asset.digest?.replace(/^sha256:/, ""),
         ]) ?? [],
       );
     },
     async ensureRelease(version, commit) {
-      if (await readRelease(version)) return;
+      if (await verifyRelease(version, commit)) return;
       const directory = await mkdtemp(
         join(tmpdir(), "openchart-release-notes-"),
       );

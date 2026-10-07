@@ -50,23 +50,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.2"
-      - uses: actions/cache/restore@v4
-        id: bun-cache
-        with:
-          path: ~/.bun/install/cache
-          key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: desktop-bun-${{ runner.os }}-
       - name: Install dependencies using Git Bash
         id: install
         run: just install --frozen-lockfile
-      - name: Save installed dependency cache
-        if: ${{ steps.bun-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.bun/install/cache
-          key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - name: Verify platform contracts and native integrations
-        run: just test-core platform/desktop/src/targets.test.ts platform/desktop/src/main.test.ts platform/desktop/src/squirrel.test.ts platform/desktop/scripts platform/desktop/tests/native-executable.test.ts server/models/onboarding common/models/src/providers/antigravity common/models/src/providers/claude-code/adapter/environment.test.ts
+        run: just test-core platform/desktop/src/targets.test.ts platform/desktop/src/main.test.ts platform/desktop/src/squirrel.test.ts platform/desktop/scripts platform/desktop/tests/native-executable.test.ts server/models/onboarding server/agent/workflow/compile-workflow.test.ts common/models/src/providers/antigravity common/models/src/providers/claude-code/adapter/environment.test.ts
       - name: Build unsigned Windows installer and update packages
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         id: build
@@ -99,6 +87,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-evidence-${{ github.sha }}
+          include-hidden-files: true
           path: |
             platform/desktop/.artifacts/*.json
             platform/desktop/.artifacts/*.png

@@ -1,15 +1,13 @@
 // Purpose: Executes one native setup job and records its bounded output and completion.
 import { randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
-import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-import { promisify, stripVTControlCharacters } from "node:util";
+import { stripVTControlCharacters } from "node:util";
 import { Cause, Effect, Exit, Fiber, Queue, Stream, Scope } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { ProviderDiscoveryResult } from "@openchart/models/model-provider";
 import type { ModelError } from "@openchart/server/models/errors";
 import type { SetupAction, SetupState } from "./setup-state";
 import { SetupFailed } from "./errors";
+import { stopWindowsTerminal } from "./terminal-cleanup";
 
 type SetupCommand = Extract<
   ProviderDiscoveryResult,
@@ -140,33 +138,11 @@ const executeTerminalCommand = Effect.fn("Models.setup.executeTerminalCommand")(
       (resource) =>
         Effect.promise(async () => {
           try {
-            if (!resource.ended()) {
-              // Killing only the CLI leaves descendants holding the console alive.
-              try {
-                await promisify(execFile)(
-                  path.win32.join(
-                    process.env.SystemRoot ?? "C:\\Windows",
-                    "System32",
-                    "taskkill.exe",
-                  ),
-                  ["/PID", String(resource.terminal.pid), "/T", "/F"],
-                  { windowsHide: true, timeout: 5_000, maxBuffer: 16_384 },
-                );
-              } catch (cause) {
-                // A natural exit racing cancellation makes taskkill report no process.
-                if (!resource.ended()) throw cause;
-              } finally {
-                if (!resource.ended()) resource.terminal.kill();
-              }
-              await Promise.race([
-                resource.exit,
-                delay(2_000, undefined, { ref: false }),
-              ]);
-              if (!resource.ended())
-                throw new Error(
-                  "Terminal sign-in did not exit after termination.",
-                );
-            }
+            await stopWindowsTerminal(
+              resource.terminal,
+              resource.exit,
+              resource.ended,
+            );
           } finally {
             resource.output.dispose();
             resource.completion.dispose();
