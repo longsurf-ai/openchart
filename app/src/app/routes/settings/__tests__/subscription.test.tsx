@@ -1,4 +1,4 @@
-// Purpose: Verify Subscription scopes billing to the gated account and refreshes provider access on status.
+// Purpose: Verify Subscription scopes billing to the signed-in local account, offers sign-in while signed out, and refreshes provider access on status.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,15 +12,51 @@ import SubscriptionSettings from "@openchart/app/app/routes/settings/subscriptio
 const context = vi.hoisted(() => ({
   transport: undefined as AppTransport | undefined,
 }));
+const clerk = vi.hoisted(() => ({ openSignIn: vi.fn() }));
 vi.mock("react-router", () => ({ useOutletContext: () => context }));
 vi.mock("@clerk/react", () => ({
+  useClerk: () => clerk,
   useUser: () => ({ user: { id: "user_1" } }),
 }));
 vi.mock("@openchart/app/app/routes/settings/settings-page", () => ({
   SettingsPage: ({ children }: PropsWithChildren) => children,
 }));
 
-test("gated account billing loads once and refreshes provider access when status changes", async () => {
+function showSettings() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <AppHostProvider value={testAppHost()}>
+        <SubscriptionSettings />
+      </AppHostProvider>
+    </QueryClientProvider>,
+  );
+  return client;
+}
+
+test("a signed-out account is offered Clerk sign-in without reading billing", async () => {
+  const billing = vi.fn();
+  context.transport = {
+    rpc: {
+      providers: { refresh: { mutate: vi.fn() } },
+      access: {
+        auth: {
+          getState: { query: vi.fn(async () => ({ status: "signed-out" })) },
+        },
+        billing: { getSubscription: { query: billing } },
+      },
+    },
+    events: { subscribe: () => ({ unsubscribe() {} }) },
+  } as unknown as AppTransport;
+  showSettings();
+  await userEvent.click(await screen.findByRole("button", { name: "Sign in" }));
+  expect(clerk.openSignIn).toHaveBeenCalledOnce();
+  expect(billing).not.toHaveBeenCalled();
+});
+
+test("signed-in billing loads once and refreshes provider access when status changes", async () => {
   const billing = vi.fn(async (): Promise<object> => ({ status: "none" }));
   const refresh = vi.fn(async () => {});
   let redeemedCode: string | null = null;
@@ -28,6 +64,14 @@ test("gated account billing loads once and refreshes provider access when status
     rpc: {
       providers: { refresh: { mutate: refresh } },
       access: {
+        auth: {
+          getState: {
+            query: vi.fn(async () => ({
+              status: "signed-in",
+              user: { id: "user_1" },
+            })),
+          },
+        },
         billing: {
           getSubscription: { query: billing },
           getReferrals: {
@@ -57,16 +101,7 @@ test("gated account billing loads once and refreshes provider access when status
     },
     events: { subscribe: () => ({ unsubscribe() {} }) },
   } as unknown as AppTransport;
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={client}>
-      <AppHostProvider value={testAppHost()}>
-        <SubscriptionSettings />
-      </AppHostProvider>
-    </QueryClientProvider>,
-  );
+  const client = showSettings();
   expect(
     await screen.findByRole("button", { name: "Subscribe" }),
   ).toBeVisible();

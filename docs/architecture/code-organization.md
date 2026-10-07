@@ -123,7 +123,7 @@ The [desktop package](desktop.md) hosts the full application server in an
 Electron utility process: one SQLite runtime per application, a per-run token
 guarding the loopback API, and a safeStorage-protected credential key handed to
 the backend. The shared app requires a host-supplied Clerk provider and opens the workspace
-only behind its account gate; Desktop owns the native Clerk bridge.
+signed in or out; Desktop owns the native Clerk bridge.
 [Access](access.md) owns account state and durable credentials; OpenChartClient obtains keys through Integration. `server/runtime.ts`
 composes one OpenChart Provider client and injects its reset callback into Auth.
 Auth owns account credential writes and the subsequent cleanup, within its serialized,
@@ -202,7 +202,7 @@ existing reads still own labels and Chart-to-Dashboard resolution.
 Local application development uses `just desktop`, with renderer HMR inside
 Electron. Interactive debugging and verification use Computer Use in the Desktop
 window. There is no standalone browser entry or Vite backend proxy. Desktop
-supplies the Clerk provider; the workspace sits behind the account gate.
+supplies the Clerk provider; sign-in uses Clerk's modal.
 
 `server/index.ts` owns HTTP/Hose composition and the root router. It mounts
 `resources`, `feed`, `access`, `events`, `agent`, `config`, `models`, and `workspace`.

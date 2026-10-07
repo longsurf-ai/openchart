@@ -4,7 +4,8 @@
 access/declarations; `feed/` adapts consumers. `client.ts` owns authenticated I/O
 and decoding; `live.ts` owns the shared socket and series subscriptions; `contract.ts` defines results; `config.ts`/`errors.ts` own settings/failures.
 
-- Cloud admission grants access; confirmed billing facts explain denials.
+- Cloud admission grants access; a missing credential requires sign-in;
+  confirmed billing facts explain denials.
   HTTP 403 alone never implies a subscription requirement.
 - Publish Datasets only while enabled and access is granted. Requirements and
   permission errors wait for account/billing refresh or explicit retry; transient

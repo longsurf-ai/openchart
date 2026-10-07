@@ -2,9 +2,7 @@
 
 - Bootstrap supplies BackendConnection, AppHost and Clerk. `connection/` owns
   transport, reconnect and subscription cleanup; Layout keys consumers by attempt.
-  AccountGate sits between the connection and the workspace, dimming the static,
-  data-free WorkspaceBackdrop; its connection provider stays outside so sign-out
-  outlives the workspace.
+  AccountConnectionProvider wraps the workspace, which opens signed in or out.
   AppHostProvider supplies native operations. Route changes detach observations
   without cancelling execution; the last subscriber closes SSE.
 - Layout retains LeftSidebar, SidebarInset/Outlet and CopilotAgent. It owns

@@ -241,7 +241,7 @@ test("another user never sees the previous user's cached facts", async () => {
   ).toBeVisible();
 });
 
-// The account gate unmounts Billing on any account change.
+// Subscription settings remount Billing for each signed-in account.
 test("pending checkout cannot open after unmount", async () => {
   const app = fixture();
   let resolve!: (link: { url: string }) => void;

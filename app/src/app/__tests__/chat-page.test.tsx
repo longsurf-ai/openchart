@@ -128,6 +128,7 @@ const rpc = vi.hoisted(() => ({
 }));
 const clerk = vi.hoisted(() => ({
   signOut: vi.fn(),
+  openSignIn: vi.fn(),
   signedIn: true,
   // The session handoff reads the SDK user from the Clerk object itself.
   get user() {
@@ -148,7 +149,6 @@ vi.mock("@clerk/react", () => ({
   useSession: () => ({ session: clerk.signedIn ? { id: "session_1" } : null }),
   useClerk: () => clerk,
   UserAvatar: () => null,
-  SignIn: () => <p>Clerk sign in</p>,
 }));
 vi.mock("@trpc/client", async (original) => ({
   ...(await original<typeof import("@trpc/client")>()),
@@ -3356,18 +3356,19 @@ test("chat can retry failed Config reads and settings shows its own error only",
   ).not.toBeInTheDocument();
 });
 
-test("signed-out users see sign-in instead of the workspace", async () => {
+test("signed-out users use the workspace and sign in through Clerk's modal", async () => {
   backend();
   clerk.signedIn = false;
   rpc.access.auth.getState.query.mockResolvedValue({ status: "signed-out" });
-  renderWorkspace();
-  expect(await screen.findByText("Clerk sign in")).toBeInTheDocument();
+  const view = renderWorkspace();
+  disposals.push(() => view.unmount());
+  const user = userEvent.setup();
   expect(
-    screen.queryByRole("textbox", { name: "Message" }),
-  ).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole("link", { name: "Settings" }),
-  ).not.toBeInTheDocument();
+    await screen.findByRole("textbox", { name: "Message" }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  expect(clerk.openSignIn).toHaveBeenCalledOnce();
+  expect(window.location.pathname).toBe("/app");
 });
 
 test("Profile is read-only, independent of Config, and sign-out ends the Clerk session first", async () => {
@@ -3414,9 +3415,15 @@ test("Profile is read-only, independent of Config, and sign-out ends the Clerk s
       await screen.findByRole("region", { name: "Profile settings" }),
     ).getByRole("button", { name: "Sign out of OpenChart" }),
   );
-  expect(await screen.findByText("Clerk sign in")).toBeInTheDocument();
+  expect(
+    within(
+      await screen.findByRole("region", { name: "Profile settings" }),
+    ).getByRole("button", { name: "Sign in" }),
+  ).toBeInTheDocument();
   expect(clerk.signOut).toHaveBeenCalledTimes(2);
-  expect(rpc.access.auth.logout.mutate).toHaveBeenCalledOnce();
+  await waitFor(() =>
+    expect(rpc.access.auth.logout.mutate).toHaveBeenCalledOnce(),
+  );
   expect(rpc.config.update.mutate).not.toHaveBeenCalled();
 });
 

@@ -27,7 +27,7 @@ const date = (value: string) =>
     new Date(value),
   );
 
-/** Shows the gated account's facts. Cloud alone decides trial eligibility and data access. @example <Subscription transport={transport} /> */
+/** Shows the signed-in account's facts. Cloud alone decides trial eligibility and data access. @example <Subscription transport={transport} /> */
 export function Subscription(props: {
   transport: AppTransport;
   onStatusChange?: () => void;
