@@ -30,11 +30,16 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   _electron,
-  expect,
+  expect as playwrightExpect,
   type ElectronApplication,
   type Page,
+  type Request,
 } from "@playwright/test";
 import { writeNativeExecutable } from "./native-executable.ts";
+
+// Packaged UI readiness includes backend I/O and may run under emulation.
+// Keep assertions bounded consistently with page actions; native waits stay separate.
+const expect = playwrightExpect.configure({ timeout: 30_000 });
 
 const sourceExecutable = process.argv[2];
 assert(
@@ -724,23 +729,37 @@ try {
     page.getByRole("textbox", { name: "Message", exact: true }),
   ).toBeVisible();
   // Observe the app's normal discovery request; no prompt or market query is sent.
-  // Ignore a late response from the page being replaced by this reload.
+  // Only completed requests started by the new document qualify. React can
+  // cancel discovery during mount; old-document responses have stale CDP handles.
   const models = page
     .waitForEvent("framenavigated", {
       predicate: (frame) => frame === page.mainFrame(),
     })
-    .then(() =>
-      page.waitForResponse(
-        (response) => new URL(response.url()).pathname === "/trpc/models.list",
-      ),
-    );
+    .then(async () => {
+      const requests = new Set<Request>();
+      const remember = (request: Request) => {
+        if (new URL(request.url()).pathname === "/trpc/models.list")
+          requests.add(request);
+      };
+      page.on("request", remember);
+      try {
+        const request = await page.waitForEvent("requestfinished", {
+          predicate: (request) => requests.has(request),
+        });
+        const response = await request.response();
+        assert(response, "Packaged model discovery did not receive a response");
+        return { status: response.status(), body: await response.json() };
+      } finally {
+        page.off("request", remember);
+      }
+    });
   await page.reload();
+  const modelResponse = await models;
+  assert.equal(modelResponse.status, 200);
+  assert(Array.isArray(modelResponse.body.result.data));
   await expect(
     page.getByRole("dialog", { name: "Connect your agent", exact: true }),
   ).toHaveCount(0);
-  const modelResponse = await models;
-  assert.equal(modelResponse.status(), 200);
-  assert(Array.isArray((await modelResponse.json()).result.data));
   const windowButtons =
     runtime.platform === "darwin"
       ? await application!.evaluate(({ BrowserWindow }) =>
