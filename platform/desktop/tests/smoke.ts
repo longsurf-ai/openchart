@@ -202,7 +202,8 @@ async function verifySettings(page: Page) {
   const filename = join(home, "settings.json");
   await expect
     .poll(
-      async () => JSON.parse(await readFile(filename, "utf8")).appearance.theme,
+      async () =>
+        JSON.parse(await readFile(filename, "utf8")).appearance?.theme,
     )
     .toBe("dark");
   await page.getByRole("link", { name: "Data Providers", exact: true }).click();
@@ -219,7 +220,8 @@ async function verifySettings(page: Page) {
   await expect
     .poll(
       async () =>
-        JSON.parse(await readFile(filename, "utf8")).providers.binance.enabled,
+        JSON.parse(await readFile(filename, "utf8")).providers?.binance
+          ?.enabled,
     )
     .toBe(false);
 
@@ -329,7 +331,7 @@ async function verifySettings(page: Page) {
   await expect
     .poll(
       async () =>
-        JSON.parse(await readFile(filename, "utf8")).models.defaultModel
+        JSON.parse(await readFile(filename, "utf8")).models?.defaultModel
           ?.modelID,
     )
     .toBe("tier1");
