@@ -3,7 +3,7 @@
 Owns the app manifest, managed downloads, startup reconciliation and login jobs.
 
 - Manifest is the sole version/download authority. Pin official archives (npm or
-  flat GitHub release tarballs) and hashes;
+  flat GitHub release tarballs/ZIPs) and hashes;
   update both Claude SDK package dependencies with its native artifact version.
 - Startup installs missing pinned runtimes, including first installs and upgrades,
   independently of provider enablement and without blocking app readiness.
@@ -15,5 +15,7 @@ Owns the app manifest, managed downloads, startup reconciliation and login jobs.
   Failed updates preserve old installations but never select an unpinned version.
 - After setup, refresh only that provider and recheck auth. Credentials stay with
   the native CLI and inherited HOME/CODEX_HOME/CLAUDE_CONFIG_DIR. Never log tokens.
+- Terminal login uses Windows-only ConPTY, scoped input/output and process-tree
+  cleanup. Piped setup hides Windows consoles; Unix login commands stay native.
 - RPC accepts provider/action only. Installation output is progress; only login
   accepts stdin. Setup state/output are bounded, ephemeral and never persisted.

@@ -58,11 +58,34 @@ test("every Antigravity pin is one flat GitHub release", () => {
   expect(versions.size).toBe(1);
   const [version] = versions;
   for (const pin of pins) {
-    expect(pin).toMatchObject({ layout: "flat", executable: "antigravity" });
+    expect(pin).toMatchObject({
+      layout: "flat",
+      executable: pin.archive === "zip" ? "antigravity.exe" : "antigravity",
+    });
     expect(pin.url).toMatch(
       new RegExp(
-        `^https://github\\.com/google-antigravity/antigravity-cli/releases/download/${version!.replaceAll(".", "\\.")}/agy_cli_[a-z0-9_]+\\.tar\\.gz$`,
+        `^https://github\\.com/google-antigravity/antigravity-cli/releases/download/${version!.replaceAll(".", "\\.")}/agy_cli_[a-z0-9_]+${pin.archive === "zip" ? "\\.zip" : "\\.tar\\.gz"}$`,
       ),
     );
   }
+});
+
+test("existing tar pins retain exactly their original identity fields", () => {
+  for (const pins of Object.values(PROVIDER_MANIFEST)) {
+    for (const pin of Object.values(pins)) {
+      if (pin.archive === "zip") continue;
+      // Installation hashes JSON.stringify(pin): even a default archive field forces a download.
+      expect(Object.keys(pin)).toEqual([
+        "version",
+        "url",
+        "integrity",
+        "layout",
+        "executable",
+      ]);
+    }
+  }
+  expect(PROVIDER_MANIFEST[ANTIGRAVITY]["win32-x64"]).toMatchObject({
+    archive: "zip",
+    executable: "antigravity.exe",
+  });
 });

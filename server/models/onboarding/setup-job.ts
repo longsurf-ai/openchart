@@ -1,6 +1,9 @@
 // Purpose: Executes one native setup job and records its bounded output and completion.
 import { randomUUID } from "node:crypto";
-import { stripVTControlCharacters } from "node:util";
+import { execFile } from "node:child_process";
+import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { promisify, stripVTControlCharacters } from "node:util";
 import { Cause, Effect, Exit, Fiber, Queue, Stream, Scope } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { ProviderDiscoveryResult } from "@openchart/models/model-provider";
@@ -56,7 +59,13 @@ export const runSetupJob = Effect.fn("Models.setup.runSetupJob")(function* (
   );
 });
 
-/** Runs trusted native login argv with inherited auth environment; nonzero exits fail with SetupFailed. @example yield* executeSetupCommand(job, command, spawner); */
+/**
+ * Runs trusted login argv with inherited native auth environment. Terminal login
+ * uses Windows ConPTY; ordinary commands use scoped pipes. The owner closes input,
+ * awaits process cleanup on cancellation/deadline, and retains bounded output.
+ * Unsupported terminal hosts, spawn errors and nonzero exits fail with SetupFailed.
+ * @example yield* executeSetupCommand(job, command, spawner);
+ */
 export const executeSetupCommand = Effect.fn(
   "Models.setup.executeSetupCommand",
 )(function* (
@@ -64,10 +73,12 @@ export const executeSetupCommand = Effect.fn(
   command: SetupCommand,
   spawner: ChildProcessSpawner.ChildProcessSpawner["Service"],
 ) {
+  if (command.terminal) return yield* executeTerminalCommand(job, command);
   const process = yield* spawner.spawn(
     ChildProcess.make(command.executable, command.args, {
       extendEnv: true,
       env: { DISABLE_AUTOUPDATER: "1" },
+      windowsHide: true,
       // Native CLIs own their auth/config; discovery never starts this process.
       stdin: Stream.fromQueue(job.input),
       forceKillAfter: "2 seconds",
@@ -83,6 +94,106 @@ export const executeSetupCommand = Effect.fn(
       message: `Sign-in exited with code ${code}.`,
     });
 });
+
+const executeTerminalCommand = Effect.fn("Models.setup.executeTerminalCommand")(
+  function* (job: SetupJob, command: SetupCommand) {
+    if (process.platform !== "win32")
+      return yield* new SetupFailed({
+        message: "Terminal sign-in is unavailable on this platform.",
+      });
+    const resource = yield* Effect.acquireRelease(
+      Effect.tryPromise({
+        try: async () => {
+          // Native dependencies are staged only for Windows and loaded only for login.
+          const pty = await import("node-pty");
+          const terminal = pty.spawn(command.executable, [...command.args], {
+            name: "xterm-color",
+            cols: 120,
+            rows: 30,
+            useConpty: true,
+            env: {
+              ...process.env,
+              DISABLE_AUTOUPDATER: "1",
+              AGY_CLI_DISABLE_AUTO_UPDATE: "true",
+            },
+          });
+          let ended = false;
+          let resolveExit!: (code: number) => void;
+          const exit = new Promise<number>((resolve) => {
+            resolveExit = resolve;
+          });
+          const output = terminal.onData((chunk) => appendOutput(job, chunk));
+          const completion = terminal.onExit(({ exitCode }) => {
+            ended = true;
+            resolveExit(exitCode);
+          });
+          return { terminal, exit, output, completion, ended: () => ended };
+        },
+        catch: (cause) =>
+          new SetupFailed({
+            message:
+              cause instanceof Error
+                ? cause.message
+                : "Could not start terminal sign-in.",
+          }),
+      }),
+      (resource) =>
+        Effect.promise(async () => {
+          try {
+            if (!resource.ended()) {
+              // Killing only the CLI leaves descendants holding the console alive.
+              try {
+                await promisify(execFile)(
+                  path.win32.join(
+                    process.env.SystemRoot ?? "C:\\Windows",
+                    "System32",
+                    "taskkill.exe",
+                  ),
+                  ["/PID", String(resource.terminal.pid), "/T", "/F"],
+                  { windowsHide: true, timeout: 5_000, maxBuffer: 16_384 },
+                );
+              } catch (cause) {
+                // A natural exit racing cancellation makes taskkill report no process.
+                if (!resource.ended()) throw cause;
+              } finally {
+                if (!resource.ended()) resource.terminal.kill();
+              }
+              await Promise.race([
+                resource.exit,
+                delay(2_000, undefined, { ref: false }),
+              ]);
+              if (!resource.ended())
+                throw new Error(
+                  "Terminal sign-in did not exit after termination.",
+                );
+            }
+          } finally {
+            resource.output.dispose();
+            resource.completion.dispose();
+          }
+        }),
+    );
+    const input = Stream.fromQueue(job.input).pipe(
+      Stream.decodeText(),
+      Stream.runForEach((text) =>
+        Effect.try({
+          try: () => resource.terminal.write(text.replace(/\r?\n/g, "\r")),
+          catch: () =>
+            new SetupFailed({ message: "Could not send sign-in input." }),
+        }),
+      ),
+      Effect.andThen(Effect.never),
+    );
+    const code = yield* Effect.raceFirst(
+      Effect.promise(() => resource.exit),
+      input,
+    );
+    if (code !== 0)
+      return yield* new SetupFailed({
+        message: `Sign-in exited with code ${code}.`,
+      });
+  },
+);
 
 const finishSetupJob = Effect.fn("Models.setup.finishSetupJob")(function* (
   job: SetupJob,

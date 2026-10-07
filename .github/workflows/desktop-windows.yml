@@ -1,0 +1,89 @@
+name: Desktop Windows
+
+on:
+  push:
+    branches: [main, seanxwzhang/desktop-multiplatform]
+  pull_request:
+    paths:
+      - "platform/desktop/**"
+      - "server/**"
+      - "common/models/**"
+      - "app/**"
+      - "bun.lock"
+      - "justfile"
+      - ".node-version"
+      - ".github/workflows/desktop-windows.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      VITEST_MIN_FORKS: "2"
+      VITEST_MAX_FORKS: "2"
+    steps:
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Install Tea's supported npm version
+        run: npm install --global npm@11.11.1
+      - uses: extractions/setup-just@v2
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - name: Install dependencies using Git Bash
+        run: just install --frozen-lockfile
+      - name: Verify platform contracts and native integrations
+        run: just test-core platform/desktop/src/targets.test.ts platform/desktop/src/main.test.ts platform/desktop/src/squirrel.test.ts platform/desktop/scripts platform/desktop/tests/native-executable.test.ts server/models/onboarding common/models/src/providers/antigravity
+      - name: Build unsigned Windows installer and update packages
+        id: build
+        run: |
+          version=$(node -p "require('./platform/desktop/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          just desktop-release win32-x64 unsigned
+      - name: Probe pinned Antigravity sign-in with ConPTY
+        env:
+          OPENCHART_WINDOWS_RUNTIME_PROBE: "1"
+          OPENCHART_WINDOWS_RUNTIME_PROBE_REPORT: platform/desktop/.artifacts/antigravity-windows-probe.json
+        run: just test-core server/models/onboarding/windows-runtime.test.ts
+      - name: Verify relocated production package
+        run: |
+          version=$(node -p "require('./platform/desktop/package.json').version")
+          executable=$(cygpath -w "$PWD/platform/desktop/out/$version/OpenChart-win32-x64/OpenChart.exe")
+          just desktop-smoke "$executable" production
+      - name: Retain installer and receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenChart-win32-x64-unsigned-${{ github.sha }}
+          path: platform/desktop/out/release/${{ steps.build.outputs.version }}/win32-x64/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Retain smoke evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-evidence-${{ github.sha }}
+          path: |
+            platform/desktop/.artifacts/*.json
+            platform/desktop/.artifacts/*.png
+            platform/desktop/.artifacts/*.txt
+          if-no-files-found: warn
+          retention-days: 14

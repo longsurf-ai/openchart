@@ -2,6 +2,8 @@
 
 import { temporaryHome } from "@openchart/server/home.test-utils";
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Notify } from "./host-protocol";
 
@@ -21,8 +23,24 @@ async function host(
   configurationError?: Error,
   production = false,
   switches: readonly string[] = [],
+  environment: {
+    platform?: NodeJS.Platform;
+    arch?: string;
+    argv?: readonly string[];
+    updateRoot?: string | null;
+    earlyNotification?: boolean;
+  } = {},
 ) {
   vi.resetModules();
+  const runtimePlatform = environment.platform ?? "darwin";
+  const runtimeArch = environment.arch ?? "arm64";
+  vi.doMock("node:os", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("node:os")>()),
+    platform: () => runtimePlatform,
+    arch: () => runtimeArch,
+  }));
+  const previousArgv = process.argv;
+  process.argv = ["OpenChart.exe", ...(environment.argv ?? [])];
   const resourcesPath = Object.getOwnPropertyDescriptor(
     process,
     "resourcesPath",
@@ -37,14 +55,17 @@ async function host(
     production ? "production" : "development",
   );
   vi.stubEnv(
-    "OPENCHART_UPDATE_URL",
-    "https://downloads.longsurf.ai/openchart/darwin/arm64",
+    "OPENCHART_UPDATE_ROOT",
+    environment.updateRoot === null
+      ? undefined
+      : (environment.updateRoot ?? "https://downloads.longsurf.ai/openchart"),
   );
   const signals = (["SIGINT", "SIGTERM"] as const).map((signal) => ({
     signal,
     listeners: process.listeners(signal),
   }));
   cleanup = () => {
+    process.argv = previousArgv;
     if (resourcesPath)
       Object.defineProperty(process, "resourcesPath", resourcesPath);
     else Reflect.deleteProperty(process, "resourcesPath");
@@ -90,8 +111,14 @@ async function host(
   }
   const notifications: SystemNotification[] = [];
   const notificationsSupported = vi.fn(() => true);
+  const handleActivation = vi.fn<
+    (callback: (details: unknown) => void) => void
+  >((callback) => {
+    if (environment.earlyNotification) callback({ type: "click" });
+  });
   class SystemNotification extends EventEmitter {
     static isSupported = notificationsSupported;
+    static handleActivation = handleActivation;
     readonly show = vi.fn();
     readonly options: unknown;
     constructor(options: unknown) {
@@ -108,7 +135,10 @@ async function host(
     },
     isPackaged: true,
     setName: vi.fn(),
-    requestSingleInstanceLock: () => true,
+    setAppUserModelId: vi.fn(),
+    setAsDefaultProtocolClient: vi.fn(() => true),
+    removeAsDefaultProtocolClient: vi.fn(() => true),
+    requestSingleInstanceLock: vi.fn(() => true),
     whenReady: async () => {},
     getPath: () => "/profile",
     getAppPath: () => "/app",
@@ -159,16 +189,23 @@ async function host(
     protocol: { registerSchemesAsPrivileged: vi.fn() },
   }));
   vi.doMock("./credentials", () => ({ loadCredentialKey: () => key.promise }));
+  const configureClerk = vi.fn(() => {
+    if (configurationError) throw configurationError;
+    return {
+      publishableKey: "configured-test-key",
+      origin: "https://test.clerk.accounts.dev",
+      cleanup: vi.fn(),
+    };
+  });
   vi.doMock("./clerk", () => ({
-    configureClerk: () => {
-      if (configurationError) throw configurationError;
-      return {
-        publishableKey: "configured-test-key",
-        origin: "https://test.clerk.accounts.dev",
-        cleanup: vi.fn(),
-      };
-    },
+    configureClerk,
     connectClerkSession: vi.fn(),
+  }));
+  const installer = deferred<{ stdout: string; stderr: string }>();
+  const executeInstaller = vi.fn(() => installer.promise);
+  vi.doMock("node:child_process", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("node:child_process")>()),
+    execFile: Object.assign(vi.fn(), { [promisify.custom]: executeInstaller }),
   }));
   vi.doMock("./backend-process", () => ({ startBackend }));
   await import("./main");
@@ -194,6 +231,10 @@ async function host(
     quitAndInstall,
     stopUpdates,
     showMessageBox,
+    handleActivation,
+    configureClerk,
+    executeInstaller,
+    installer,
   };
 }
 
@@ -234,16 +275,20 @@ test("development packages never start automatic updates", async () => {
   expect(runtime.startBackend).toHaveBeenCalledWith(
     expect.objectContaining({
       init: expect.objectContaining({
-        documentationDirectory: "/app/Contents/Resources/docs",
+        documentationDirectory: join("/app/Contents/Resources", "docs"),
       }),
     }),
   );
 });
 
-test.runIf(process.platform === "darwin" && process.arch === "arm64")(
-  "the page's update restart respects cancellation and waits for backend exit",
-  async () => {
-    const runtime = await host(undefined, true);
+test.each([
+  ["darwin", "arm64"],
+  ["darwin", "x64"],
+  ["win32", "x64"],
+] as const)(
+  "%s-%s update restart respects cancellation and waits for backend exit",
+  async (platform, arch) => {
+    const runtime = await host(undefined, true, [], { platform, arch });
     runtime.key.resolve(new Uint8Array(32));
     runtime.ready.resolve(4321);
     await vi.waitFor(() =>
@@ -254,7 +299,7 @@ test.runIf(process.platform === "darwin" && process.arch === "arm64")(
       onNotifyUser: (info: { releaseName: string }) => void;
     };
     expect(options.updateSource.baseUrl).toBe(
-      "https://downloads.longsurf.ai/openchart/darwin/arm64",
+      `https://downloads.longsurf.ai/openchart/${platform}/${arch}`,
     );
     const window = runtime.windows[0]!;
     // Release builds load the bundled app, not the development server.
@@ -271,7 +316,9 @@ test.runIf(process.platform === "darwin" && process.arch === "arm64")(
     expect(readyUpdate(trusted)).toBeNull();
     restartToUpdate(trusted);
     expect(runtime.app.quit).not.toHaveBeenCalled();
-    options.onNotifyUser({ releaseName: "OpenChart 0.1.6" });
+    options.onNotifyUser({
+      releaseName: platform === "win32" ? "0.1.6" : "OpenChart 0.1.6",
+    });
     expect(runtime.showMessageBox).not.toHaveBeenCalled();
     expect(window.webContents.send).toHaveBeenCalledExactlyOnceWith(
       "desktop.updateReady",
@@ -304,6 +351,97 @@ test.runIf(process.platform === "darwin" && process.arch === "arm64")(
     );
   },
 );
+
+test.each([
+  { platform: "linux", arch: "x64" },
+  { platform: "win32", arch: "arm64" },
+  { platform: "darwin", arch: "x64", updateRoot: "" },
+  { platform: "darwin", arch: "arm64", updateRoot: null },
+  { platform: "win32", arch: "x64", argv: ["--squirrel-firstrun"] },
+] as const)(
+  "disables automatic updates for $platform-$arch with $updateRoot / $argv",
+  async (environment) => {
+    const runtime = await host(undefined, true, [], environment);
+    runtime.key.resolve(new Uint8Array(32));
+    runtime.ready.resolve(4321);
+    await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+    expect(runtime.updateElectronApp).not.toHaveBeenCalled();
+    expect(runtime.executeInstaller).not.toHaveBeenCalled();
+  },
+);
+
+test.each(["--squirrel-install", "--squirrel-updated", "--squirrel-uninstall"])(
+  "%s completes installer work without starting Clerk, backend or windows",
+  async (event) => {
+    const runtime = await host(undefined, true, [], {
+      platform: "win32",
+      arch: "x64",
+      argv: [event, "0.1.6"],
+    });
+    expect(runtime.executeInstaller).toHaveBeenCalledOnce();
+    expect(runtime.app.quit).not.toHaveBeenCalled();
+    expect(runtime.app.requestSingleInstanceLock).not.toHaveBeenCalled();
+    expect(runtime.configureClerk).not.toHaveBeenCalled();
+    expect(runtime.startBackend).not.toHaveBeenCalled();
+    expect(runtime.opened).not.toHaveBeenCalled();
+    expect(runtime.handleActivation).not.toHaveBeenCalled();
+    runtime.installer.resolve({ stdout: "", stderr: "" });
+    await vi.waitFor(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
+  },
+);
+
+test("an obsolete Windows package quits without initialization", async () => {
+  const runtime = await host(undefined, true, [], {
+    platform: "win32",
+    argv: ["--squirrel-obsolete"],
+  });
+  expect(runtime.app.quit).toHaveBeenCalledOnce();
+  expect(runtime.executeInstaller).not.toHaveBeenCalled();
+  expect(runtime.configureClerk).not.toHaveBeenCalled();
+  expect(runtime.startBackend).not.toHaveBeenCalled();
+  expect(runtime.opened).not.toHaveBeenCalled();
+});
+
+test("Windows notification activation waits for readiness, survives dismissal, and respects shutdown", async () => {
+  const runtime = await host(undefined, true, [], {
+    platform: "win32",
+    arch: "x64",
+    earlyNotification: true,
+  });
+  expect(runtime.app.setAppUserModelId).toHaveBeenCalledExactlyOnceWith(
+    "com.squirrel.OpenChart.OpenChart",
+  );
+  await vi.waitFor(() =>
+    expect(runtime.handleActivation).toHaveBeenCalledOnce(),
+  );
+  expect(runtime.opened).not.toHaveBeenCalled();
+  runtime.key.resolve(new Uint8Array(32));
+  runtime.ready.resolve(4321);
+  await vi.waitFor(() =>
+    expect(runtime.windows[0]?.focus).toHaveBeenCalledOnce(),
+  );
+  const activation = runtime.handleActivation.mock.calls[0]![0];
+  const first = runtime.windows[0]!;
+  const { onNotify } = runtime.startBackend.mock.calls[0]![0];
+  onNotify({ type: "notify", title: "Alert", body: "Ready", sound: "system" });
+  runtime.notifications[0]!.emit("close");
+  activation({ type: "click" });
+  expect(first.focus).toHaveBeenCalledTimes(2);
+  // An instance event accompanies handleActivation; it must not focus twice.
+  runtime.notifications[0]!.emit("click");
+  expect(first.focus).toHaveBeenCalledTimes(2);
+  runtime.windows.length = 0;
+  activation({ type: "click" });
+  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
+  const reopened = runtime.windows[0]!;
+  await vi.waitFor(() => expect(reopened.focus).toHaveBeenCalledOnce());
+  runtime.app.emit("before-quit", { preventDefault: vi.fn() });
+  activation({ type: "click" });
+  expect(reopened.focus).toHaveBeenCalledOnce();
+  runtime.windows.length = 0;
+  activation({ type: "click" });
+  expect(runtime.opened).toHaveBeenCalledTimes(2);
+});
 
 test("development startup failures exit visibly without a pre-ready native dialog", async () => {
   const failure = new Error("Native authentication bridge failed");
@@ -385,6 +523,8 @@ test("native file open validates local paths and the calling frame, and propagat
     "file:///other/note.pdf",
     "https://example.com",
     "//remote/file.pdf",
+    "\\\\remote\\file.pdf",
+    "/\\remote\\file.pdf",
     "/other/bad\0.pdf",
   ])
     await expect(open(event, path)).rejects.toThrow();
@@ -439,7 +579,7 @@ test("a backend notification is shown and its click brings the window forward", 
     title: "BTC breakout",
     body: "exceeded 70000",
     silent: false,
-    ...(process.platform === "darwin" ? { sound: "openchart-glass.wav" } : {}),
+    sound: "openchart-glass.wav",
   });
   expect(notification.show).toHaveBeenCalledOnce();
   const window = runtime.windows[0]!;

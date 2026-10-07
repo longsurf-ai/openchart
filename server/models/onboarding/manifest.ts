@@ -12,13 +12,14 @@ export interface RuntimeArtifact {
    * installation strips; `flat` release archives keep entries at the root.
    */
   readonly layout: "npm" | "flat";
+  /** ZIP archives opt in; omitted means tar.gz and preserves existing install identities. */
+  readonly archive?: "zip";
   /** Path of the CLI inside the installed payload. */
   readonly executable: string;
 }
 /**
  * Platform-specific pins. Update Claude SDK dependencies together with its artifacts.
- * Antigravity publishes GitHub release archives; Windows ships zip archives and
- * sign-in needs a POSIX pseudo-terminal, so it has no Windows pin.
+ * Antigravity publishes flat GitHub release archives, including ZIPs on Windows.
  */
 export const PROVIDER_MANIFEST: Readonly<
   Record<NativeProviderID, Readonly<Record<string, RuntimeArtifact>>>
@@ -124,6 +125,15 @@ export const PROVIDER_MANIFEST: Readonly<
     },
   },
   antigravity: {
+    "win32-x64": {
+      version: "1.2.16",
+      url: "https://github.com/google-antigravity/antigravity-cli/releases/download/1.2.16/agy_cli_windows_x64.zip",
+      integrity:
+        "sha512-UUWMxTzPb/W3Y6LiQqkcYqMtcn0Y3vIAsUHklI8mXZ3tjNxaXbmO6kuiXi7baCjZF87AStTPv//mMOFcNXO2kg==",
+      layout: "flat",
+      archive: "zip",
+      executable: "antigravity.exe",
+    },
     "darwin-arm64": {
       version: "1.2.16",
       url: "https://github.com/google-antigravity/antigravity-cli/releases/download/1.2.16/agy_cli_mac_arm64.tar.gz",

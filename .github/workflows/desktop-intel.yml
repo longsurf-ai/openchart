@@ -1,0 +1,58 @@
+name: Desktop Intel Mac
+
+on:
+  push:
+    branches: [main, seanxwzhang/desktop-multiplatform]
+  pull_request:
+    paths:
+      - "platform/desktop/**"
+      - "server/**"
+      - "common/models/**"
+      - "app/**"
+      - "bun.lock"
+      - "justfile"
+      - ".node-version"
+      - ".github/workflows/desktop-intel.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-intel-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Install Tea's supported npm version
+        run: npm install --global npm@11.11.1
+      - uses: extractions/setup-just@v2
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - name: Install dependencies
+        run: just install --frozen-lockfile
+      - name: Package for Intel
+        run: just desktop-package development darwin-x64
+      - name: Verify relocated Intel package
+        run: just desktop-smoke "$PWD/platform/desktop/.artifacts/dev/OpenChart Development-darwin-x64/OpenChart Development.app/Contents/MacOS/OpenChart Development" development
+      - name: Retain smoke evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-intel-evidence-${{ github.sha }}
+          path: |
+            platform/desktop/.artifacts/*.json
+            platform/desktop/.artifacts/*.png
+            platform/desktop/.artifacts/*.txt
+          if-no-files-found: warn
+          retention-days: 14

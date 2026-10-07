@@ -66,6 +66,7 @@ export function createAntigravityProvider(
     assertActive();
     const pending = execute(settings.executable, args, {
       env,
+      windowsHide: true,
       signal: AbortSignal.any([disposal.signal, AbortSignal.timeout(30_000)]),
     });
     // The CLI reads piped stdin as a prompt; closing it makes a signed-out CLI

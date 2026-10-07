@@ -5,15 +5,17 @@ permissions, quota, sign-in, installation) stays in `binding.ts` and the host.
 
 - `language-model.ts`: one `--input-format stream-json` process per call;
   append-only prompts `--conversation` resume only with unchanged tools,
-  instructions and policy. Abort sends SIGINT.
+  instructions and policy. Abort sends SIGINT on Unix and kills the process
+  tree on Windows; exited processes have bounded pipe cleanup.
 - `history.ts`: input is text only; fresh conversations get the system
   instructions and replayed transcript as text.
 - `translate.ts`: `step_update`/`result` events to AI SDK parts. Subagents run
   in the background and stay ordinary tool calls; usage sums the turn's steps.
 - `host-tools.ts`, `native-config.ts`: OpenChart tools as one MCP server on a
   per-request loopback port. The CLI only reads MCP servers from its global
-  config, so one fixed `openchart` bash relay plus two allow rules live there;
+  config, so one fixed `openchart` shell relay plus two allow rules live there;
   the relay finds the request through environment variables and a token.
+  Unix uses Bash; Windows uses system PowerShell with byte streams.
 - `provider.ts`: `models` and `/usage` run with a closed stdin, so a signed-out
   CLI fails fast instead of starting sign-in.
 

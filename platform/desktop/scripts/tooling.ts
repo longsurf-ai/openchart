@@ -14,7 +14,17 @@ import { z } from "zod";
 
 import { generateWorkflowTypes } from "@openchart/server/agent/workflow/generate-workflow-types";
 import metadata from "@openchart/desktop/package.json" with { type: "json" };
-import { createRelease, releaseBaseUrl, signingIdentity } from "./release.ts";
+import { createRelease, signingIdentity, committedSource } from "./release.ts";
+import {
+  parseTarget,
+  targetPlatform,
+  targetArch,
+  assertBuildHost,
+  releaseRoot,
+  type DesktopTarget,
+} from "../src/targets.ts";
+import { windowsSigning } from "./windows-signing.ts";
+import { verifyNativeFiles } from "./native-files.ts";
 import { copyDocumentation } from "./documentation.ts";
 import { rendererConfig } from "./renderer-config.ts";
 
@@ -28,7 +38,12 @@ const teaCompiler = createRequire(require.resolve("@openchart/server")).resolve(
 const staging = join(directory, "dist");
 const documentationStaging = join(directory, ".artifacts/docs");
 const nodeExternal = [/^node:/, ...builtinModules, "electron"];
-const runtimePackages = ["ws", "@anthropic-ai/claude-agent-sdk", "typescript"];
+const runtimePackages = [
+  "ws",
+  "@anthropic-ai/claude-agent-sdk",
+  "typescript",
+  ...(process.platform === "win32" ? ["node-pty"] : []),
+];
 
 async function main() {
   const command = z
@@ -44,13 +59,33 @@ async function main() {
       command === "dev" ? "development" : (process.argv[3] ?? "production"),
     );
   const development = environment === "development";
-  if (
-    command === "release" &&
-    (development || process.platform !== "darwin" || process.arch !== "arm64")
-  )
-    throw new Error(
-      "Releases require a production build on Apple Silicon macOS",
-    );
+  const target =
+    command === "dev" || command === "build"
+      ? undefined
+      : process.argv[4]
+        ? parseTarget(process.argv[4])
+        : process.platform === "darwin" || process.platform === "win32"
+          ? parseTarget(`${process.platform}-${process.arch}`)
+          : undefined;
+  const signing = z
+    .enum(["signed", "unsigned"])
+    .parse(process.argv[5] ?? "signed");
+  if (target) assertBuildHost(target);
+  let source: string | undefined;
+  if (command === "release") {
+    if (development || !target)
+      throw new Error(
+        "Releases require a production build and supported target",
+      );
+    source = await committedSource();
+    if (existsSync(join(directory, "out/release", metadata.version, target)))
+      throw new Error(
+        "Keep existing release artifacts; choose a new version instead of rebuilding them.",
+      );
+  }
+  if (!development && target === "win32-x64") windowsSigning(signing);
+  const feedRoot =
+    !development && signing === "signed" ? releaseRoot : undefined;
   const mode = development ? "development" : "production";
   process.env.NODE_ENV = mode;
   const keyError = `VITE_APP_CLERK_PUBLISHABLE_KEY must be a ${development ? "pk_test_" : "pk_live_"} publishable key for ${mode} builds.`;
@@ -66,28 +101,31 @@ async function main() {
         ),
     })
     .parse(loadEnv(mode, appDirectory, "VITE_APP_"));
-  await buildDesktopRuntime(development, publishableKey);
+  await buildDesktopRuntime(development, publishableKey, feedRoot);
   // Tailwind's content paths are relative to the shared app's directory.
   process.chdir(appDirectory);
   if (command === "dev") return runDevelopment(testAccount);
   await buildRenderer();
   if (command === "package" || command === "release") {
-    const executable = await packageApplication(development);
-    if (command === "release")
-      await createRelease(
-        dirname(dirname(dirname(executable))),
-        metadata.version,
-      );
+    const executable = await packageApplication(development, target, signing);
+    if (command === "release" && target) {
+      const bundle =
+        targetPlatform(target) === "darwin"
+          ? join(dirname(executable), "../..")
+          : dirname(executable);
+      await createRelease(bundle, metadata.version, target, signing, source!);
+    }
   }
 }
 
 async function buildDesktopRuntime(
   development: boolean,
   publishableKey: string,
+  feedRoot: string | undefined,
 ) {
   await rm(staging, { recursive: true, force: true });
   await copyDocumentation(dirname(dirname(teaCompiler)), documentationStaging);
-  await buildMain(development, publishableKey);
+  await buildMain(development, publishableKey, feedRoot);
   await buildBackend();
   await buildPreload();
   // Every command produces a self-contained runtime, including desktop-build.
@@ -109,7 +147,11 @@ async function buildDesktopRuntime(
   );
 }
 
-async function buildMain(development: boolean, publishableKey: string) {
+async function buildMain(
+  development: boolean,
+  publishableKey: string,
+  feedRoot: string | undefined,
+) {
   await build({
     configFile: false,
     define: {
@@ -118,7 +160,7 @@ async function buildMain(development: boolean, publishableKey: string) {
       ),
       "process.env.OPENCHART_CLERK_PUBLISHABLE_KEY":
         JSON.stringify(publishableKey),
-      "process.env.OPENCHART_UPDATE_URL": JSON.stringify(releaseBaseUrl),
+      "process.env.OPENCHART_UPDATE_ROOT": JSON.stringify(feedRoot ?? ""),
     },
     build: {
       target: "node24",
@@ -200,7 +242,7 @@ async function buildBackend() {
       ssrEmitAssets: true,
       rollupOptions: {
         onwarn,
-        external: [...nodeExternal, ...runtimePackages],
+        external: [...nodeExternal, ...runtimePackages, "node-pty"],
         output: {
           format: "es",
           entryFileNames: "backend.js",
@@ -316,17 +358,27 @@ async function buildRenderer() {
   });
 }
 
-async function packageApplication(development: boolean) {
+async function packageApplication(
+  development: boolean,
+  target?: DesktopTarget,
+  signing: "signed" | "unsigned" = "signed",
+) {
+  const platform = target ? targetPlatform(target) : process.platform;
+  if (target) await verifyNativeFiles(staging, target, true);
   const name = development ? "OpenChart Development" : "OpenChart";
   // @agent invariant: Development and release execute the same packaged runtime
   // layout on every platform. Only app identity and output location vary here.
   const [bundle] = await packager({
     dir: staging,
+    ...(target
+      ? { platform: targetPlatform(target), arch: targetArch(target) }
+      : {}),
     // Packager clears its temporary root; isolate worktrees and release versions.
     tmpdir: join(
       directory,
       ".artifacts/packager",
       development ? "development" : metadata.version,
+      target ?? `${process.platform}-${process.arch}`,
     ),
     out: join(
       directory,
@@ -334,8 +386,19 @@ async function packageApplication(development: boolean) {
     ),
     name,
     icon:
-      process.platform === "darwin"
+      platform === "darwin"
         ? join(directory, "assets/icon.icns")
+        : platform === "win32"
+          ? join(directory, "assets/icon.ico")
+          : undefined,
+    win32metadata: {
+      CompanyName: "Longsurf, Inc.",
+      FileDescription: "OpenChart",
+      ProductName: name,
+    },
+    windowsSign:
+      platform === "win32" && !development
+        ? windowsSigning(signing)
         : undefined,
     appBundleId: development
       ? "ai.longsurf.openchart.development"
@@ -347,17 +410,18 @@ async function packageApplication(development: boolean) {
         schemes: [development ? "openchart-dev" : "openchart"],
       },
     ],
-    asar: true,
+    asar: platform === "win32" ? { unpackDir: "node_modules/node-pty" } : true,
     // UNNotificationSound searches the main bundle, not Electron's ASAR archive.
     extraResource: [
       ...notificationSounds.map((sound) => fileURLToPath(sound.url)),
       documentationStaging,
     ],
     osxSign:
-      process.platform === "darwin"
+      platform === "darwin"
         ? {
-            identity: development ? "-" : signingIdentity,
-            identityValidation: !development,
+            identity:
+              development || signing === "unsigned" ? "-" : signingIdentity,
+            identityValidation: !development && signing === "signed",
             preAutoEntitlements: false,
             continueOnError: false,
             optionsForFile: (file) =>
@@ -366,7 +430,7 @@ async function packageApplication(development: boolean) {
                     entitlements: [
                       "com.apple.security.cs.allow-jit",
                       // Ad-hoc development apps cannot match their frameworks' Team ID.
-                      ...(development
+                      ...(development || signing === "unsigned"
                         ? ["com.apple.security.cs.disable-library-validation"]
                         : []),
                     ],
@@ -375,7 +439,7 @@ async function packageApplication(development: boolean) {
           }
         : undefined,
     osxNotarize:
-      process.platform === "darwin" && !development
+      platform === "darwin" && !development && signing === "signed"
         ? { keychainProfile: "openchart-notary" }
         : undefined,
     prune: false,
@@ -383,9 +447,9 @@ async function packageApplication(development: boolean) {
   });
   if (!bundle) throw new Error("Electron Packager produced no application");
   console.log("Packaged OpenChart:", bundle);
-  return process.platform === "darwin"
+  return platform === "darwin"
     ? join(bundle, `${name}.app`, "Contents/MacOS", name)
-    : join(bundle, `${name}${process.platform === "win32" ? ".exe" : ""}`);
+    : join(bundle, `${name}${platform === "win32" ? ".exe" : ""}`);
 }
 
 async function copyRuntimePackages() {
@@ -402,8 +466,20 @@ async function copyRuntimePackages() {
     await cp(source, join(staging, "node_modules", name), {
       recursive: true,
       dereference: true,
-      filter: (filename) =>
-        !filename.slice(source.length).split(/[/\\]/).includes("node_modules"),
+      filter: (filename) => {
+        const parts = filename
+          .slice(source.length)
+          .split(/[/\\]/)
+          .filter(Boolean);
+        if (parts.includes("node_modules")) return false;
+        if (name === "node-pty") {
+          if (["build", "src", "deps", "third_party"].includes(parts[0] ?? ""))
+            return false;
+          if (parts[0] === "prebuilds" && parts[1] && parts[1] !== "win32-x64")
+            return false;
+        }
+        return true;
+      },
     });
     copied.add(name);
     for (const dependency of Object.keys(manifest.dependencies ?? {}))

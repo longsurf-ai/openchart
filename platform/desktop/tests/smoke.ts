@@ -6,7 +6,6 @@ import { PROVIDER_MANIFEST } from "@openchart/server/models/onboarding/manifest"
 import assert from "node:assert/strict";
 import {
   cp,
-  chmod,
   mkdir,
   mkdtemp,
   readdir,
@@ -17,7 +16,14 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import {
+  basename,
+  delimiter,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   _electron,
@@ -25,6 +31,7 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
+import { writeNativeExecutable } from "./native-executable.ts";
 
 const sourceExecutable = process.argv[2];
 assert(
@@ -58,6 +65,7 @@ const errors: string[] = [];
 const processErrors: string[] = [];
 let application: ElectronApplication | undefined;
 let passed = false;
+let packagedConpty: boolean | null = null;
 const nativeState = join(profile, "native-state");
 const nativeBin = join(profile, "bin");
 
@@ -375,7 +383,7 @@ async function launch(): Promise<Page> {
   delete env.NODE_PATH;
   delete env.NODE_OPTIONS;
   delete env.OPENCHART_DESKTOP_DEV_URL;
-  env.PATH = `${nativeBin}:${env.PATH ?? ""}`;
+  env.PATH = `${nativeBin}${delimiter}${env.PATH ?? ""}`;
   env.OPENCHART_SMOKE_STATE = nativeState;
   application = await _electron.launch({
     executablePath: executable,
@@ -409,6 +417,64 @@ async function launch(): Promise<Page> {
       "app.asar",
     ),
   );
+  if (process.platform === "win32") {
+    // Resolve from the relocated ASAR inside the real Electron main process:
+    // this verifies node-pty's native addon, DLL and worker packaging together.
+    packagedConpty = await application.evaluate(({ app }) => {
+      const { createRequire } = process.getBuiltinModule("node:module");
+      const { join } = process.getBuiltinModule("node:path");
+      const require = createRequire(join(app.getAppPath(), "package.json"));
+      const pty = require("node-pty") as typeof import("node-pty");
+      return new Promise<boolean>((resolve, reject) => {
+        const terminal = pty.spawn(
+          join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe"),
+          ["/d", "/c", "echo OPENCHART_PTY_READY"],
+          {
+            name: "xterm-color",
+            cols: 80,
+            rows: 24,
+            cwd: app.getPath("temp"),
+            useConpty: true,
+          },
+        );
+        let output = "";
+        let settled = false;
+        const finish = (cause?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          data.dispose();
+          exit.dispose();
+          if (cause) {
+            try {
+              terminal.kill();
+            } catch {
+              // An already exited terminal needs no further cleanup.
+            }
+            reject(cause);
+          } else resolve(true);
+        };
+        const timeout = setTimeout(() => {
+          finish(
+            new Error(
+              `Packaged ConPTY did not exit within 10 seconds: ${output}`,
+            ),
+          );
+        }, 10_000);
+        const data = terminal.onData((chunk) => {
+          output = (output + chunk).slice(-4096);
+        });
+        const exit = terminal.onExit(({ exitCode }) => {
+          finish(
+            exitCode === 0 && output.includes("OPENCHART_PTY_READY")
+              ? undefined
+              : new Error(`Packaged ConPTY failed (${exitCode}): ${output}`),
+          );
+        });
+      });
+    });
+    assert.equal(packagedConpty, true);
+  }
   assert.equal(
     await application.evaluate(({ app }) => app.getName()),
     development ? "OpenChart Development" : "OpenChart",
@@ -482,20 +548,19 @@ try {
     PROVIDER_MANIFEST[CODEX][platform]!.version,
   );
   const fixture = await readFile(
-    new URL("./native-cli-fixture.mjs", import.meta.url),
+    new URL("./native-cli-fixture.cjs", import.meta.url),
     "utf8",
   );
-  await writeFile(
-    join(nativeBin, "codex"),
-    `#!${process.execPath}\n${fixture}`,
+  const executableSuffix = process.platform === "win32" ? ".exe" : "";
+  await writeNativeExecutable(
+    join(nativeBin, `codex${executableSuffix}`),
+    fixture,
   );
-  await chmod(join(nativeBin, "codex"), 0o755);
   // Claude remains explicitly signed out; no real native account is used.
-  await writeFile(
-    join(nativeBin, "claude"),
-    `#!${process.execPath}\nconsole.log(process.argv.includes("--version") ? "${PROVIDER_MANIFEST[CLAUDE_CODE][platform]!.version} (Claude Code)" : JSON.stringify({loggedIn: false}));`,
+  await writeNativeExecutable(
+    join(nativeBin, `claude${executableSuffix}`),
+    `console.log(process.argv.includes("--version") ? "${PROVIDER_MANIFEST[CLAUDE_CODE][platform]!.version} (Claude Code)" : JSON.stringify({loggedIn: false}));`,
   );
-  await chmod(join(nativeBin, "claude"), 0o755);
   // Seed completed managed fixtures before startup reconciliation can download real CLIs.
   const installations = createInstallations(join(home, "model-providers"));
   for (const [providerID, filename] of [
@@ -506,7 +571,7 @@ try {
     const artifact = PROVIDER_MANIFEST[providerID][platform]!;
     const root = target.slice(0, -artifact.executable.length);
     await mkdir(dirname(target), { recursive: true });
-    await cp(join(nativeBin, filename), target);
+    await cp(join(nativeBin, `${filename}${executableSuffix}`), target);
     await writeFile(join(root, ".installed"), basename(root));
     assert(await installations.installed(providerID));
   }
@@ -711,6 +776,7 @@ try {
     executable: sourceExecutable,
     keychain,
     relocatedBundle: bundle,
+    packagedConpty,
     titlebar: { windowButtons, chatHeader, settingsHeader },
     isolation,
     boundary,

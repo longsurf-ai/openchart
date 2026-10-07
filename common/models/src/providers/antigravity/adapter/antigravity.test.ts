@@ -1,12 +1,10 @@
 // Purpose: Drives the Antigravity adapter against a scripted fake CLI through the real AI SDK stream, conformer, and MCP relay.
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+  spawn,
+  type ExecFileOptions,
+  type SpawnOptions,
+} from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -15,13 +13,42 @@ import type {
   LanguageModelV4StreamPart,
 } from "@ai-sdk/provider";
 import { streamText, type ModelMessage } from "ai";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   conformProviderStream,
   type ModelStreamEvent,
 } from "@openchart/models/stream";
 import { createAntigravityProvider } from "./provider";
+
+// Keep real child processes, stdio and OS lifecycle behavior on every host.
+// The fixture alone needs Node's script argument; the native CLI does not.
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  const { promisify } = await import("node:util");
+  const execute = promisify(actual.execFile);
+  const command = (file: string, args: string[], options: SpawnOptions) =>
+    options.env?.FAKE_AGY_EXECUTABLE === file
+      ? ([process.execPath, [options.env.FAKE_AGY_SCRIPT!, ...args]] as const)
+      : ([file, args] as const);
+  return {
+    ...actual,
+    spawn: vi.fn((file: string, args: string[], options: SpawnOptions) => {
+      const [executable, argv] = command(file, args, options);
+      return actual.spawn(executable, argv, options);
+    }),
+    execFile: Object.assign(actual.execFile.bind(actual), {
+      [promisify.custom]: (
+        file: string,
+        args: string[],
+        options: ExecFileOptions,
+      ) => {
+        const [executable, argv] = command(file, args, options);
+        return execute(executable, argv, options);
+      },
+    }),
+  };
+});
 
 /**
  * The fake CLI records its argv, cwd and stdin, then plays the next scripted
@@ -52,7 +79,7 @@ fs.appendFileSync(dir + "/calls.jsonl", JSON.stringify({
 async function callTool(name, args) {
   const config = JSON.parse(fs.readFileSync(
     process.env.HOME + "/.gemini/config/mcp_config.json", "utf8")).mcpServers.openchart;
-  const relay = spawn(config.command, config.args, { stdio: ["pipe", "pipe", "inherit"] });
+  const relay = spawn(config.command, config.args, { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
   const pending = new Map();
   readline.createInterface({ input: relay.stdout }).on("line", (line) => {
     const message = JSON.parse(line);
@@ -79,6 +106,13 @@ for (const step of scenario) {
   else if (step.stdout !== undefined) process.stdout.write(step.stdout);
   else if (step.stderr !== undefined) process.stderr.write(step.stderr);
   else if (step.callTool) await callTool(step.callTool.name, step.callTool.arguments);
+  else if (step.descendant) {
+    const descendant = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: ['ignore', process.stdout, process.stderr], windowsHide: true,
+      env: { ...process.env, NODE_OPTIONS: '' },
+    });
+    fs.writeFileSync(dir + '/descendant.pid', String(descendant.pid));
+  }
   else if (step.untilInterrupted) while (!interrupted) await new Promise((r) => setTimeout(r, 5));
   else if (step.exit !== undefined) process.exit(step.exit);
 }
@@ -98,13 +132,23 @@ beforeEach(async () => {
     recursive: true,
   });
   executable = path.join(directory, "antigravity");
-  await writeFile(executable, `#!${process.execPath}\n${FAKE_CLI}`);
-  await chmod(executable, 0o755);
+  await writeFile(`${executable}.mjs`, FAKE_CLI);
   await script();
 });
 
 afterEach(async () => {
   await Promise.all(providers.splice(0).map((provider) => provider.dispose()));
+  const descendant = await readFile(
+    path.join(directory, "descendant.pid"),
+    "utf8",
+  ).catch(() => undefined);
+  if (descendant) {
+    try {
+      process.kill(Number(descendant), "SIGKILL");
+    } catch {
+      /* Already terminated with its parent. */
+    }
+  }
   await rm(directory, { recursive: true, force: true });
 });
 
@@ -146,7 +190,10 @@ function setup(modelId = "gemini-3.1-pro") {
     executable,
     env: {
       HOME: home,
+      USERPROFILE: home,
       FAKE_AGY_DIR: directory,
+      FAKE_AGY_EXECUTABLE: executable,
+      FAKE_AGY_SCRIPT: `${executable}.mjs`,
       AGY_CLI_DISABLE_AUTO_UPDATE: "true",
     },
   });
@@ -323,6 +370,11 @@ describe("Antigravity adapter", () => {
       event: "user",
       message: { content: "hi" },
     });
+    expect(spawn).toHaveBeenCalledWith(
+      executable,
+      expect.any(Array),
+      expect.objectContaining({ windowsHide: true }),
+    );
   });
 
   it("resumes an append-only conversation with only the new message and replays everything else", async () => {
@@ -519,13 +571,27 @@ describe("Antigravity adapter", () => {
       toolStep(1, "ACTIVE", {
         name: "view_file",
         parameters: {
-          AbsolutePath: `${home}/.gemini/antigravity-cli/mcp/openchart/get_secret.json`,
+          AbsolutePath: path.join(
+            home,
+            ".gemini",
+            "antigravity-cli",
+            "mcp",
+            "openchart",
+            "get_secret.json",
+          ),
         },
       }),
       toolStep(1, "DONE", {
         name: "view_file",
         parameters: {
-          AbsolutePath: `${home}/.gemini/antigravity-cli/mcp/openchart/get_secret.json`,
+          AbsolutePath: path.join(
+            home,
+            ".gemini",
+            "antigravity-cli",
+            "mcp",
+            "openchart",
+            "get_secret.json",
+          ),
         },
         output: "1 lines",
       }),
@@ -616,7 +682,7 @@ describe("Antigravity adapter", () => {
     );
     expect(settings.permissions.allow).toEqual([
       "mcp(openchart/*)",
-      `read_file(${realHome}/.gemini/antigravity-cli/mcp/openchart/)`,
+      `read_file(${path.join(realHome, ".gemini", "antigravity-cli", "mcp", "openchart")}${path.sep})`,
     ]);
   });
 
@@ -662,6 +728,26 @@ describe("Antigravity adapter", () => {
     });
   });
 
+  it("hides schema-file plumbing reported with native Windows paths", async () => {
+    const toolInfo = {
+      name: "view_file",
+      parameters: {
+        AbsolutePath:
+          "C:\\Users\\Test User\\.gemini\\antigravity-cli\\mcp\\openchart\\example.json",
+      },
+    };
+    await script([
+      init(),
+      toolStep(1, "ACTIVE", toolInfo),
+      toolStep(1, "DONE", { ...toolInfo, output: "schema" }),
+      ...reply("ready"),
+    ]);
+    const { model } = setup();
+    expect(
+      compact(await run(model, [{ role: "user", content: "go" }])),
+    ).toEqual(["text:ready", "finish:stop"]);
+  });
+
   it("passes full access as --dangerously-skip-permissions and a JSON schema as structured output", async () => {
     await script([
       init(),
@@ -695,7 +781,7 @@ describe("Antigravity adapter", () => {
     );
   });
 
-  it("interrupts on abort with SIGINT and finishes as interrupted", async () => {
+  it("interrupts on abort and finishes as interrupted", async () => {
     await script([
       init(),
       textDelta(1, "partial"),
@@ -724,6 +810,98 @@ describe("Antigravity adapter", () => {
       finishReason: { unified: "stop", raw: "interrupted" },
     });
   });
+
+  it("finishes an interruption even when the CLI exits without a final event", async () => {
+    await script([
+      init(),
+      textDelta(1, "partial"),
+      { untilInterrupted: true },
+      { exit: 1 },
+    ]);
+    const { model } = setup();
+    const controller = new AbortController();
+    const { stream } = await model.doStream({
+      prompt: [user("wait")],
+      abortSignal: controller.signal,
+    } as LanguageModelV4CallOptions);
+    const parts: LanguageModelV4StreamPart[] = [];
+    for await (const part of stream) {
+      parts.push(part);
+      if (part.type === "text-delta") controller.abort();
+    }
+    expect(parts.some((part) => part.type === "error")).toBe(false);
+    expect(parts.at(-1)).toMatchObject({
+      type: "finish",
+      finishReason: { unified: "stop", raw: "interrupted" },
+    });
+  });
+
+  it.skipIf(process.platform !== "win32")(
+    "kills Windows descendants holding stdout on interruption",
+    async () => {
+      await script([
+        init(),
+        { descendant: true },
+        textDelta(1, "partial"),
+        { untilInterrupted: true },
+      ]);
+      const { model } = setup();
+      const controller = new AbortController();
+      const { stream } = await model.doStream({
+        prompt: [user("wait")],
+        abortSignal: controller.signal,
+      } as LanguageModelV4CallOptions);
+      const parts: LanguageModelV4StreamPart[] = [];
+      for await (const part of stream) {
+        parts.push(part);
+        if (part.type === "text-delta") controller.abort();
+      }
+      expect(parts.at(-1)).toMatchObject({
+        type: "finish",
+        finishReason: { unified: "stop", raw: "interrupted" },
+      });
+      const pid = Number(
+        await readFile(path.join(directory, "descendant.pid"), "utf8"),
+      );
+      await expect
+        .poll(() => {
+          try {
+            process.kill(pid, 0);
+            return true;
+          } catch {
+            return false;
+          }
+        })
+        .toBe(false);
+    },
+    15_000,
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "settles after Windows exit when a descendant still holds stdout",
+    async () => {
+      await script([
+        init(),
+        { descendant: true },
+        { stderr: "parent exited\r\n" },
+        { exit: 1 },
+      ]);
+      const { model } = setup();
+      const { stream } = await model.doStream({
+        prompt: [user("wait")],
+      } as LanguageModelV4CallOptions);
+      const parts = await drain(stream);
+      expect(parts.find((part) => part.type === "error")).toMatchObject({
+        error: expect.objectContaining({
+          message: expect.stringContaining("parent exited"),
+        }),
+      });
+      expect(parts.at(-1)).toMatchObject({
+        type: "finish",
+        finishReason: { unified: "error" },
+      });
+    },
+  );
 
   it("turns failed results, denied actions and exits without a result into stream errors", async () => {
     await script(

@@ -146,6 +146,8 @@ function signInCommand(
   ProviderDiscoveryResult,
   { status: "authentication_required" }
 >["login"] {
+  if (process.platform === "win32")
+    return { executable, args: ["-p", "/usage"], terminal: true };
   return {
     executable: "/bin/bash",
     args: [

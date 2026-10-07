@@ -154,51 +154,77 @@ sign-in. The Profile page's sign-out action stops pending login work, calls
 Access logout, then Clerk sign-out. A retained Clerk session never automatically
 reactivates a locally disabled key; the user can explicitly sign in again.
 
-On Apple Silicon macOS the package is
-`platform/desktop/out/<version>/OpenChart-darwin-arm64/OpenChart.app`.
-Development packages are ad-hoc signed for local execution. Hardened runtime
+Packaging supports `darwin-arm64`, `darwin-x64`, and `win32-x64` through
+Desktop's shared target definition. Both Mac targets can be built on either
+Mac architecture; Windows installers require a Windows host. The production app
+is at `platform/desktop/out/<version>/OpenChart-<target>/`, with `OpenChart.app`
+on Mac and `OpenChart.exe` on Windows. Packager temporary directories are isolated
+per target. The staged JavaScript is target-neutral; native files are rejected
+unless explicitly owned by Windows' unpacked `node-pty` dependency.
+
+Mac development packages are ad-hoc signed for local execution. Hardened runtime
 and JIT stay enabled; only development disables library validation because its
-ad-hoc identity cannot match Electron's frameworks. Production packages use
+ad-hoc identity cannot match Electron's frameworks. Production Mac packages use
 `Developer ID Application: Longsurf, Inc.`, notarize through the
-`openchart-notary` Keychain profile, and staple Apple's ticket. Packaging targets
-the host OS and architecture; public releases initially support Apple Silicon.
+`openchart-notary` Keychain profile, and staple Apple's ticket. Windows production
+signing uses an operator-provided signing hook or certificate. Explicit unsigned
+Windows builds are test artifacts and contain no update feed root.
 
 ### Downloads and updates
 
 Follow the [desktop release runbook](../operations/desktop-release.md) for
 signing setup, packaging, acceptance checks, publishing and recovery.
 
-`just desktop-release` builds the production app, verifies its signature and
-Gatekeeper acceptance, then creates a DMG with an Applications shortcut and a ZIP
-for Electron's updater. It notarizes/staples/verifies the DMG before exposing the
-release directory at `platform/desktop/out/release/<version>/`. It also writes
-`SHA256SUMS` and Electron's static `RELEASES.json`. The version comes from
-`platform/desktop/package.json`; increment it for every release. Release output
-is prepared in a temporary directory and never overwrites an existing version.
-The same commit adds the release's entry to `src/changelog/changelog.json`,
-which the renderer bundles for Settings → Changelog; tests fail when its newest
-version differs from the package. Writing rules live in
+`just desktop-release <target>` builds signed production artifacts. Mac builds
+verify signatures and Gatekeeper acceptance, then create a notarized DMG with an
+Applications shortcut and a ZIP for Squirrel.Mac. Windows uses Squirrel.Windows
+to create a setup EXE, full `.nupkg`, and `RELEASES`. Its permanent package identity
+is `OpenChart`; installer events create/remove shortcuts and exit before normal
+app startup. Uninstall removes the `openchart:` protocol handler and retains data.
+
+Completed release directories live at
+`platform/desktop/out/release/<version>/<target>/`. Each contains `SOURCE`,
+`BUILD.json`, `SHA256SUMS`, its downloads and its feed manifest. The receipt
+records the source commit, target, toolchain, builder and signing state. The
+builder verifies artifacts before exposing the directory and does not overwrite
+it. The version comes from `platform/desktop/package.json`; the same commit adds
+a matching entry to `src/changelog/changelog.json` following
 [its AGENTS.md](../../platform/desktop/src/changelog/AGENTS.md).
 
-`just desktop-publish <version>` verifies the local checksums and uploads to the
-`openchart-releases` Cloudflare R2 bucket. Versioned artifacts are cacheable;
-the stable `OpenChart.dmg` download and `RELEASES.json` use `no-store`. The manifest
-is uploaded last, after the downloads. Authenticate with `wrangler login` first.
-The public base URL is `https://downloads.longsurf.ai/openchart/darwin/arm64`.
+`just desktop-publish <version> [targets...] --dry-run` validates the complete
+local inventory without network access. Without `--dry-run`, it uploads to the
+`openchart-releases` R2 bucket and attaches missing assets to the matching GitHub
+Release. Target sets default to all supported targets; an explicit subset allows
+signed Mac releases while Windows signing is still being configured. All targets
+must have the same source commit. Unsigned builds are refused. Existing immutable
+objects and GitHub assets must match; uploaded bytes are downloaded and checked
+before feeds change. Target-qualified metadata avoids conflicting checksum assets
+when a later retry adds another target.
 
-Production Apple Silicon builds use `update-electron-app` with Electron's native
-Squirrel.Mac updater, checking on startup and hourly. Electron validates the
-downloaded app's signature. No dialog interrupts the user: main sends the
-downloaded release name to open pages and answers pages that load later, and the
-sidebar shows a blue download button beside the account. Clicking it enters the
-ordinary Quit path, preserving editor cancellation and waiting for backend exit
-before `quitAndInstall()`. Without a click, Squirrel installs the download on the
-next normal quit. Development packages never check for updates.
-App identity remains `ai.longsurf.openchart`; data stays outside the app bundle.
+The production feed root is `https://downloads.longsurf.ai/openchart`. Main
+appends the running binary's platform and architecture, preserving the existing
+`darwin/arm64` URLs. Each target has immutable versioned downloads, a `no-store`
+website pointer (`OpenChart.dmg` or `OpenChartSetup.exe`), and a `no-store` feed
+(`RELEASES.json` on Mac, `RELEASES` on Windows). Every target's downloads are
+verified before stable pointers and feeds change. CI uploads Actions artifacts
+only; it never publishes updates.
 
-Release acceptance requires installing two successive signed builds and verifying
-an actual download/restart update, saved data, real Keychain credentials, and
-production login. The mock-Keychain smoke alone does not establish those results.
+Signed production builds use `update-electron-app` with Electron's native
+updater, checking on startup and hourly. Squirrel's Windows first-run flag skips
+update initialization to avoid the installer's lock. Main sends the downloaded
+release name to open pages and answers pages that load later; the sidebar shows
+a blue download button beside the account. Clicking it enters the ordinary Quit
+path, preserving editor cancellation and waiting for backend exit before
+`quitAndInstall()`. Squirrel.Mac installs at quit. Squirrel.Windows prepares the
+new version during download and relaunches it on restart. Development and unsigned
+packages never check for updates. Mac identity stays `ai.longsurf.openchart`;
+Windows uses the permanent Squirrel ID `OpenChart`. User data remains outside the
+application directory on every target.
+
+Release acceptance requires installing two successive builds and verifying an
+actual download/restart update, saved data, OS-protected credentials, and
+production login. Automated Windows and Intel Mac packaging/smoke lanes exercise
+isolated fixtures. They do not establish live-account or user-device acceptance.
 
 ## Ownership and runtime
 
@@ -435,5 +461,6 @@ updates across windows, and configures an isolated OpenAI-compatible HTTP fixtur
 through the UI. It verifies an Agent reply, selecting
 a `.workflow.ts` file with `@`, executing a model-issued workflow tool call with
 a real child Session without adding workspace support files, and credential persistence across
-restart, without placing the API key in settings.json. Native providers are
-disabled in this deterministic scenario; live native-account acceptance is a separate release check.
+restart, without placing the API key in settings.json. Codex and Claude use isolated native CLI fixtures; Windows embeds those fixtures
+in real Node single-executable applications. Live native-account acceptance is a
+separate release check.

@@ -70,7 +70,7 @@ function isHostPlumbing(step: StepUpdate): boolean {
   return (
     name === "view_file" &&
     typeof parameters.AbsolutePath === "string" &&
-    parameters.AbsolutePath.includes(HOST_SCHEMAS)
+    parameters.AbsolutePath.replaceAll("\\", "/").includes(HOST_SCHEMAS)
   );
 }
 
