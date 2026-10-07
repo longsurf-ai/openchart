@@ -50,27 +50,38 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.2"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: bun-cache
         with:
           path: ~/.bun/install/cache
           key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: desktop-bun-${{ runner.os }}-
       - name: Install dependencies using Git Bash
+        id: install
         run: just install --frozen-lockfile
+      - name: Save installed dependency cache
+        if: ${{ steps.bun-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.bun/install/cache
+          key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - name: Verify platform contracts and native integrations
         run: just test-core platform/desktop/src/targets.test.ts platform/desktop/src/main.test.ts platform/desktop/src/squirrel.test.ts platform/desktop/scripts platform/desktop/tests/native-executable.test.ts server/models/onboarding common/models/src/providers/antigravity common/models/src/providers/claude-code/adapter/environment.test.ts
       - name: Build unsigned Windows installer and update packages
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         id: build
         run: |
           version=$(node -p "require('./platform/desktop/package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
           just desktop-release win32-x64 unsigned
       - name: Probe pinned Antigravity sign-in with ConPTY
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           OPENCHART_WINDOWS_RUNTIME_PROBE: "1"
           OPENCHART_WINDOWS_RUNTIME_PROBE_REPORT: platform/desktop/.artifacts/antigravity-windows-probe.json
         run: just test-core server/models/onboarding/windows-runtime.test.ts
       - name: Verify relocated production package
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           version=$(node -p "require('./platform/desktop/package.json').version")
           executable=$(cygpath -w "$PWD/platform/desktop/out/$version/OpenChart-win32-x64/OpenChart.exe")

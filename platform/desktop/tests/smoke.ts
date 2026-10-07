@@ -69,6 +69,58 @@ let packagedConpty: boolean | null = null;
 const nativeState = join(profile, "native-state");
 const nativeBin = join(profile, "bin");
 
+/** Completes the real first-launch pages and tour before entering a new chat. */
+async function verifyOnboarding(page: Page) {
+  const agents = page.getByRole("dialog", {
+    name: "Connect your agent",
+    exact: true,
+  });
+  await expect(agents).toBeVisible({ timeout: 30_000 });
+  for (const name of ["Claude Code", "Codex", "Antigravity"])
+    await expect(
+      agents.getByRole("region", { name, exact: true }),
+    ).toBeVisible();
+  await page.screenshot({
+    path: join(artifacts, "desktop-onboarding-agents.png"),
+  });
+  await agents
+    .getByRole("button", { name: /^(Continue|Skip for now)$/ })
+    .click();
+  const notifications = page.getByRole("dialog", {
+    name: "Turn on notifications",
+    exact: true,
+  });
+  await expect(notifications).toBeVisible();
+  await notifications
+    .getByRole("button", { name: "Continue", exact: true })
+    .click();
+  const dashboard = "/app/dashboards/dsh_88JOx0yX7TH65p";
+  const steps = [
+    ["Watch the market from your dashboard", dashboard],
+    ["Make the chart yours", dashboard],
+    ["Ask the Agent for an indicator", dashboard],
+    ["All your agents, in one place", "/app/sessions/ses_rrbFx6CsSf2Xk8"],
+    ["Alerts put agents to work", "/app/alerts/rules/alr_88PH5QdFSkCg4R"],
+    ["Star us on GitHub", dashboard],
+  ] as const;
+  for (const [index, [name, route]] of steps.entries()) {
+    const card = page.getByRole("dialog", { name, exact: true });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(`${index + 1} of ${steps.length}`);
+    await expect(page).toHaveURL(`openchart://app${route}`);
+    await card
+      .getByRole("button", {
+        name: index === steps.length - 1 ? "Done" : "Next",
+        exact: true,
+      })
+      .click();
+  }
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: /^New Chat/ }).click();
+  await expect(page).toHaveURL("openchart://app/app");
+  return { agentPage: true, notificationPage: true, tourSteps: steps.length };
+}
+
 /** Exercises Settings through the renderer, including native CLI setup and model requests. */
 async function verifySettings(page: Page) {
   const filename = join(home, "settings.json");
@@ -172,7 +224,10 @@ async function verifySettings(page: Page) {
   await page
     .getByRole("textbox", { name: "Authorization code for Codex" })
     .fill("smoke-code");
-  await page.getByRole("button", { name: "Send code" }).click();
+  await page
+    .getByRole("region", { name: "Codex", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
   await expect(
     page
       .getByRole("region", { name: "Codex", exact: true })
@@ -242,6 +297,7 @@ async function verifySettings(page: Page) {
   const workspaceRoot = join(home, "workspaces/default");
   assert.deepEqual((await readdir(workspaceRoot)).sort(), [
     "indicators",
+    "studies",
     "workflows",
   ]);
   await writeFile(
@@ -293,6 +349,7 @@ export default defineWorkflow({
   assert.equal(workflowChildren, 1);
   assert.deepEqual((await readdir(workspaceRoot)).sort(), [
     "indicators",
+    "studies",
     "workflows",
     "workspace-smoke.workflow.ts",
   ]);
@@ -577,6 +634,7 @@ try {
   }
   await writeFile(join(home, "settings.json"), JSON.stringify({}));
   let page = await launch();
+  const onboarding = await verifyOnboarding(page);
 
   await expect(
     page.getByRole("textbox", { name: "Message", exact: true }),
@@ -593,6 +651,9 @@ try {
       ),
     );
   await page.reload();
+  await expect(
+    page.getByRole("dialog", { name: "Connect your agent", exact: true }),
+  ).toHaveCount(0);
   const modelResponse = await models;
   assert.equal(modelResponse.status(), 200);
   assert(Array.isArray((await modelResponse.json()).result.data));
@@ -777,6 +838,7 @@ try {
     keychain,
     relocatedBundle: bundle,
     packagedConpty,
+    onboarding,
     titlebar: { windowButtons, chatHeader, settingsHeader },
     isolation,
     boundary,
@@ -785,7 +847,7 @@ try {
     stopped,
     settings,
     tests:
-      "chat shell, settings, native window buttons, draggable headers, clickable header controls, sidebar collapse/expand spacing, theme persistence, no mock worker, models, SSE ready, Hose protocol, hosted backend, new chat, reload, graceful backend exit, restart with persisted chat, renderer isolation",
+      "first-launch agent and notification pages, starter tour, chat shell, settings, native window buttons, draggable headers, clickable header controls, sidebar collapse/expand spacing, theme persistence, no mock worker, models, SSE ready, Hose protocol, hosted backend, new chat, reload, graceful backend exit, restart with persisted chat, renderer isolation",
   };
   await writeFile(
     join(artifacts, "smoke-result.json"),

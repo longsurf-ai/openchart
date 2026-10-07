@@ -28,7 +28,7 @@ import {
   type RuntimeArtifact,
 } from "@openchart/server/models/onboarding/manifest";
 import { SetupFailed } from "@openchart/server/models/onboarding/errors";
-import { extractZip } from "./zip";
+import { extractZip } from "./zip.ts";
 
 const execute = promisify(execFile);
 const completed = ".installed";

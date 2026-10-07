@@ -43,13 +43,20 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.2"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: bun-cache
         with:
           path: ~/.bun/install/cache
           key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: desktop-bun-${{ runner.os }}-
       - name: Install dependencies
         run: just install --frozen-lockfile
+      - name: Save installed dependency cache
+        if: ${{ steps.bun-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.bun/install/cache
+          key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - name: Package for Intel
         run: just desktop-package development darwin-x64
       - name: Verify relocated Intel package
