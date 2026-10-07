@@ -1,6 +1,5 @@
 // Purpose: Opt-in Windows feasibility evidence for the real pinned Antigravity CLI and ConPTY, without authenticating.
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { lstat, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
@@ -20,8 +19,7 @@ type ProbePhase =
   | "authentication"
   | "authentication-complete"
   | "terminal-cleanup"
-  | "directory-cleanup"
-  | "complete";
+  | "terminal-finished";
 
 /** Retain only observations; authorization URLs and codes must never enter test logs or reports. */
 function observePrompt(output: string) {
@@ -60,11 +58,26 @@ test.skipIf(
 )(
   "the pinned Windows CLI reaches its authorization-code prompt under real ConPTY",
   async () => {
+    const directory = process.env.OPENCHART_WINDOWS_RUNTIME_PROBE_DIRECTORY;
+    if (!directory || !path.isAbsolute(directory))
+      throw new Error(
+        "Run just desktop-windows-probe, or supply an absolute parent-owned probe fixture directory.",
+      );
+    const fixture = await lstat(directory);
+    if (
+      !fixture.isDirectory() ||
+      fixture.isSymbolicLink() ||
+      (await readdir(directory)).length > 0
+    )
+      throw new Error(
+        "The probe requires an existing, empty, parent-owned fixture directory.",
+      );
     const reportPath = process.env.OPENCHART_WINDOWS_RUNTIME_PROBE_REPORT;
     const startedAt = Date.now();
     const report = {
       probe: "antigravity-windows-conpty",
       phase: "environment" as ProbePhase,
+      fixtureCleanupOwner: "parent-process",
       version: PROVIDER_MANIFEST[ANTIGRAVITY]["win32-x64"]!.version,
       downloadAndVersionVerified: false,
       terminalStarted: false,
@@ -90,7 +103,6 @@ test.skipIf(
         report.failure ??= "probe-report-write-failed";
       }
     }
-    let directory: string | undefined;
     let terminal: IPty | undefined;
     let outputListener: { dispose(): void } | undefined;
     let exitListener: { dispose(): void } | undefined;
@@ -101,9 +113,6 @@ test.skipIf(
     });
     try {
       await checkpoint("environment");
-      directory = await mkdtemp(
-        path.join(tmpdir(), "openchart-windows-antigravity-"),
-      );
       for (const [name, folder] of [
         ["HOME", "home"],
         ["USERPROFILE", "profile"],
@@ -224,21 +233,7 @@ test.skipIf(
         outputListener?.dispose();
         exitListener?.dispose();
         vi.unstubAllEnvs();
-        await checkpoint("directory-cleanup");
-        if (directory) {
-          try {
-            await rm(directory, {
-              recursive: true,
-              force: true,
-              maxRetries: 5,
-              retryDelay: 100,
-            });
-          } catch {
-            report.cleanupComplete = false;
-            report.failure = "temporary-directory-cleanup-failed";
-          }
-        }
-        await checkpoint("complete");
+        await checkpoint("terminal-finished");
       }
     }
     if (report.failure)
@@ -253,5 +248,6 @@ test.skipIf(
   },
   // Preserve the 30s install signal, 20s prompt wait and 5s+2s+2s terminal
   // cleanup timers, allowing overhead for native calls, filesystem and reports.
+  // The parent command removes its fixture after this native owner process exits.
   90_000,
 );

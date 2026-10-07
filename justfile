@@ -72,6 +72,10 @@ desktop-publish version *options:
 desktop-smoke executable environment="production" keychain="mock":
     npm --prefix platform/desktop run smoke -- '{{executable}}' '{{environment}}' '{{keychain}}'
 
+# Probe native Windows sign-in, then remove its fixture after the native owner exits.
+desktop-windows-probe:
+    node --experimental-strip-types platform/desktop/tests/windows-runtime-probe.ts
+
 # Run every OpenChart check once in parallel; every dependency must succeed.
 [parallel]
 check: check-static typecheck test

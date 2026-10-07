@@ -134,6 +134,17 @@ CI executes on an x64 runner; an optional local Rosetta run is emulation and sho
 be recorded as such. Smoke results and screenshots live under
 `platform/desktop/.artifacts`.
 
+On Windows, `just desktop-windows-probe` checks the pinned Antigravity CLI's
+authorization URL and code prompt under real ConPTY without authenticating. The
+probe verifies terminal shutdown; its parent command removes the isolated fixture
+only after the Vitest/native process exits, with a 15-second cleanup deadline.
+Either probe failure or fixture cleanup failure fails the command. Direct opt-in
+test execution requires `OPENCHART_WINDOWS_RUNTIME_PROBE_DIRECTORY` naming an
+existing empty directory whose parent process owns cleanup. Status checkpoints
+contain no authorization URLs, codes or credentials. Earlier in-process removal
+stalled after terminal shutdown; the underlying Windows filesystem cause remains
+unproven.
+
 Automated smoke uses fake model accounts. Live Google/Clerk sign-in, real provider
 credentials, notifications and actual upgrades remain separate acceptance checks.
 On Mac, install the DMG into Applications without a Gatekeeper bypass and test
