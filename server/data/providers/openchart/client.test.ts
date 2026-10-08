@@ -323,6 +323,7 @@ test("calendar reads a listing's stored rows and rejects broken references", asy
     });
     for (const body of [
       { ...calendarResponse, calendar: "" },
+      { ...calendarResponse, calendar: "NASDAQ" },
       {
         ...calendarResponse,
         calendars: calendarResponse.calendars.slice(0, 1),

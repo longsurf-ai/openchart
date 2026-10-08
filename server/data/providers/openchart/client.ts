@@ -42,6 +42,11 @@ const CalendarResponse = Schema.fromJsonString(
   CalendarRows.mapFields(
     (fields) => ({ ...fields, calendar: Schema.NonEmptyString }),
     { unsafePreserveChecks: true }, // The referenced row fields are unchanged.
+  ).check(
+    Schema.makeFilter(
+      (body) => body.calendars.some((row) => row.name === body.calendar),
+      { message: "The selected calendar must be among the returned rows" },
+    ),
   ),
 );
 const CapabilitiesResponse = Schema.fromJsonString(
