@@ -5,6 +5,7 @@ import {
   type BarsRequest,
   type BarsSeries,
 } from "@openchart/feed";
+import type { TradingDay } from "@openchart/market";
 import type { DataFrame } from "@openchart/timeseries";
 
 import type { ChartPreferences } from "./preferences";
@@ -20,6 +21,53 @@ export function toRows(frame: DataFrame): ChartRow[] {
       time: row.time / 1000,
     }),
   );
+}
+
+/**
+ * The whole UTC days of calendar a series needs for session shading, or
+ * undefined when it has none: only intraday Extended/24h bars are shaded.
+ * Whole days keep the window stable while live bars arrive. Times are Unix ms.
+ * @example const window = sessionDaysWindow(series, firstBarTime, lastBarTime);
+ */
+export function sessionDaysWindow(
+  series: Pick<BarsSeries, "resolution" | "session">,
+  first: number | undefined,
+  last: number | undefined,
+): { start: number; end: number } | undefined {
+  const day = resolutionMs["1d"];
+  const step = resolutionMs[series.resolution];
+  if (step >= day || series.session === "regular") return undefined;
+  if (first === undefined || last === undefined) return undefined;
+  const start = Math.floor(first / day) * day;
+  return { start, end: Math.ceil((last + step) / day) * day };
+}
+
+/**
+ * Tag each row whose open time falls inside a calendar session with that
+ * session's type and bounds in seconds, the fields the renderer shades extended
+ * sessions from. Rows outside every session, or outside the days, stay as they
+ * are. Rows and days ascend; sessions never overlap.
+ * @example const tagged = tagSessions(toRows(frame), calendar.days);
+ */
+export function tagSessions(
+  rows: readonly ChartRow[],
+  days: readonly TradingDay[],
+): ChartRow[] {
+  const sessions = days.flatMap((day) => day.sessions);
+  let next = 0;
+  return rows.map((row) => {
+    const time = row.time * 1000;
+    while (next < sessions.length && sessions[next]!.end <= time) next++;
+    const session = sessions[next];
+    return session && session.start <= time
+      ? Object.freeze({
+          ...row,
+          sessionType: session.type,
+          sessionStart: session.start / 1000,
+          sessionEnd: session.end / 1000,
+        })
+      : row;
+  });
 }
 
 /** The open time in milliseconds of the main series' bar at `index`, counting back from -1 for the newest, if it has one. @example const newest = mainBarTime(chart.store.getState(), -1); */

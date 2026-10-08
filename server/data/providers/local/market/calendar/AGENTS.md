@@ -3,7 +3,9 @@
 Expands local calendar tables into openchart.market.calendar day rows.
 
 - schema.ts owns hosted-compatible table declarations; data.ts validates Drizzle
-  reads. Existing files may lack constraints, so corrupt rows fail explicitly.
+  reads and, as `CalendarRows`, Cloud's JSON rows with the same integrity checks.
+  Existing files may lack constraints, so corrupt rows fail explicitly.
+- Sessions use market `AtomicSessionType`; overnight rules pass through.
 - Composition owns a read-only connection. Construction reads one consistent
   transaction and retains rows only; never open/migrate/write/close that database.
   Rebuild to load changes; callers may close after construction.

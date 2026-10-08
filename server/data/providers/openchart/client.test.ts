@@ -31,6 +31,7 @@ import {
   arrow,
   bar,
   listing,
+  calendarResponse,
   capabilities,
   series,
   pageRequest,
@@ -309,6 +310,49 @@ test.each([
     }
   },
 );
+test("calendar reads a listing's stored rows and rejects broken references", async () => {
+  const f = await fixture();
+  try {
+    f.operation.mockResolvedValue(calendarResponse);
+    expect(await f.runtime.runPromise(f.client.readCalendar(10244))).toEqual(
+      calendarResponse,
+    );
+    expect(f.queries[0]!.pathname).toBe("/calendar");
+    expect(Object.fromEntries(f.queries[0]!.searchParams)).toEqual({
+      listing: "10244",
+    });
+    for (const body of [
+      { ...calendarResponse, calendar: "" },
+      { ...calendarResponse, calendar: "NASDAQ" },
+      {
+        ...calendarResponse,
+        calendars: calendarResponse.calendars.slice(0, 1),
+      },
+      {
+        ...calendarResponse,
+        rules: [{ ...calendarResponse.rules[0], crossesMidnight: 0 }],
+      },
+      {
+        ...calendarResponse,
+        rules: [...calendarResponse.rules, calendarResponse.rules[0]],
+      },
+      {
+        ...calendarResponse,
+        overrides: [
+          ...calendarResponse.overrides,
+          { ...calendarResponse.overrides[1], date: "2026-11-26" },
+        ],
+      },
+    ]) {
+      f.operation.mockResolvedValue(body);
+      await expect(
+        f.runtime.runPromise(f.client.readCalendar(10244)),
+      ).rejects.toMatchObject({ _tag: "OpenChartInvalidResponse" });
+    }
+  } finally {
+    await f.close();
+  }
+});
 test("history returns decoded observations and serializes typed page parameters", async () => {
   const f = await fixture();
   try {

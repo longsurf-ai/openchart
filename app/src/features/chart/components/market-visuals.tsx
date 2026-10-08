@@ -3,11 +3,15 @@ import { memo, useLayoutEffect, useMemo } from "react";
 import { useStore } from "zustand";
 import { v2 } from "@openchart/chart-core";
 import { Color } from "@openchart/chart-core/util";
-import type { BarColumn } from "@openchart/market";
+import type { BarColumn, TradingDay } from "@openchart/market";
 import { joinByTime, type DataFrame } from "@openchart/timeseries";
 import { useChart } from "@openchart/app/hooks/use-chart";
 import type { MarketSeriesInput } from "@openchart/app/hooks/use-market-series-source";
-import { mainTimeline, toRows } from "@openchart/app/lib/chart/data";
+import {
+  mainTimeline,
+  tagSessions,
+  toRows,
+} from "@openchart/app/lib/chart/data";
 import {
   defaultSeriesPreferences,
   type ChartPreferencesStore,
@@ -32,11 +36,14 @@ export const MarketVisuals = memo(function MarketVisuals({
   input,
   symbol,
   frame,
+  days,
   localStore,
 }: {
   input: MarketSeriesInput;
   symbol: string;
   frame: DataFrame | undefined;
+  /** Calendar days whose sessions tag bars for the renderer's session shading. */
+  days?: readonly TradingDay[];
   localStore: ChartPreferencesStore;
 }) {
   const chart = useChart();
@@ -54,11 +61,15 @@ export const MarketVisuals = memo(function MarketVisuals({
       : undefined;
   });
   useStore(chart.store, (state) => state.config.chart.layout.background);
-  const rows = useMemo(() => {
+  const bars = useMemo(() => {
     if (!frame) return [];
     const timeline = mainData ? mainTimeline(chart.store.getState()) : [];
     return toRows(timeline.length ? joinByTime(timeline, frame) : frame);
   }, [chart, frame, mainData]);
+  const rows = useMemo(
+    () => (days ? tagSessions(bars, days) : bars),
+    [bars, days],
+  );
   const element = chart.renderer.canvas?.parentElement;
   const colors = {
     up: element ? chartTokenColor(element, "--up") : "#26a69a",

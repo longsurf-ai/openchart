@@ -75,3 +75,57 @@ export function arrow(rows: readonly Bar[], id = listing.id) {
     }),
   );
 }
+
+const weekdays = [0, 1, 2, 3, 4];
+/** Cloud's `/calendar` body for an NYSE-like listing with an inherited parent. */
+export const calendarResponse = {
+  calendar: "NYSE",
+  calendars: [
+    {
+      calendarId: 2,
+      sourceCalendarId: 1,
+      name: "NYSE",
+      timezone: "America/New_York",
+    },
+    {
+      calendarId: 1,
+      sourceCalendarId: null,
+      name: "US equities",
+      timezone: "America/New_York",
+    },
+  ],
+  rules: weekdays.flatMap((dayOfWeek) =>
+    (
+      [
+        ["pre", "04:00:00", "09:30:00"],
+        ["regular", "09:30:00", "16:00:00"],
+        ["post", "16:00:00", "20:00:00"],
+      ] as const
+    ).map(([sessionType, openTime, closeTime]) => ({
+      calendarId: 1,
+      sessionType,
+      dayOfWeek,
+      openTime,
+      closeTime,
+      crossesMidnight: false,
+    })),
+  ),
+  overrides: [
+    {
+      calendarId: 2,
+      date: "2026-11-26",
+      overrideType: "closed",
+      name: "Thanksgiving",
+      openTime: null,
+      closeTime: null,
+    },
+    {
+      calendarId: 2,
+      date: "2026-11-27",
+      overrideType: "early_close",
+      name: "Thanksgiving",
+      openTime: null,
+      closeTime: "13:00:00",
+    },
+  ],
+} as const;

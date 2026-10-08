@@ -51,6 +51,8 @@
     --ai-gradient-start: hsl(240 70% 62%);
     --ai-gradient-end: hsl(17 85% 58%);
     --chart-grid: hsl(216 14% 86%);
+    --chart-session-pre: rgb(255 167 38 / 0.09);
+    --chart-session-post: rgb(41 98 255 / 0.075);
     --chart-text: hsl(220 8% 42%);
     --chart-panel: hsl(216 18% 95%);
     --chart-split-line: color-mix(in oklab, var(--border) 58%, transparent);
@@ -114,6 +116,8 @@
     --ai-gradient-start: hsl(240 100% 80%);
     --ai-gradient-end: hsl(17 100% 77%);
     --chart-grid: hsl(225 6% 16%);
+    --chart-session-pre: rgb(255 167 38 / 0.08);
+    --chart-session-post: rgb(41 98 255 / 0.14);
     --chart-text: hsl(220 5% 54%);
     --chart-panel: hsl(225 8% 11%);
     --chart-split-line: color-mix(in oklab, var(--border) 52%, transparent);
@@ -142,6 +146,8 @@
     --plan-ink-muted: #426a83;
     --plan-wash: #eef6fc;
     --plan-accent: #1b5fd9;
+    /* Overnight shares the pre-market tint: both precede the open. */
+    --chart-session-overnight: var(--chart-session-pre);
     --chart-agent-annotation-muted: color-mix(
       in srgb,
       var(--chart-agent-annotation-text) 62%,

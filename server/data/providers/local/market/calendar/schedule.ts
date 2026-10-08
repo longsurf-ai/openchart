@@ -110,16 +110,7 @@ function day(schedule: Schedule, date: Temporal.PlainDate): Day {
       throw new DatasetFailure(new DatasetReasons.InvalidResult(), {
         cause: `Invalid session interval on ${label}`,
       });
-    sessions.push({
-      kind:
-        rule.sessionType === "pre"
-          ? "premarket"
-          : rule.sessionType === "post"
-            ? "postmarket"
-            : "regular",
-      start,
-      end,
-    });
+    sessions.push({ type: rule.sessionType, start, end });
   }
   sessions.sort((left, right) => left.start - right.start);
   return result;

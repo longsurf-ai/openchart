@@ -27,4 +27,10 @@ export function applyChartTheme(state: v2.Chart.State, element: HTMLElement) {
     "--chart-text",
   );
   state.config.chart.grid.color = chartTokenColor(element, "--chart-grid");
+  // Session tints are translucent; keep their tokens in rgb()/hsl() so this
+  // projection never flattens them through the opaque oklch conversion.
+  const bands = state.config.chart.sessionBands;
+  bands.pre = chartTokenColor(element, "--chart-session-pre");
+  bands.post = chartTokenColor(element, "--chart-session-post");
+  bands.overnight = chartTokenColor(element, "--chart-session-overnight");
 }

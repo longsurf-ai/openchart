@@ -1,9 +1,11 @@
 # Calendar Feed
 
-Owns the consumer Calendar service contract and its currently unavailable implementation.
+Owns the consumer Calendar service contract, provider routing and its tRPC
+router (`feed.calendar.get`).
 
 ## Invariants
 
+- Route by request provider only; a provider without a calendar binding fails
+  `Feed.SourceUnavailable`, never another provider's calendar.
 - Dataset calendar access is distinct from resolving a consumer listing's venue
-  calendar. Until a Feed adaptor exists, operations fail unavailable.
-- No placeholder router, adaptor or provisioner is created for future work.
+  calendar; Provider adapters own that resolution.

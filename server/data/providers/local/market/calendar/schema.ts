@@ -35,7 +35,7 @@ export const tradingSessionRules = sqliteTable(
       .notNull()
       .references(() => tradingCalendars.calendarId),
     sessionType: text("session_type", {
-      enum: ["regular", "pre", "post", "early_close", "late_open"],
+      enum: ["regular", "pre", "post", "overnight", "early_close", "late_open"],
     }).notNull(),
     dayOfWeek: integer("day_of_week").notNull(),
     openTime: text("open_time").notNull(),

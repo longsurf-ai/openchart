@@ -17,7 +17,7 @@ export type TradingSession = typeof TradingSession.Type;
 
 /** A venue-local trading day and its complete atomic sessions. */
 export const TradingDay = Schema.Struct({
-  // Unix milliseconds of the venue trading day's local midnight; a day label, not an open time.
+  // Unix milliseconds of the venue trading date's midnight in the consumer's zone; a day label, not an open time.
   date: Schema.Int,
   sessions: Schema.Array(TradingSession),
 });

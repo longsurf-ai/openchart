@@ -9,6 +9,7 @@ const silent: Client = {
   changes: Stream.empty,
   getCapabilities: () => Effect.die("unused"),
   searchListings: () => Effect.die("unused"),
+  readCalendar: () => Effect.die("unused"),
   readBarsPage: () => Effect.die("unused"),
   subscribeBars: () => Effect.succeed(Stream.never),
   reset: () => Effect.void,

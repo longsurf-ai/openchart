@@ -2,6 +2,7 @@
 import { Context, Effect, Layer, Stream } from "effect";
 import {
   openchartBars,
+  openchartCalendar,
   openchartSymbology,
 } from "@openchart/server/data/providers/openchart/datasets/definitions";
 import { OpenChartClient } from "./client";
@@ -17,6 +18,7 @@ import {
   streamBars,
 } from "@openchart/server/data/providers/openchart/datasets/bars";
 import { searchSymbols } from "@openchart/server/data/providers/openchart/datasets/symbology";
+import { cachedSelectCalendar } from "@openchart/server/data/providers/openchart/datasets/calendar";
 /** OpenChart credentials remain owned by Access. @example OpenChartProvider.layer; */
 export class OpenChartProvider extends Context.Service<
   OpenChartProvider,
@@ -45,12 +47,15 @@ export class OpenChartProvider extends Context.Service<
           const symbols = yield* makeDataset(openchartSymbology, {
             search: (query) => searchSymbols(client, query),
           });
-          return [bars, symbols];
+          const calendar = yield* makeDataset(openchartCalendar, {
+            select: yield* cachedSelectCalendar(client),
+          });
+          return [bars, symbols, calendar];
         }),
         checkAccess,
       );
       return {
-        definitions: [openchartBars, openchartSymbology],
+        definitions: [openchartBars, openchartSymbology, openchartCalendar],
         watch: () => client.changes.pipe(Stream.switchMap(() => configured)),
         checkAccess,
         refresh: () => client.reset(),
