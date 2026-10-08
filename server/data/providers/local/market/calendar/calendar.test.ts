@@ -474,3 +474,38 @@ test("rejects cyclic inheritance, overlaps, and invalid local times", async () =
     });
   }
 });
+
+test("stores and expands overnight sessions that cross midnight", async () => {
+  const calendar = dataset(
+    snapshot((client) => {
+      drizzle({ client })
+        .insert(tradingSessionRules)
+        .values({
+          calendarId: 1,
+          sessionType: "overnight",
+          dayOfWeek: 6,
+          openTime: "21:00:00",
+          closeTime: "04:00:00",
+          crossesMidnight: 1,
+        })
+        .run();
+    }),
+  );
+  const [sunday] = await calendar.select({
+    calendar: "NYSE",
+    time: {
+      from: Date.parse("2026-12-06T05:00Z"),
+      to: Date.parse("2026-12-07T05:00Z"),
+    },
+  });
+  expect(sunday).toMatchObject({
+    date: "2026-12-06",
+    sessions: [
+      {
+        type: "overnight",
+        start: Date.parse("2026-12-07T02:00Z"),
+        end: Date.parse("2026-12-07T09:00Z"),
+      },
+    ],
+  });
+});
