@@ -1,8 +1,12 @@
-// Purpose: The first chart window covers everything the saved zoom shows.
+// Purpose: Chart windows cover the saved zoom; session shading reads only the calendar it needs.
 import { BarsSeries, resolutionMs } from "@openchart/feed";
 import { Schema } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
-import { initialBarsRequest, tagSessions } from "@openchart/app/lib/chart/data";
+import {
+  initialBarsRequest,
+  sessionDaysWindow,
+  tagSessions,
+} from "@openchart/app/lib/chart/data";
 
 const series = Schema.decodeUnknownSync(BarsSeries)({
   provider: "binance",
@@ -93,4 +97,33 @@ it("tags rows inside calendar sessions and leaves the rest untouched", () => {
   });
   expect(Object.isFrozen(tagged[1])).toBe(true);
   expect(tagged[0]).toBe(rows[0]);
+});
+
+it("asks for calendar days only under intraday Extended/24h bars", () => {
+  const first = Date.parse("2026-10-05T13:00Z");
+  const last = Date.parse("2026-10-07T23:00Z");
+  expect(
+    sessionDaysWindow({ resolution: "1h", session: "extended" }, first, last),
+  ).toEqual({
+    start: Date.parse("2026-10-05T00:00Z"),
+    end: Date.parse("2026-10-08T00:00Z"),
+  });
+  expect(
+    sessionDaysWindow({ resolution: "1m", session: "24h" }, last, last),
+  ).toEqual({
+    start: Date.parse("2026-10-07T00:00Z"),
+    end: Date.parse("2026-10-08T00:00Z"),
+  });
+  for (const series of [
+    { resolution: "1h", session: "regular" },
+    { resolution: "1d", session: "extended" },
+  ] as const)
+    expect(sessionDaysWindow(series, first, last)).toBeUndefined();
+  expect(
+    sessionDaysWindow(
+      { resolution: "1h", session: "extended" },
+      undefined,
+      undefined,
+    ),
+  ).toBeUndefined();
 });

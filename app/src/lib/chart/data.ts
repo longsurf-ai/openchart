@@ -24,6 +24,25 @@ export function toRows(frame: DataFrame): ChartRow[] {
 }
 
 /**
+ * The whole UTC days of calendar a series needs for session shading, or
+ * undefined when it has none: only intraday Extended/24h bars are shaded.
+ * Whole days keep the window stable while live bars arrive. Times are Unix ms.
+ * @example const window = sessionDaysWindow(series, firstBarTime, lastBarTime);
+ */
+export function sessionDaysWindow(
+  series: Pick<BarsSeries, "resolution" | "session">,
+  first: number | undefined,
+  last: number | undefined,
+): { start: number; end: number } | undefined {
+  const day = resolutionMs["1d"];
+  const step = resolutionMs[series.resolution];
+  if (step >= day || series.session === "regular") return undefined;
+  if (first === undefined || last === undefined) return undefined;
+  const start = Math.floor(first / day) * day;
+  return { start, end: Math.ceil((last + step) / day) * day };
+}
+
+/**
  * Tag each row whose open time falls inside a calendar session with that
  * session's type and bounds in seconds, the fields the renderer shades extended
  * sessions from. Rows outside every session, or outside the days, stay as they
