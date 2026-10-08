@@ -9,7 +9,9 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { resolutionMs, type BarsSeries } from "@openchart/feed";
 import type { BarColumn } from "@openchart/market";
+import type { DataFrame } from "@openchart/timeseries";
 
 import { Button } from "@openchart/app/components/ui/button";
 import {
@@ -30,6 +32,7 @@ import {
   type ProfileBars,
 } from "@openchart/app/features/chart/components/sources/volume-profile";
 import { SymbolPicker } from "@openchart/app/features/chart/components/symbol-picker";
+import { useCalendar } from "@openchart/app/hooks/use-calendar";
 import { useChart } from "@openchart/app/hooks/use-chart";
 import { useChartGrid } from "@openchart/app/hooks/use-chart-grid";
 import { useWidgetControls } from "@openchart/app/hooks/use-widget";
@@ -53,6 +56,33 @@ const format = (value: unknown) =>
         maximumFractionDigits: Math.abs(value) < 1 ? 6 : 2,
       })
     : "—";
+
+const day = resolutionMs["1d"];
+/** Calendar days under intraday Extended/24h bars, which the renderer shades by
+ * session; regular-session and daily bars have none. Failures only omit shading.
+ */
+function useSessionDays(series: BarsSeries, frame: DataFrame | undefined) {
+  const step = resolutionMs[series.resolution];
+  const rows = frame?.numRows ?? 0;
+  const first = frame?.get(0)?.time ?? 0;
+  const last = frame?.get(rows - 1)?.time ?? 0;
+  // Whole UTC days keep the request stable while live bars arrive.
+  const start = Math.floor(first / day) * day;
+  const calendar = useCalendar(
+    {
+      provider: series.provider,
+      listing: series.listing,
+      start,
+      end: Math.max(start + day, Math.ceil((last + step) / day) * day),
+      timezone: "UTC", // Only session instants are read, never day labels.
+    },
+    {
+      enabled: step < day && series.session !== "regular" && rows > 0,
+      silent: true,
+    },
+  );
+  return calendar.data?.days;
+}
 
 /** One source owns one useBars; portals move only its display rows. @example <MarketSource {...props} /> */
 export function MarketSource({
@@ -84,6 +114,7 @@ export function MarketSource({
   const [profileBars, setProfileBars] = useState<ProfileBars>();
   useWidgetControls(picking);
   const shown = bars.current?.request ?? input.series;
+  const days = useSessionDays(shown, bars.frame);
   const failure = bars.status === "error" ? bars.error : undefined;
   // A local projection failure can always be retried; Feed failures say so themselves.
   const retryable =
@@ -103,6 +134,7 @@ export function MarketSource({
         input={input}
         symbol={shown.listing.symbol}
         frame={bars.frame}
+        days={days}
         localStore={localStore}
       />
       {input.bindings.flatMap((binding) =>

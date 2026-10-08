@@ -5,6 +5,7 @@ import {
   type BarsRequest,
   type BarsSeries,
 } from "@openchart/feed";
+import type { TradingDay } from "@openchart/market";
 import type { DataFrame } from "@openchart/timeseries";
 
 import type { ChartPreferences } from "./preferences";
@@ -20,6 +21,34 @@ export function toRows(frame: DataFrame): ChartRow[] {
       time: row.time / 1000,
     }),
   );
+}
+
+/**
+ * Tag each row whose open time falls inside a calendar session with that
+ * session's type and bounds in seconds, the fields the renderer shades extended
+ * sessions from. Rows outside every session, or outside the days, stay as they
+ * are. Rows and days ascend; sessions never overlap.
+ * @example const tagged = tagSessions(toRows(frame), calendar.days);
+ */
+export function tagSessions(
+  rows: readonly ChartRow[],
+  days: readonly TradingDay[],
+): ChartRow[] {
+  const sessions = days.flatMap((day) => day.sessions);
+  let next = 0;
+  return rows.map((row) => {
+    const time = row.time * 1000;
+    while (next < sessions.length && sessions[next]!.end <= time) next++;
+    const session = sessions[next];
+    return session && session.start <= time
+      ? Object.freeze({
+          ...row,
+          sessionType: session.type,
+          sessionStart: session.start / 1000,
+          sessionEnd: session.end / 1000,
+        })
+      : row;
+  });
 }
 
 /** The open time in milliseconds of the main series' bar at `index`, counting back from -1 for the newest, if it has one. @example const newest = mainBarTime(chart.store.getState(), -1); */

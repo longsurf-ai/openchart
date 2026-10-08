@@ -2,6 +2,7 @@
 
 import { Schema } from "effect";
 import { Temporal } from "@js-temporal/polyfill";
+import { TradingSession } from "@openchart/market";
 import { defineDataset, k, Layout } from "@openchart/server/data/dataset";
 
 /** Exact ISO calendar dates; impossible dates fail at the boundary. */
@@ -21,32 +22,15 @@ export const CalendarDate = Schema.String.check(
   ),
 );
 
-/** Trading time categories; closed time is the gap between windows. */
-export const SessionKind = Schema.Literals([
-  "premarket",
-  "regular",
-  "postmarket",
-]);
-
-/** A complete trading interval; boundaries are not clipped to the query. */
-export const SessionWindow = Schema.Struct({
-  kind: SessionKind,
-  start: Schema.Finite.check(Schema.isInt()),
-  end: Schema.Finite.check(Schema.isInt()),
-})
-  .check(
-    Schema.makeFilter((window) => window.start < window.end, {
-      message: "Session start must precede end",
-    }),
-  )
-  // @agent invariant: annotate after check; `.check` rebuilds the node and drops parseOptions.
-  .annotate({ parseOptions: { onExcessProperty: "error" } });
 /** Provider-native observation schema. */
 export const calendarRow = Schema.Struct({
   date: CalendarDate,
   timezone: Schema.String.check(Schema.isMinLength(1)),
   holiday: Schema.NullOr(Schema.String),
-  sessions: Schema.Array(SessionWindow).check(
+  sessions: Schema.Array(
+    // @agent invariant: annotate after check; `.check` rebuilds the node and drops parseOptions.
+    TradingSession.annotate({ parseOptions: { onExcessProperty: "error" } }),
+  ).check(
     Schema.makeFilter(
       (windows) =>
         windows.every(

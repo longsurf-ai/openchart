@@ -2,7 +2,7 @@
 import { BarsSeries, resolutionMs } from "@openchart/feed";
 import { Schema } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
-import { initialBarsRequest } from "@openchart/app/lib/chart/data";
+import { initialBarsRequest, tagSessions } from "@openchart/app/lib/chart/data";
 
 const series = Schema.decodeUnknownSync(BarsSeries)({
   provider: "binance",
@@ -45,4 +45,52 @@ it("requests a power of two covering a quarter more than the bars that fit at th
     initialBarsRequest(series, { viewport: null, barSpacing: 50 }, 1016)
       .countBack,
   ).toBe(128);
+});
+
+it("tags rows inside calendar sessions and leaves the rest untouched", () => {
+  const seconds = (iso: string) => Date.parse(iso) / 1000;
+  const rows = [
+    "2026-11-27T08:00Z", // before pre-market
+    "2026-11-27T09:00Z",
+    "2026-11-27T14:30Z", // the open belongs to the regular session
+    "2026-11-27T18:00Z",
+    "2026-11-28T01:00Z", // the post-market end is exclusive
+    "2026-11-30T09:00Z", // beyond the calendar's days
+  ].map((iso) => Object.freeze({ time: seconds(iso), close: 1 }));
+  const session = (
+    type: "pre" | "regular" | "post",
+    start: string,
+    end: string,
+  ) => ({
+    type,
+    start: Date.parse(start),
+    end: Date.parse(end),
+  });
+  const tagged = tagSessions(rows, [
+    { date: Date.parse("2026-11-26T05:00Z"), sessions: [] },
+    {
+      date: Date.parse("2026-11-27T05:00Z"),
+      sessions: [
+        session("pre", "2026-11-27T09:00Z", "2026-11-27T14:30Z"),
+        session("regular", "2026-11-27T14:30Z", "2026-11-27T18:00Z"),
+        session("post", "2026-11-27T18:00Z", "2026-11-28T01:00Z"),
+      ],
+    },
+  ]);
+  expect(tagged.map((row) => row.sessionType)).toEqual([
+    undefined,
+    "pre",
+    "regular",
+    "post",
+    undefined,
+    undefined,
+  ]);
+  expect(tagged[1]).toEqual({
+    ...rows[1],
+    sessionType: "pre",
+    sessionStart: seconds("2026-11-27T09:00Z"),
+    sessionEnd: seconds("2026-11-27T14:30Z"),
+  });
+  expect(Object.isFrozen(tagged[1])).toBe(true);
+  expect(tagged[0]).toBe(rows[0]);
 });

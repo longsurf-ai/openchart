@@ -8,7 +8,7 @@ import { Bus } from "@openchart/server/bus";
 import { Database } from "@openchart/server/db";
 import { Events, SubscriberOverflowError } from "@openchart/server/events";
 import { readBarsHistory } from "@openchart/server/feed/bar/history";
-import { calendarFeed } from "@openchart/server/feed/calendar/service";
+import { calendarFeed } from "@openchart/server/feed/calendar/calendar";
 import { logosFeed } from "@openchart/server/feed/logo/logo";
 import { Feed } from "@openchart/server/feed/service";
 import { Transactor } from "@openchart/server/lib/resource";
@@ -163,7 +163,7 @@ function environment(events = Events.layer) {
                 search: () => Effect.succeed([]),
               },
               logos: logosFeed(),
-              calendar: calendarFeed,
+              calendar: calendarFeed(),
             }),
         }),
       ),

@@ -24,7 +24,7 @@ const Calendar = createSelectSchema(tradingCalendars, {
 });
 const Rule = createSelectSchema(tradingSessionRules, {
   calendarId: Id,
-  sessionType: Schema.Literals(["pre", "regular", "post"]),
+  sessionType: Schema.Literals(["pre", "regular", "post", "overnight"]),
   dayOfWeek: Schema.Finite.check(Schema.isInt())
     .check(Schema.isGreaterThanOrEqualTo(0))
     .check(Schema.isLessThanOrEqualTo(6)),
@@ -60,14 +60,64 @@ const Override = Schema.Union([
     ...{ overrideType: Schema.Literal("late_open"), openTime: Clock },
   }),
 ]);
+// @agent invariant: downloaded calendar rows are untrusted even when their
+// shape matches; existing snapshots may not enforce the declared constraints.
+const references = Schema.makeFilter(
+  (data: {
+    calendars: readonly {
+      calendarId: number;
+      sourceCalendarId: number | null;
+      name: string;
+    }[];
+    rules: readonly { calendarId: number }[];
+    overrides: readonly { calendarId: number }[];
+  }) => {
+    const ids = new Set(data.calendars.map((row) => row.calendarId));
+    if (
+      ids.size !== data.calendars.length ||
+      new Set(data.calendars.map((row) => row.name)).size !==
+        data.calendars.length
+    )
+      return "Calendar IDs and names must be unique";
+    if (
+      data.calendars.some(
+        (row) =>
+          row.sourceCalendarId !== null && !ids.has(row.sourceCalendarId),
+      ) ||
+      [...data.rules, ...data.overrides].some((row) => !ids.has(row.calendarId))
+    )
+      return "Calendar data references a missing calendar";
+    return true;
+  },
+);
 const Source = Schema.Struct({
   calendars: Schema.Array(Calendar).check(Schema.isMinLength(1)),
   rules: Schema.Array(Rule),
   overrides: Schema.Array(Override),
-});
+}).check(references);
 
-/** Calendar rows parsed from the local dataset's Drizzle declarations. */
-export type CalendarData = typeof Source.Type;
+/**
+ * Hosted calendar rows as JSON, as OpenChart Cloud serves them: the same rows
+ * the local tables store, with a boolean `crossesMidnight`.
+ * @example Schema.decodeUnknownEffect(CalendarRows)(body);
+ */
+export const CalendarRows = Schema.Struct({
+  calendars: Schema.Array(
+    Schema.Struct({
+      calendarId: Calendar.fields.calendarId,
+      sourceCalendarId: Calendar.fields.sourceCalendarId,
+      name: Calendar.fields.name,
+      timezone: Calendar.fields.timezone,
+    }),
+  ).check(Schema.isMinLength(1)),
+  rules: Schema.Array(
+    Schema.Struct({ ...Rule.fields, crossesMidnight: Schema.Boolean }),
+  ),
+  overrides: Schema.Array(Override),
+}).check(references);
+
+/** Parsed calendar rows from either source; the schedule expander reads only these. */
+export type CalendarData = typeof CalendarRows.Type;
 
 /**
  * Reads the three calendar tables in one transaction and parses source values
@@ -78,33 +128,13 @@ export type CalendarData = typeof Source.Type;
  */
 export function readCalendarData(database: NodeSQLiteDatabase): CalendarData {
   try {
-    const data = database.transaction((tx) =>
+    return database.transaction((tx) =>
       Schema.decodeUnknownSync(Source)({
         calendars: tx.select().from(tradingCalendars).all(),
         rules: tx.select().from(tradingSessionRules).all(),
         overrides: tx.select().from(tradingCalendarOverrides).all(),
       }),
     );
-    // @agent invariant: downloaded SQLite files are untrusted even when their
-    // tables match; existing snapshots may not enforce the declared constraints.
-    const ids = new Set(data.calendars.map((row) => row.calendarId));
-    if (
-      ids.size !== data.calendars.length ||
-      new Set(data.calendars.map((row) => row.name)).size !==
-        data.calendars.length
-    ) {
-      throw new Error("Calendar IDs and names must be unique");
-    }
-    if (
-      data.calendars.some(
-        (row) =>
-          row.sourceCalendarId !== null && !ids.has(row.sourceCalendarId),
-      ) ||
-      [...data.rules, ...data.overrides].some((row) => !ids.has(row.calendarId))
-    ) {
-      throw new Error("Calendar data references a missing calendar");
-    }
-    return data;
   } catch (cause) {
     throw new DatasetFailure(new DatasetReasons.InvalidResult(), { cause });
   }

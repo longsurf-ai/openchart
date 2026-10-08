@@ -1,4 +1,4 @@
-// Purpose: Zod schemas and defaults for chart-level configuration (dimensions, layout, grid)
+// Purpose: Zod schemas and defaults for chart-level configuration (dimensions, layout, grid, session tints)
 // Module:  @openchart/chart-core / chart
 
 /* eslint-disable @typescript-eslint/no-namespace -- Namespace exports are the intentional public API for this module. */
@@ -80,6 +80,28 @@ export namespace ChartConfig {
   export type Grid = z.infer<typeof Grid>;
 
   /**
+   * Background tints for extended-session bars. Hosts project their theme
+   * tokens here; the fallbacks keep headless rendering tinted.
+   */
+  export const SessionBands = z
+    .object({
+      pre: z
+        .string()
+        .default("var(--chart-session-pre, #ffa72617)")
+        .describe("Pre-market background tint"),
+      post: z
+        .string()
+        .default("var(--chart-session-post, #2962ff13)")
+        .describe("Post-market background tint"),
+      overnight: z
+        .string()
+        .default("var(--chart-session-overnight, #ffa72617)")
+        .describe("Overnight background tint"),
+    })
+    .describe("Background tints for extended-session bars.");
+  export type SessionBands = z.infer<typeof SessionBands>;
+
+  /**
    * Full chart config schema.
    */
   export const Schema = z
@@ -101,6 +123,11 @@ export namespace ChartConfig {
         horzLines: true,
         vertLines: true,
       }).describe("Grid line visibility and styling."),
+      sessionBands: SessionBands.default({
+        pre: "var(--chart-session-pre, #ffa72617)",
+        post: "var(--chart-session-post, #2962ff13)",
+        overnight: "var(--chart-session-overnight, #ffa72617)",
+      }).describe("Background tints for extended-session bars."),
     })
     .describe(
       "Chart-level configuration for layout, dimensions, and grid settings.",

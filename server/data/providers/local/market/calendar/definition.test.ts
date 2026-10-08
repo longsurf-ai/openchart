@@ -30,13 +30,13 @@ test("calendar rows preserve closed dates and reject invalid windows", () => {
     Schema.decodeUnknownSync(definition.access.select.output)([row]),
   ).toEqual([row]);
   for (const sessions of [
-    [{ kind: "regular", start: 2, end: 1 }],
+    [{ type: "regular", start: 2, end: 1 }],
     [
-      { kind: "regular", start: 1, end: 3 },
-      { kind: "postmarket", start: 2, end: 4 },
+      { type: "regular", start: 1, end: 3 },
+      { type: "post", start: 2, end: 4 },
     ],
-    [{ kind: "closed", start: 1, end: 2 }],
-    [{ kind: "regular", start: 1, end: 2, typo: true }],
+    [{ type: "closed", start: 1, end: 2 }],
+    [{ type: "regular", start: 1, end: 2, typo: true }],
   ])
     expect(() =>
       Schema.decodeUnknownSync(definition.access.select.output)([

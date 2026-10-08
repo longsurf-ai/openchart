@@ -61,9 +61,9 @@ if (realSnapshot) {
     expect(rows.map((row) => row.date)).toEqual(["2026-11-26", "2026-11-27"]);
     expect(rows[0]).toMatchObject({ holiday: "Thanksgiving", sessions: [] });
     expect(
-      rows[1]?.sessions.find((session) => session.kind === "regular"),
+      rows[1]?.sessions.find((session) => session.type === "regular"),
     ).toEqual({
-      kind: "regular",
+      type: "regular",
       start: Date.parse("2026-11-27T14:30Z"),
       end: Date.parse("2026-11-27T18:00Z"),
     });
@@ -291,17 +291,17 @@ test("reads source data without writes and applies inheritance, closures, and ch
   expect(rows[0]).toMatchObject({ holiday: "Thanksgiving", sessions: [] });
   expect(rows[1]?.sessions).toEqual([
     {
-      kind: "premarket",
+      type: "pre",
       start: Date.parse("2026-11-27T09:00Z"),
       end: Date.parse("2026-11-27T14:30Z"),
     },
     {
-      kind: "regular",
+      type: "regular",
       start: Date.parse("2026-11-27T14:30Z"),
       end: Date.parse("2026-11-27T18:00Z"),
     },
     {
-      kind: "postmarket",
+      type: "post",
       start: Date.parse("2026-11-27T18:00Z"),
       end: Date.parse("2026-11-28T01:00Z"),
     },
@@ -348,7 +348,7 @@ test("handles DST as local dates and preserves full overlapping source sessions"
     "2026-11-30",
   ]);
   expect(overnight[0]?.sessions[0]).toEqual({
-    kind: "regular",
+    type: "regular",
     start: Date.parse("2026-11-29T23:00Z"),
     end: Date.parse("2026-11-30T22:00Z"),
   });

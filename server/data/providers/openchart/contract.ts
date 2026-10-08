@@ -8,6 +8,7 @@ import {
 } from "effect";
 import { SessionType, type Listing } from "@openchart/market";
 import type { OpenChartError } from "./errors";
+import type { CalendarData } from "@openchart/server/data/providers/local/market/calendar/data";
 
 /** OpenChart's supported time buckets, including calendar weeks and months. */
 export const OpenChartResolution = Schema.Literals([
@@ -88,6 +89,9 @@ export const Capabilities = Schema.Struct({
 /** Validated OpenChart service limits and supported selections. */
 export type Capabilities = typeof Capabilities.Type;
 
+/** A listing venue's calendar name with the stored rows needed to expand it. */
+export type ListingCalendar = CalendarData & { readonly calendar: string };
+
 /** Typed OpenChart API; consumers never handle endpoint paths or encoded responses. */
 export interface Client {
   /** Emits on subscription and account reset so consumers reacquire Datasets. @example openchart.changes.pipe(Stream.runDrain); */
@@ -98,6 +102,8 @@ export interface Client {
   searchListings(
     request: SearchRequest,
   ): Effect.Effect<ReadonlyArray<Listing>, OpenChartError>;
+  /** Read the stored calendar rows of a listing's venue; unknown listings are rejected. @example yield* openchart.readCalendar(10244); */
+  readCalendar(listing: number): Effect.Effect<ListingCalendar, OpenChartError>;
   /** Read one complete page; times are milliseconds and prices are ordinary numbers. Transport/decode failures never return partial success. @example yield* openchart.readBarsPage({...series, start: 0, end: 1000, limit: 100, order: "asc"}); */
   readBarsPage(
     request: BarsPageRequest,

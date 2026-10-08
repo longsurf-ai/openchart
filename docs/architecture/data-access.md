@@ -316,4 +316,6 @@ rules are unchanged. Composition supplies a separate read-only Drizzle connectio
 activation loads a consistent snapshot of the small calendar tables. The Provider
 does not write, migrate, or close that connection. These schemas remain outside
 the application's SQLite migration ledger. Calendar-ID selection remains distinct
-from consumer listing-to-calendar resolution, whose Feed implementation is deferred.
+from consumer listing-to-calendar resolution. The OpenChart Provider resolves its
+listings through Cloud's `GET /calendar`, which returns the same hosted rows as
+JSON, and expands them with this module's decoding and schedule code.
