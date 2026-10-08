@@ -331,6 +331,17 @@ test("calendar reads a listing's stored rows and rejects broken references", asy
         ...calendarResponse,
         rules: [{ ...calendarResponse.rules[0], crossesMidnight: 0 }],
       },
+      {
+        ...calendarResponse,
+        rules: [...calendarResponse.rules, calendarResponse.rules[0]],
+      },
+      {
+        ...calendarResponse,
+        overrides: [
+          ...calendarResponse.overrides,
+          { ...calendarResponse.overrides[1], date: "2026-11-26" },
+        ],
+      },
     ]) {
       f.operation.mockResolvedValue(body);
       await expect(

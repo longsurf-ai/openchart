@@ -69,8 +69,12 @@ const references = Schema.makeFilter(
       sourceCalendarId: number | null;
       name: string;
     }[];
-    rules: readonly { calendarId: number }[];
-    overrides: readonly { calendarId: number }[];
+    rules: readonly {
+      calendarId: number;
+      sessionType: string;
+      dayOfWeek: number;
+    }[];
+    overrides: readonly { calendarId: number; date: string }[];
   }) => {
     const ids = new Set(data.calendars.map((row) => row.calendarId));
     if (
@@ -87,6 +91,18 @@ const references = Schema.makeFilter(
       [...data.rules, ...data.overrides].some((row) => !ids.has(row.calendarId))
     )
       return "Calendar data references a missing calendar";
+    // Mirror the tables' primary keys: a duplicate must fail, not let the last row win.
+    const unique = (keys: readonly string[]) =>
+      new Set(keys).size === keys.length;
+    if (
+      !unique(
+        data.rules.map(
+          (row) => `${row.calendarId}:${row.sessionType}:${row.dayOfWeek}`,
+        ),
+      ) ||
+      !unique(data.overrides.map((row) => `${row.calendarId}:${row.date}`))
+    )
+      return "Calendar rules and overrides must be unique per key";
     return true;
   },
 );
