@@ -245,3 +245,152 @@ test("rejects full-container codecs or checks that cannot be applied to a smalle
     ),
   ).toThrow("Containers with serverManaged");
 });
+
+type Node = {
+  readonly label: string;
+  readonly count: number;
+  readonly children: ReadonlyArray<Node>;
+};
+const Node: Schema.Codec<Node> = Schema.Struct({
+  label: Schema.NonEmptyString,
+  count: serverManaged(Schema.Number),
+  children: Schema.Array(Schema.suspend(() => Node)),
+});
+
+test("recursive schemas omit managed fields at every depth", () => {
+  const shape = deriveWriteShape(Schema.Struct({ root: Node }));
+  const parse = Schema.decodeUnknownSync(shape.schema, STRICT_PARSE_OPTIONS);
+  const tree = {
+    root: {
+      label: "A",
+      children: [{ label: "B", children: [{ label: "C", children: [] }] }],
+    },
+  };
+  expect(parse(tree)).toEqual(tree);
+  expect(() =>
+    parse({
+      root: {
+        label: "A",
+        children: [{ label: "B", children: [{ label: "", children: [] }] }],
+      },
+    }),
+  ).toThrow();
+  expect(() =>
+    parse({
+      root: {
+        label: "A",
+        children: [
+          { label: "B", children: [{ label: "C", count: 1, children: [] }] },
+        ],
+      },
+    }),
+  ).toThrow();
+  expect(
+    shape.project({
+      root: {
+        label: "A",
+        count: 1,
+        children: [
+          {
+            label: "B",
+            count: 2,
+            children: [{ label: "C", count: 3, children: [] }],
+          },
+        ],
+      },
+    }),
+  ).toEqual(tree);
+});
+
+test("recursion without managed fields keeps its schema, defaults, and checks", () => {
+  type Plain = {
+    readonly label: string;
+    readonly children: ReadonlyArray<Plain>;
+  };
+  type PlainEncoded = {
+    readonly label: string;
+    readonly children?: ReadonlyArray<PlainEncoded>;
+  };
+  const Plain: Schema.Codec<Plain, PlainEncoded> = Schema.Struct({
+    label: Schema.NonEmptyString,
+    children: Schema.Array(Schema.suspend(() => Plain))
+      .check(Schema.isMaxLength(2))
+      .pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  });
+  const schema = Schema.Struct({ root: Plain });
+  const shape = deriveWriteShape(schema);
+  expect(shape.schema.ast).toBe(schema.ast);
+  const parse = Schema.decodeUnknownSync(shape.schema, STRICT_PARSE_OPTIONS);
+  expect(parse({ root: { label: "A", children: [{ label: "B" }] } })).toEqual({
+    root: { label: "A", children: [{ label: "B", children: [] }] },
+  });
+  expect(() =>
+    parse({
+      root: {
+        label: "A",
+        children: [{ label: "B", children: [{}, {}, {}] }],
+      },
+    }),
+  ).toThrow();
+});
+
+test("mutually recursive schemas derive one closed cycle", () => {
+  type Group = {
+    readonly name: string;
+    readonly revision: number;
+    readonly entries: ReadonlyArray<Entry>;
+  };
+  type Entry = {
+    readonly label: string;
+    readonly revision: number;
+    readonly group?: Group;
+  };
+  const Group: Schema.Codec<Group> = Schema.Struct({
+    name: Schema.String,
+    revision: serverManaged(Schema.Number),
+    entries: Schema.Array(Schema.suspend(() => Entry)),
+  });
+  const Entry: Schema.Codec<Entry> = Schema.Struct({
+    label: Schema.String,
+    revision: serverManaged(Schema.Number),
+    group: Schema.optionalKey(Schema.suspend(() => Group)),
+  });
+  const shape = deriveWriteShape(Schema.Struct({ root: Group }));
+  const parse = Schema.decodeUnknownSync(shape.schema, STRICT_PARSE_OPTIONS);
+  const value = {
+    root: {
+      name: "A",
+      entries: [
+        { label: "a", group: { name: "B", entries: [{ label: "b" }] } },
+      ],
+    },
+  };
+  expect(parse(value)).toEqual(value);
+  expect(() =>
+    parse({
+      root: {
+        name: "A",
+        entries: [
+          { label: "a", group: { name: "B", revision: 1, entries: [] } },
+        ],
+      },
+    }),
+  ).toThrow();
+});
+
+test("rejects recursive containers that cannot follow the smaller shape when derived", () => {
+  type Checked = {
+    readonly count: number;
+    readonly children: ReadonlyArray<Checked>;
+  };
+  const Checked: Schema.Codec<Checked> = Schema.Struct({
+    count: serverManaged(Schema.Number),
+    children: Schema.Array(Schema.suspend(() => Checked)),
+  }).check(Schema.makeFilter((value) => value.count > 0));
+  // The invalid container is reachable only through the suspension.
+  expect(() =>
+    deriveWriteShape(
+      Schema.Struct({ roots: Schema.Array(Schema.suspend(() => Checked)) }),
+    ),
+  ).toThrow("Containers with serverManaged");
+});

@@ -37,6 +37,7 @@ function fixture(
     getCapabilities,
     reset: () => Effect.die("unused"),
     searchListings: () => Effect.die("unused"),
+    readCalendar: () => Effect.die("unused"),
     readBarsPage: () => Effect.die("unused"),
     subscribeBars: () => Effect.die("unused"),
   });

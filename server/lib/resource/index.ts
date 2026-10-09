@@ -62,6 +62,7 @@ export {
   withInvariants,
   ResourceIssue,
   resourceIssues,
+  type At,
   type Path,
   type Invariant,
   type InvariantContext,

@@ -12,3 +12,5 @@ decoding, unit conversion, response identity and account invalidation.
 - Search returns at most 200 ranked native listings, without full indexing.
   Feed owns class filtering and merged limits.
 - Heartbeats prove liveness and never supply prices.
+- Calendar caches each listing's Cloud rows for an hour per activation and
+  expands them with the local calendar schedule; failed reads are not kept.

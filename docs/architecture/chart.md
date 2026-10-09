@@ -32,7 +32,7 @@ fetch / subscription lifecycle.
 | Drawing          | Tools that core already supports: create, drag, edit, lock, show/hide, delete; the shared toolbar follows the active chart                            |
 | User preferences | Plain persisted local state; chart preferences are saved by cell.id and grid ratios by chart Resource ID; the display timezone is an App-wide setting |
 | Indicator        | Indicator Resource: a Workspace Tea file snapshot + explicit parameter overrides; each mounted instance compiles by ID and observes independently     |
-| Calendar         | Calendar Feed returns unavailable; no fake trading calendar, market open/closed state, session shading, or countdown                                  |
+| Calendar         | Extended/24h intraday bars carry calendar sessions, shaded by type; no open/closed state, live-session extension or countdown                         |
 | Drawing Resource | Persisted; shared by dashboard + provider/listing, with its own revision and delete; failures can be retried                                          |
 | Agent overlays   | The Agent can write annotations through Drawing Resource; reuses auto layout, persisted dragging, the V1 card style, and source links                 |
 

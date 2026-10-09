@@ -17,6 +17,7 @@ import {
 import { makeLive } from "./live";
 import { tableFromIPC } from "apache-arrow";
 import { Listing } from "@openchart/market";
+import { CalendarRows } from "@openchart/server/data/providers/local/market/calendar/data";
 import {
   Capabilities,
   openchartBar,
@@ -36,6 +37,17 @@ import {
 type Parameters = Readonly<Record<string, string>>;
 const SearchResponse = Schema.fromJsonString(
   Schema.Struct({ results: Schema.Array(Listing) }),
+);
+const CalendarResponse = Schema.fromJsonString(
+  CalendarRows.mapFields(
+    (fields) => ({ ...fields, calendar: Schema.NonEmptyString }),
+    { unsafePreserveChecks: true }, // The referenced row fields are unchanged.
+  ).check(
+    Schema.makeFilter(
+      (body) => body.calendars.some((row) => row.name === body.calendar),
+      { message: "The selected calendar must be among the returned rows" },
+    ),
+  ),
 );
 const CapabilitiesResponse = Schema.fromJsonString(
   Schema.Struct({
@@ -245,6 +257,13 @@ export const layer = (baseUrl?: string) =>
               decodeResponse(SearchResponse, body).pipe(
                 Effect.map((value) => value.results),
               ),
+          ),
+        readCalendar: (listing) =>
+          request(
+            "/calendar",
+            { listing: String(listing) },
+            (response) => response.text(),
+            (body) => decodeResponse(CalendarResponse, body),
           ),
         readBarsPage: (query) =>
           request(

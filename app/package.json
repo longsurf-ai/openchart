@@ -37,7 +37,7 @@
     "test": "npm run test:lint && npm run test:workflow-types && vitest run && npm run test:feed",
     "test:lint": "node --test tooling/eslint.test.cjs",
     "test:workflow-types": "node --import tsx --test tooling/__tests__/workflow-types.test.mjs",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --max-warnings 0",
     "lint:fix": "npm run lint -- --fix",
     "check-types": "tsc --project tsconfig.json --pretty --noEmit",
     "typecheck": "npm run check-types",

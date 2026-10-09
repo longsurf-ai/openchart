@@ -38,4 +38,5 @@ See [README.md](README.md) and [architecture](../../../../docs/architecture/char
 - Tea only through `hooks/use-tea` (never the client; ESLint enforces). Adding
   decides once `useTeaDefinition` settles on the post-save read.
 - menus.tsx/chart-explain-drawings.tsx may use Effect Schema for Drawing input.
-- Calendar unavailable.
+- MarketVisuals tags intraday Extended/24h bars with calendar sessions;
+  failures only omit shading.

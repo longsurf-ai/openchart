@@ -43,7 +43,7 @@ openchart/
     feed/                     whole-Feed service/layer/router assembly, versions and shared events
       bar/                    service, provisioner, Hose handler
       symbology/              service, provisioner, business RPC router
-      calendar/               service contract and unavailable implementation
+      calendar/               service contract, provider routing and router
       logo/                   service contract and Provider binding provisioning
       series/                 finite reads of declared timeseries, such as Workspace Datasets
     agent/                    durable run admission and process-local execution orchestration
@@ -87,8 +87,8 @@ Browser consumers use `common/feed` through ordinary app hooks.
 records use OpenChart ProviderListing; it no longer exports the V1 DataSource or
 InstrumentView facade. `app/src/features/chart` binds it to `useBars` and owns
 DataFrame-to-renderer projection, React lifecycle, theme, and resize. Automated
-tests exercise the Feed bindings; Calendar integration remains pending on the
-existing Feed service. There are no V1 workspace imports.
+tests exercise the Feed bindings; the Calendar Feed supplies session tags for
+extended-hours shading. There are no V1 workspace imports.
 
 Commands are owned by the repository-root `justfile` and `package.json`.
 The workspace owns dependencies and configuration. The complete check runs

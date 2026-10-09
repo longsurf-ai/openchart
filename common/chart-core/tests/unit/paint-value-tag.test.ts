@@ -1103,12 +1103,13 @@ describe("Extended-session value tags", () => {
 });
 
 describe("Extended-session background bands", () => {
-  it("uses distinct tints for pre-market and post-market ranges", () => {
+  it("tints overnight and pre-market amber and post-market blue", () => {
     const ctx = createMockCtx() as CanvasRenderingContext2D & {
       __fillRects: Array<{ style: string; args: unknown[] }>;
     };
     const state = createChartState({
       data: [
+        { value: 99, sessionType: "overnight" },
         { value: 100, sessionType: "pre" },
         { value: 101, sessionType: "pre" },
         { value: 102, sessionType: "regular" },
@@ -1123,8 +1124,9 @@ describe("Extended-session background bands", () => {
     repaint(state, runtime, fullMask());
 
     const styles = ctx.__fillRects.map((rect) => rect.style);
-    expect(styles).toContain("rgba(41, 98, 255, 0.075)");
-    expect(styles).toContain("rgba(255, 167, 38, 0.09)");
+    // Adjacent overnight and pre bars are separate bands of the same tint.
+    expect(styles.filter((style) => style === "#ffa72617")).toHaveLength(2);
+    expect(styles.filter((style) => style === "#2962ff13")).toHaveLength(1);
   });
 
   it("extends the active post-market band through the session close", () => {
@@ -1151,7 +1153,7 @@ describe("Extended-session background bands", () => {
     repaint(state, runtime, fullMask());
 
     const postWidths = ctx.__fillRects
-      .filter((rect) => rect.style === "rgba(255, 167, 38, 0.09)")
+      .filter((rect) => rect.style === "#2962ff13")
       .map((rect) => Number(rect.args[2]))
       .filter((width) => Number.isFinite(width) && width > 0);
 
@@ -1188,9 +1190,7 @@ describe("Extended-session background bands", () => {
 
     repaint(state, runtime, fullMask());
 
-    const preRect = ctx.__fillRects.find(
-      (rect) => rect.style === "rgba(41, 98, 255, 0.075)",
-    );
+    const preRect = ctx.__fillRects.find((rect) => rect.style === "#ffa72617");
 
     expect(preRect).toBeTruthy();
     expect(Number(preRect!.args[0])).toBeGreaterThan(0);

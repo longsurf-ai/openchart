@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "fbc9abf6-887a-4203-ab0d-12b44d64af64",
-  "prevIds": ["c3f861a3-d4e3-4d18-8831-d16cf3798a70"],
+  "id": "c1a107e8-7461-4704-add6-ccc64be634cf",
+  "prevIds": ["075f6a43-7fc1-4954-91ea-e03f767adefc"],
   "ddl": [
     {
       "name": "agent_permission_grants",
@@ -110,6 +110,18 @@
     },
     {
       "name": "trigger",
+      "entityType": "tables"
+    },
+    {
+      "name": "watchlist_item",
+      "entityType": "tables"
+    },
+    {
+      "name": "watchlist_section",
+      "entityType": "tables"
+    },
+    {
+      "name": "watchlist",
       "entityType": "tables"
     },
     {
@@ -2061,6 +2073,176 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
+      "table": "watchlist_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "watchlist_id",
+      "entityType": "columns",
+      "table": "watchlist_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "section_id",
+      "entityType": "columns",
+      "table": "watchlist_item"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "watchlist_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "watchlist_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing",
+      "entityType": "columns",
+      "table": "watchlist_item"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "watchlist_section"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "watchlist_id",
+      "entityType": "columns",
+      "table": "watchlist_section"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_section_id",
+      "entityType": "columns",
+      "table": "watchlist_section"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
+      "entityType": "columns",
+      "table": "watchlist_section"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "watchlist_section"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "watchlist"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "watchlist"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "watchlist"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "watchlist"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "watchlist"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'[]'",
+      "generated": null,
+      "name": "columns",
+      "entityType": "columns",
+      "table": "watchlist"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
       "table": "workspace_dataset"
     },
     {
@@ -2466,6 +2648,39 @@
       "table": "post_media"
     },
     {
+      "columns": ["watchlist_id", "section_id"],
+      "tableTo": "watchlist_section",
+      "columnsTo": ["watchlist_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": true,
+      "name": "watchlist_item_section_fk",
+      "entityType": "fks",
+      "table": "watchlist_item"
+    },
+    {
+      "columns": ["watchlist_id"],
+      "tableTo": "watchlist",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_watchlist_section_watchlist_id_watchlist_id_fk",
+      "entityType": "fks",
+      "table": "watchlist_section"
+    },
+    {
+      "columns": ["watchlist_id", "parent_section_id"],
+      "tableTo": "watchlist_section",
+      "columnsTo": ["watchlist_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": true,
+      "name": "watchlist_section_parent_fk",
+      "entityType": "fks",
+      "table": "watchlist_section"
+    },
+    {
       "columns": ["session_id", "id"],
       "nameExplicit": false,
       "name": "agent_todos_pk",
@@ -2652,6 +2867,27 @@
       "nameExplicit": false,
       "name": "trigger_pk",
       "table": "trigger",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "watchlist_item_pk",
+      "table": "watchlist_item",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "watchlist_section_pk",
+      "table": "watchlist_section",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "watchlist_pk",
+      "table": "watchlist",
       "entityType": "pks"
     },
     {
@@ -3227,6 +3463,68 @@
       "table": "symbology"
     },
     {
+      "columns": [
+        {
+          "value": "watchlist_id",
+          "isExpression": false
+        },
+        {
+          "value": "provider",
+          "isExpression": false
+        },
+        {
+          "value": "case when json_extract(\"listing\", '$.id') is not null then json_array(json_extract(\"listing\", '$.id')) else json_array(json_extract(\"listing\", '$.symbol'), json_extract(\"listing\", '$.venue')) end",
+          "isExpression": true
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "watchlist_item_listing_unique",
+      "entityType": "indexes",
+      "table": "watchlist_item"
+    },
+    {
+      "columns": [
+        {
+          "value": "watchlist_id",
+          "isExpression": false
+        },
+        {
+          "value": "position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"watchlist_section\".\"parent_section_id\" IS NULL",
+      "origin": "manual",
+      "name": "watchlist_section_root_position_unique",
+      "entityType": "indexes",
+      "table": "watchlist_section"
+    },
+    {
+      "columns": [
+        {
+          "value": "watchlist_id",
+          "isExpression": false
+        },
+        {
+          "value": "parent_section_id",
+          "isExpression": false
+        },
+        {
+          "value": "position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"watchlist_section\".\"parent_section_id\" IS NOT NULL",
+      "origin": "manual",
+      "name": "watchlist_section_child_position_unique",
+      "entityType": "indexes",
+      "table": "watchlist_section"
+    },
+    {
       "columns": ["chart_id", "position"],
       "nameExplicit": true,
       "name": "chart_cell_position_unique",
@@ -3288,6 +3586,20 @@
       "name": "dashboard_widget_position_unique",
       "entityType": "uniques",
       "table": "dashboard_widget"
+    },
+    {
+      "columns": ["section_id", "position"],
+      "nameExplicit": true,
+      "name": "watchlist_item_position_unique",
+      "entityType": "uniques",
+      "table": "watchlist_item"
+    },
+    {
+      "columns": ["watchlist_id", "id"],
+      "nameExplicit": true,
+      "name": "watchlist_section_watchlist_id_unique",
+      "entityType": "uniques",
+      "table": "watchlist_section"
     },
     {
       "columns": ["root"],
@@ -3979,6 +4291,84 @@
       "name": "chk_triggers_target_object",
       "entityType": "checks",
       "table": "trigger"
+    },
+    {
+      "value": "\"id\" IS NOT NULL AND length(\"id\") > 0",
+      "name": "watchlist_item_id_check",
+      "entityType": "checks",
+      "table": "watchlist_item"
+    },
+    {
+      "value": "typeof(\"position\") = 'integer' AND \"position\" >= 0",
+      "name": "watchlist_item_position_check",
+      "entityType": "checks",
+      "table": "watchlist_item"
+    },
+    {
+      "value": "length(\"provider\") > 0",
+      "name": "watchlist_item_provider_check",
+      "entityType": "checks",
+      "table": "watchlist_item"
+    },
+    {
+      "value": "COALESCE(\n        json_type(\"listing\") = 'object'\n        AND json_type(\"listing\", '$.symbol') = 'text'\n        AND json_type(\"listing\", '$.currency') = 'text',\n        0\n      )",
+      "name": "watchlist_item_listing_check",
+      "entityType": "checks",
+      "table": "watchlist_item"
+    },
+    {
+      "value": "\"id\" IS NOT NULL AND length(\"id\") > 0",
+      "name": "watchlist_section_id_check",
+      "entityType": "checks",
+      "table": "watchlist_section"
+    },
+    {
+      "value": "typeof(\"position\") = 'integer' AND \"position\" >= 0",
+      "name": "watchlist_section_position_check",
+      "entityType": "checks",
+      "table": "watchlist_section"
+    },
+    {
+      "value": "\"name\" IS NULL OR length(\"name\") BETWEEN 1 AND 200",
+      "name": "watchlist_section_name_check",
+      "entityType": "checks",
+      "table": "watchlist_section"
+    },
+    {
+      "value": "\"parent_section_id\" IS NULL OR \"parent_section_id\" != \"id\"",
+      "name": "watchlist_section_parent_check",
+      "entityType": "checks",
+      "table": "watchlist_section"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "watchlist_id_check",
+      "entityType": "checks",
+      "table": "watchlist"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "watchlist_revision_check",
+      "entityType": "checks",
+      "table": "watchlist"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "watchlist_created_at_check",
+      "entityType": "checks",
+      "table": "watchlist"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "watchlist_updated_at_check",
+      "entityType": "checks",
+      "table": "watchlist"
+    },
+    {
+      "value": "length(\"name\") BETWEEN 1 AND 200",
+      "name": "watchlist_name_check",
+      "entityType": "checks",
+      "table": "watchlist"
     },
     {
       "value": "\"id\" IS NOT NULL",

@@ -13,6 +13,7 @@ import {
   SymbolIndexAccepted,
   SymbolIndexStatus,
   LogoResult,
+  CalendarResult,
   SeriesSnapshot,
 } from "@openchart/feed";
 import { HoseError, type HoseErrorCode } from "@openchart/hose";
@@ -162,12 +163,6 @@ export class FeedTransport {
         throw feedError(signal.aborted ? signal.reason : error);
       }
     };
-    const unsupported = (_request: unknown, options?: RequestOptions) =>
-      run(options, async () => {
-        throw new FeedError({
-          reason: new FeedReasons.SourceUnavailable({}),
-        });
-      });
     return {
       close: () => {
         lifetime.abort(new ClientFailures.Cancelled());
@@ -180,7 +175,14 @@ export class FeedTransport {
             ),
           ),
       },
-      calendar: { getCalendar: unsupported },
+      calendar: {
+        getCalendar: (request, options) =>
+          run(options, async (signal) =>
+            Schema.decodeUnknownSync(CalendarResult)(
+              await this.rpc.feed.calendar.get.query(request, { signal }),
+            ),
+          ),
+      },
       series: {
         select: (request, options) =>
           run(options, async (signal) =>

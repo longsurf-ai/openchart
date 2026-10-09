@@ -55,7 +55,7 @@ Feed-selection API and demo toggles have been removed.
 - `server/feed/bar` owns Bars service, shared history reads, provisioning and hose-handler.
   `symbology` owns its service, merged-search provisioner and router;
   its RPC path is `feed.symbology.search`. `logo` provisions Provider bindings;
-  `calendar` currently owns its service contract and unavailable implementation.
+  `calendar` owns its service contract, provider routing and `feed.calendar.get`.
 - The Feed root owns whole-Feed service/layer/router composition, version
   coordination and shared events/errors. It contains no business implementation
   registry or combined provisioner. Bars has no unused tRPC router.
@@ -284,7 +284,20 @@ multi-market rules. The frontend contains no alias or image-path logic. The
 Provider reads individual bundled images as data URLs, with no external requests.
 The asset catalog's README records its scope and coverage.
 
-Consumer Calendar retains its contract but currently returns unavailable.
+Calendar requests carry the same `{provider, listing}` pair as Bars and route to
+that provider only; a provider without a calendar is `Feed.SourceUnavailable`.
+OpenChart Cloud serves a listing's venue calendar as stored rows (`GET /calendar`):
+the calendar, its ancestors, weekly session rules and dated overrides. The
+Provider caches them per listing for an hour per activation and expands them with
+the local calendar's schedule code into venue days; failed reads are not kept.
+Each day's `date` is the venue date's midnight in the requested timezone.
+
+The chart asks for whole UTC days under its loaded bars, only for intraday
+Extended/24h series, and tags each bar whose open time falls inside a session
+with that session's type and bounds. The renderer shades runs of tagged bars:
+overnight and pre-market amber, post-market blue. Calendar failures are silent
+and only omit shading. While a moved window loads, the same listing's previous
+days stay; another listing's never do.
 Provider settings control availability; neither Catalog nor Feed writes configuration.
 The two public Providers do not demonstrate OAuth; fixture tests cover retirement,
 completion, explicit cancellation, restoration, and stale acquisition rejection.

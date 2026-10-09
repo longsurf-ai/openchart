@@ -6,10 +6,12 @@ import {
 } from "@openchart/server/feed/adapter";
 import {
   openchartBars,
+  openchartCalendar,
   openchartSymbology,
 } from "@openchart/server/data/providers/openchart/datasets/definitions";
 import { openchartBarsFeed } from "./bars";
 import { openchartSymbologyFeed } from "./symbology";
+import { openchartCalendarFeed } from "./calendar";
 const providerId = ProviderId.make("openchart");
 /** Exact declarations and static capabilities, available before activation. */
 export const feeds: ProviderFeeds = {
@@ -24,4 +26,8 @@ export const feeds: ProviderFeeds = {
     providerId,
     indexable: false,
   },
+  calendar: datasetAdapter(openchartCalendar, (dataset) => ({
+    provider: providerId,
+    feed: openchartCalendarFeed(dataset, providerId),
+  })),
 };

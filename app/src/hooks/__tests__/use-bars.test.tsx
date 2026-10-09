@@ -418,7 +418,13 @@ it("mounts consumers before a version while finite queries wait for readiness an
         useBarsCapabilities(request, { enabled }),
         useLogo(request.listing.symbol, { enabled }),
         useCalendar(
-          { listing: request.listing, start: 0, end: 1000, timezone: "UTC" },
+          {
+            provider: request.provider,
+            listing: request.listing,
+            start: 0,
+            end: 1000,
+            timezone: "UTC",
+          },
           { enabled },
         ),
       ],
@@ -500,6 +506,62 @@ it("useLogo skips empty identifiers, caches matches, and keeps errors separate f
       }),
     );
     expect(view.result.current.data).toBeUndefined();
+  } finally {
+    view.unmount();
+    queries.clear();
+  }
+});
+
+it("useCalendar keeps a listing's days while its window moves, never another listing's", async () => {
+  const { client } = setup();
+  const pending: Array<() => void> = [];
+  const get = vi.spyOn(client.calendar, "getCalendar").mockImplementation(
+    (input) =>
+      new Promise((resolve) =>
+        pending.push(() =>
+          resolve({
+            calendar: input.listing.symbol,
+            timezone: "UTC",
+            days: [{ date: input.start, sessions: [] }],
+          }),
+        ),
+      ),
+  );
+  const queries = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queries}>
+      <FeedReactContext.Provider value={client}>
+        <FeedVersionContext.Provider value={FeedVersion.make("calendar")}>
+          {children}
+        </FeedVersionContext.Provider>
+      </FeedReactContext.Provider>
+    </QueryClientProvider>
+  );
+  const window = (symbol: string, start: number) => ({
+    provider: request.provider,
+    listing: { ...request.listing, symbol },
+    start,
+    end: start + 1000,
+    timezone: "UTC",
+  });
+  const view = renderHook(
+    ({ input }: { input: ReturnType<typeof window> }) => useCalendar(input),
+    { wrapper, initialProps: { input: window("A", 0) } },
+  );
+  try {
+    act(() => pending.shift()!());
+    await waitFor(() => expect(view.result.current.data?.calendar).toBe("A"));
+    view.rerender({ input: window("A", 1000) });
+    expect(view.result.current.data?.days[0]?.date).toBe(0);
+    act(() => pending.shift()!());
+    await waitFor(() =>
+      expect(view.result.current.data?.days[0]?.date).toBe(1000),
+    );
+    view.rerender({ input: window("B", 1000) });
+    expect(view.result.current.data).toBeUndefined();
+    expect(get).toHaveBeenCalledTimes(3);
   } finally {
     view.unmount();
     queries.clear();

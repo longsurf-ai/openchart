@@ -1379,14 +1379,8 @@ function pointSessionInterval(
 
 function isExtendedSessionType(
   type: string | undefined,
-): type is "pre" | "post" {
-  return type === "pre" || type === "post";
-}
-
-function sessionBandColor(type: string | undefined): string {
-  if (type === "pre") return "rgba(41, 98, 255, 0.075)";
-  if (type === "post") return "rgba(255, 167, 38, 0.09)";
-  return "rgba(41, 98, 255, 0.075)";
+): type is "pre" | "post" | "overnight" {
+  return type === "pre" || type === "post" || type === "overnight";
 }
 
 function pointTimeSeconds(
@@ -2275,10 +2269,18 @@ export function repaint(
   const ctx = runtime.ctx;
   const config = state.config;
   const { width, height } = config.chart.dimensions;
-  const { layout, grid } = config.chart;
+  const { layout, grid, sessionBands } = config.chart;
   const layoutBackground = Color.resolve(layout.background);
   const layoutTextColor = Color.resolve(layout.textColor);
   const gridColor = Color.resolve(grid.color);
+  const sessionBandColor = (type: string | undefined) =>
+    Color.resolve(
+      type === "post"
+        ? sessionBands.post
+        : type === "overnight"
+          ? sessionBands.overnight
+          : sessionBands.pre,
+    );
   const resolveTextColor = (color?: string) =>
     color ? Color.resolve(color) : layoutTextColor;
   const { crosshair } = config.interaction;

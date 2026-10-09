@@ -526,9 +526,16 @@ export const migrations = [
       "d2aa23d15ad1595c6b67fc62f70c5bd4e73439cf4bc9d3d45f24592f831bfdf6",
   },
   {
-    ...(await import("./migration/20261009190611_workspace-datasets")).default,
-    filename: "20261009190611_workspace-datasets.ts",
+    ...(await import("./migration/20261009193152_nested-watchlist-sections"))
+      .default,
+    filename: "20261009193152_nested-watchlist-sections.ts",
     checksum:
-      "42420f06669f82f7fecb750863caf4511277563254f85b7850ed46adda8f40d7",
+      "a70d0974be59dc47ef57d4820afba9c460b01b3450720a68e10d87c438af7985",
+  },
+  {
+    ...(await import("./migration/20261009223655_workspace-datasets")).default,
+    filename: "20261009223655_workspace-datasets.ts",
+    checksum:
+      "5e1e5154d8d553bfc74f32e9748a04397db31eefc70ca04cc6e35c8688f16ca8",
   },
 ] satisfies DatabaseMigration.RegisteredMigration[];

@@ -1,11 +1,11 @@
-// Purpose: Applies the 20261009190611_workspace-datasets forward-only SQLite migration.
+// Purpose: Applies the 20261009223655_workspace-datasets forward-only SQLite migration.
 
 import { sql } from "drizzle-orm";
 import { Effect } from "effect";
 import type { DatabaseMigration } from "../migration";
 
 const migration: DatabaseMigration.Migration = {
-  id: "20261009190611_workspace-datasets",
+  id: "20261009223655_workspace-datasets",
   /**
    * Applies this migration inside the runner-owned transaction.
    *

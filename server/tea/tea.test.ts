@@ -37,8 +37,8 @@ import {
 import { Feed } from "@openchart/server/feed/service";
 import type { ISymbologyFeedService } from "@openchart/server/feed/symbology/service";
 import { logosFeed } from "@openchart/server/feed/logo/logo";
+import { calendarFeed } from "@openchart/server/feed/calendar/calendar";
 import { seriesFeed } from "@openchart/server/feed/series/series";
-import { calendarFeed } from "@openchart/server/feed/calendar/service";
 import { readBarsHistory } from "@openchart/server/feed/bar/history";
 import { Workspaces } from "@openchart/server/workspace/workspace";
 import type { Workspace } from "@openchart/server/workspace/instance";
@@ -200,8 +200,8 @@ async function fixture(
                     search,
                   },
                   logos: logosFeed(),
+                  calendar: calendarFeed(),
                   series: seriesFeed(),
-                  calendar: calendarFeed,
                 };
               }),
           }),

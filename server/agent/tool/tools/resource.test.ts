@@ -1101,6 +1101,36 @@ const writableCases: Array<{
     issuePath: "/target",
   },
   {
+    resource: "watchlist",
+    input: () => ({
+      name: "Tech",
+      sections: [
+        {
+          id: "wsc_tech",
+          items: [{ id: "wit_aapl", ...market }],
+          sections: [{ id: "wsc_chips", items: [], sections: [] }],
+        },
+      ],
+    }),
+    // A listing may appear only once anywhere in the section tree.
+    invalid: {
+      sections: [
+        {
+          id: "wsc_tech",
+          items: [{ id: "wit_aapl", ...market }],
+          sections: [
+            {
+              id: "wsc_chips",
+              items: [{ id: "wit_again", ...market }],
+              sections: [],
+            },
+          ],
+        },
+      ],
+    },
+    issuePath: "/sections/0/sections/0/items/0/listing",
+  },
+  {
     resource: "workspace_dataset",
     input: () => ({
       name: "US CPI",
