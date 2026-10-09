@@ -22,28 +22,63 @@ export type ResourceIssue = typeof ResourceIssue.Type;
  * leaves (including branded ids) have no children. A union permits paths from
  * any branch; the rule must select the branch that exists in the actual value.
  * `[]` addresses the value itself. This checks shape, not array bounds.
+ * A recursive type is typed down to where it first nests inside itself; any
+ * path continues from there, so rules walking recursion narrow with `at`.
  */
-export type Path<T> = ReadonlyArray<string | number> & Paths<T>;
+export type Path<T> = ReadonlyArray<string | number> & Paths<T, never>;
 
-type Paths<T> = T extends string | number | boolean | null | undefined
+// Whether T equals a type on its own ancestry, meaning the value recurses.
+type Recurs<T, Ancestors> = true extends (
+  Ancestors extends unknown
+    ? [T] extends [Ancestors]
+      ? [Ancestors] extends [T]
+        ? true
+        : never
+      : never
+    : never
+)
+  ? true
+  : false;
+
+type Paths<T, Ancestors> = T extends
+  string | number | boolean | null | undefined
   ? readonly []
   : T extends ReadonlyArray<infer Item>
     ? number extends T["length"]
-      ? readonly [] | readonly [number, ...Paths<Item>]
+      ? readonly [] | readonly [number, ...Paths<Item, Ancestors>]
       : | readonly []
         | {
             [
               K in Exclude<keyof T, keyof ReadonlyArray<unknown>>
             ]: K extends `${infer Index extends number}`
-              ? readonly [Index, ...Paths<T[K]>]
+              ? readonly [Index, ...Paths<T[K], Ancestors>]
               : never;
           }[Exclude<keyof T, keyof ReadonlyArray<unknown>>]
     : T extends object
-      ? | readonly []
-        | {
-            [K in keyof T & (string | number)]-?: readonly [K, ...Paths<T[K]>];
-          }[keyof T & (string | number)]
+      ? Recurs<T, Ancestors> extends true
+        ? ReadonlyArray<string | number>
+        : | readonly []
+          | {
+              [K in keyof T & (string | number)]-?: readonly [
+                K,
+                ...Paths<T[K], Ancestors | T>,
+              ];
+            }[keyof T & (string | number)]
       : readonly [];
+
+/** The value a path addresses; a union resolves each member that has the step. */
+export type At<T, P> = P extends readonly [infer Head, ...infer Tail]
+  ? At<
+      T extends ReadonlyArray<infer Item>
+        ? Item
+        : T extends object
+          ? Head extends keyof T
+            ? T[Head]
+            : never
+          : never,
+      Tail
+    >
+  : T;
 
 /** Soft assertions: failures accumulate, and no assertion narrows a value's type. */
 export type InvariantExpectation<Actual> = {
@@ -56,13 +91,28 @@ export type InvariantExpectation<Actual> = {
     }
   : unknown);
 
-/** A per-evaluation assertion context whose paths are relative to its Resource value. */
+/** A per-evaluation assertion context whose paths are relative to its value. */
 export interface InvariantContext<Value> {
   /** Starts an assertion and identifies the field responsible for a failure. */
   readonly expect: <Actual extends Schema.Json>(
     actual: Actual,
     options: { readonly path: Path<Value> },
   ) => InvariantExpectation<Actual>;
+  /**
+   * Scopes later paths to a nested value. Failures still point into the whole
+   * candidate. Recursive rules call it once per level, keeping paths typed.
+   *
+   * @example
+   * ```ts
+   * const visit = (node: Node, at: InvariantContext<Node>) => {
+   *   at.expect(node.name, {path: ['name']}).toBe('root');
+   *   node.children.forEach((child, i) => visit(child, at.at(['children', i])));
+   * };
+   * ```
+   */
+  readonly at: <const P extends Path<Value>>(
+    path: P,
+  ) => InvariantContext<At<Value, P>>;
 }
 
 /** A pure, synchronous business rule. Framework parsing owns its execution. */
@@ -93,6 +143,15 @@ function pointer(path: ReadonlyArray<PropertyKey>): string {
     .join("");
 }
 
+// The untyped runtime shape behind every InvariantContext.
+interface Scope {
+  readonly expect: (
+    actual: Schema.Json,
+    options: { readonly path: ReadonlyArray<string | number> },
+  ) => InvariantExpectation<Schema.Json>;
+  readonly at: (path: ReadonlyArray<string | number>) => Scope;
+}
+
 function compile<Value>(
   source: SchemaAST.AST,
   rules: ReadonlyArray<Invariant<Value>>,
@@ -106,7 +165,7 @@ function compile<Value>(
     const value = writes.project(input as Schema.Json) as Value;
     const failures: Array<SchemaIssue.Issue> = [];
     for (const rule of rules) {
-      const context: InvariantContext<Value> = {
+      const scope = (prefix: ReadonlyArray<string | number>): Scope => ({
         expect: (actual, { path }) => {
           const compare = (
             received: Schema.Json,
@@ -122,7 +181,7 @@ function compile<Value>(
               actual: received,
               expected,
             });
-            failures.push(new SchemaIssue.Pointer(path, issue));
+            failures.push(new SchemaIssue.Pointer([...prefix, ...path], issue));
           };
           return {
             toBe: (expected: Schema.Json) =>
@@ -143,7 +202,10 @@ function compile<Value>(
             },
           } as InvariantExpectation<typeof actual>;
         },
-      };
+        at: (path) => scope([...prefix, ...path]),
+      });
+      // Paths are typed at each call site; the runtime only concatenates them.
+      const context = scope([]) as InvariantContext<Value>;
       rule.check(value, context);
     }
     return failures;

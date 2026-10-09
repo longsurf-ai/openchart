@@ -525,4 +525,11 @@ export const migrations = [
     checksum:
       "d2aa23d15ad1595c6b67fc62f70c5bd4e73439cf4bc9d3d45f24592f831bfdf6",
   },
+  {
+    ...(await import("./migration/20261009193152_nested-watchlist-sections"))
+      .default,
+    filename: "20261009193152_nested-watchlist-sections.ts",
+    checksum:
+      "a70d0974be59dc47ef57d4820afba9c460b01b3450720a68e10d87c438af7985",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];
