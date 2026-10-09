@@ -7,7 +7,12 @@ import { expect, expectTypeOf, test, vi } from "vitest";
 import { serverManaged } from "./annotation";
 import { defineResource, STRICT_PARSE_OPTIONS } from "./definition";
 import { envelopeFields } from "./envelope";
-import { withInvariants, resourceIssues, type Path } from "./invariant";
+import {
+  withInvariants,
+  resourceIssues,
+  type InvariantContext,
+  type Path,
+} from "./invariant";
 import { deriveWriteShape } from "./write-schema";
 
 const fields = Schema.Struct({
@@ -369,4 +374,86 @@ test("schema annotations and filter groups preserve registered invariant identit
       { code: "example.item_count", path: "/items", actual: 0, expected: 1 },
     ]);
   }
+});
+
+type TreeNode = {
+  readonly name: string;
+  readonly count: number;
+  readonly children: ReadonlyArray<TreeNode>;
+};
+const TreeNode: Schema.Codec<TreeNode> = Schema.Struct({
+  name: Schema.String,
+  count: serverManaged(Schema.Number),
+  children: Schema.Array(Schema.suspend(() => TreeNode)),
+});
+
+test("recursive values type paths to their first repetition", () => {
+  type Value = { readonly root: Omit<TreeNode, "count"> };
+  expectTypeOf<readonly ["root", "children", number, "name"]>().toExtend<
+    Path<Value>
+  >();
+  expectTypeOf<readonly ["root", "naem"]>().not.toExtend<Path<Value>>();
+  expectTypeOf<readonly ["root", "children", "0"]>().not.toExtend<
+    Path<Value>
+  >();
+});
+
+test("scoped contexts walk recursive values and report whole-value pointers", () => {
+  const tree = withInvariants(
+    Schema.Struct({ ...fields.fields, root: TreeNode }),
+    (invariant) => [
+      invariant(
+        "Names must be unique across the tree",
+        (value, { at }) => {
+          const names = new Set<string>();
+          const visit = (
+            node: typeof value.root,
+            context: InvariantContext<typeof value.root>,
+          ) => {
+            context
+              .expect(names.has(node.name), { path: ["name"] })
+              .toBe(false);
+            names.add(node.name);
+            node.children.forEach((child, i) =>
+              visit(child, context.at(["children", i])),
+            );
+          };
+          visit(value.root, at(["root"]));
+        },
+        { code: "example.unique_tree_names" },
+      ),
+    ],
+  );
+  const root = {
+    name: "A",
+    count: 1,
+    children: [
+      {
+        name: "B",
+        count: 2,
+        children: [{ name: "A", count: 3, children: [] }],
+      },
+    ],
+  };
+  expect(issues(tree, { ...envelope, items: [], root })).toEqual([
+    expect.objectContaining({
+      code: "example.unique_tree_names",
+      path: "/root/children/0/children/0/name",
+    }),
+  ]);
+  const writes = deriveWriteShape(tree);
+  expect(
+    issues(writes.schema, {
+      items: [],
+      root: {
+        name: "A",
+        children: [{ name: "A", children: [] }],
+      },
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      code: "example.unique_tree_names",
+      path: "/root/children/0/name",
+    }),
+  ]);
 });

@@ -14,7 +14,7 @@
 | `WidgetKind`       | Stable string for a frontend presentation type; not a backend enum.                                                             | `chart`                                         |
 | `WidgetDefinition` | Static definition: Content, optional Controls/Provider, icon, and default/minimum size.                                         | `features/chart/components/widget.tsx`          |
 | `WidgetPlacement`  | One item in `dashboard.widgets[]`: id, kind, optional resourceId, and required layout. Shares the Dashboard revision.           | Chart placement on a Dashboard                  |
-| `WidgetViewState`  | Frontend-only preferences that must survive a refresh, owned by the feature's Zustand store.                                    | chart viewport, column order                    |
+| `WidgetViewState`  | Frontend-only preferences that must survive a refresh, owned by the feature's Zustand store.                                    | chart viewport, column widths                   |
 | `WidgetLocalState` | Temporary React state private to a Mount.                                                                                       | hover, uncommitted input                        |
 | `WidgetMount`      | The React subtree currently mounted for a placement.                                                                            | one Chart widget                                |
 | `WidgetHost`       | Composes Context, Card, error boundary, and the feature's Provider/Controls/Content.                                            | `features/dashboard/components/widget-host.tsx` |
@@ -37,7 +37,7 @@ For concrete component interfaces and interactions, see [Widget architecture](wi
   - Private to the Mount; the Host, other widgets, and the Agent cannot see it, so it is simply dropped on frontend refresh.
   - Stored directly in `useState()`.
 - WidgetViewState (the placement of one widget on one dashboard):
-  - Survives a frontend hard refresh, but not a change of device. Only that widget's renderer consumes it; the agent cannot see it: whether it is collapsed, column ordering, the chart viewport, pinned vs. linked. It is unrelated to the essence of a Resource.
+  - Survives a frontend hard refresh, but not a change of device. Only that widget's renderer consumes it; the agent cannot see it: whether it is collapsed, column widths and sort, the chart viewport, pinned vs. linked. It is unrelated to the essence of a Resource; see "Content belongs to the Resource" below.
   - Stored in localStorage: the feature defines the schema and a Zustand persist store. It is usually isolated per placement; this round keeps the existing Chart cell preference and grid ratio keys, does not reset existing preferences, and does not add a generic ViewState framework.
   - If a read fails to parse, fall back to the default and warn; do not throw. Losing ViewState only returns to the default view; it is not data corruption. So do not write a migrate: when the schema changes, old data naturally resets. Only use persist's `version`/`migrate` when old data truly must be kept.
   - Every value must have a default.
@@ -53,6 +53,16 @@ For concrete component interfaces and interactions, see [Widget architecture](wi
   - Frontend components read and write Resources independently through the existing transport and React Query; the Query cache is a projection of backend data.
 - +1: all world observation data can only come from the sources described in @data-access.md.
   - The frontend uses Feed hooks (for example `useBars`); backend Providers supply Datasets.
+
+### Content belongs to the Resource; presentation belongs to the mount
+
+What a widget shows is part of its Resource; how one mount presents it is WidgetViewState. A Chart's cells, panes, and series decide what is drawn, while its viewport, pane heights, and axis scaling only present it. A Watchlist's listings, sections, and columns decide what is tracked, while column widths, sort, collapsed sections, density, and decimals only present it. A value belongs to the Resource if any answer is yes:
+
+- Does the Agent need to read or write it to fulfil a user request, such as adding a column?
+- Should every placement of the same Resource agree on it?
+- Does losing it discard authored work, rather than return the view to its default?
+
+Market values a column displays are world data from Feed, never stored, even though the column itself is Resource state.
 
 ### Composed transitions are still transitions
 
@@ -204,6 +214,7 @@ dashboard         name, favorite ──value──> widgets[{id, kind, resourceI
     └──owns──> drawing (dashboardId ⇒, listing)
 
 workspace         independent; root is immutable after creation; artifacts are referenced as {workspaceId,path}
+watchlist         independent ──value──> columns[], sections[{items[{provider, listing}], sections[…]}]   inline, recursive; placed by widgets[].resourceId
 agent_schedule    independent
 agent_schedule_occurrence → agent_schedule; also references agent_run
 alert_rule        independent
@@ -222,7 +233,7 @@ Four relationships, four representations, and no fifth:
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Ownership: the parent defines the child's scope | FK on the child; cascade or RESTRICT chosen by domain; `listKeys` filter on it                                                               | `chart.dashboardId`, `drawing.dashboardId`, `occurrence.scheduleId`, `alert_event.ruleId`                    |
 | Reference: points to but does not own           | an id in the value; durable references that must keep their target use FK + RESTRICT, otherwise the consumer handles "target does not exist" | `occurrence.agentRunId`, `widgets[].resourceId`, `series.source.indicatorId`, `drawing.listing` (world data) |
-| Internal structure: no independent identity     | the entity's value                                                                                                                           | `dashboard.widgets[]`, `chart.cells[].panes[].series[]`                                                      |
+| Internal structure: no independent identity     | the entity's value                                                                                                                           | `dashboard.widgets[]`, `chart.cells[].panes[].series[]`, `watchlist.columns[]`, `watchlist.sections[]`       |
 | Derived: computable from other state            | not stored                                                                                                                                   | focused cell goes into ViewState                                                                             |
 
 Nested collections are always arrays: anything ordered or with identity is an array whose elements carry ids, and the server fills in the id on append; addressing uses indexes, and safety comes from revision. Array order is defined by JSON itself, and reordering is RFC 6902 `move`. Do not use records keyed by id: no spec defines record key order, and the stability gained by id addressing would cost three new mechanisms, which is not worth it.
@@ -252,9 +263,17 @@ alert_event      ruleId ⇒ alert_rule, condition, time, detail{title,message,da
 trigger          name, enabled, event{kind:"alert",ruleId}, target{kind:"notification",message} | {kind:"agent_prompt",prompt,binding?}
 ```
 
+`watchlist`'s entity is:
+
+```
+watchlist        name, columns[{id, metric:{kind:"price" | "change" | "changePercent" | "volume"}}], sections[{id, name?, items[{id, provider, listing}], sections[…]}]
+```
+
+A watchlist is independent: Dashboards place it through `widgets[].resourceId` and never own it. Columns are an ordered JSON array on the watchlist row; each stores only its stable id and basic scalar metric. `watchlist/column.ts` owns the shared column contract and the metric union discriminated by `kind`; the database schema imports its type and the entity uses its runtime validation. Sections and items are internal child tables sharing the watchlist revision. Every section shares the watchlist's columns; sections never carry their own column layout. Sections nest in the entity to any depth, so the tree is its own source of truth: cycles and missing parents cannot be expressed, and moving a row or a whole subtree is one RFC 6902 `move`. In storage each section row records its `parent_section_id` and its position among siblings; the Store converts between rows and the tree. Inside a section both `items` and `sections` are required, because a decoding default inside the recursion would stop the Agent's JSON Schema export. A listing appears at most once per watchlist across all sections, and each metric appears at most once among its columns. Column values come from Feed; widths, sort, collapsed sections, density, and decimals are frontend view state.
+
 `alert_rule`'s Tea config stores normalized JSON: either a NodeConfig whose inputs contain only Bars, or an Indicator-following `{indicatorId,parameters,requests}`; for the latter, inputs, map, and `nodes.indicator` are generated at runtime from the Indicator and the chart cell it lives in.
 
-Among the currently registered Resources there are ownership FKs from chart to dashboard, indicator to chart, and Occurrence to Schedule, plus a reference FK from Occurrence to Run. Domain transitions include Workspace registration, idempotent Occurrence intake, and advancing the Schedule cursor. Ordinary writes use mutable domain fields plus the intrinsic create/patch/delete: adding a cell or changing the preset is `chart.patch`, adding/removing an indicator is `resources.macro.addIndicator`/`removeIndicator`, adding a watchlist or renaming is `dashboard.patch`, and none of them touch each other's revision.
+Among the currently registered Resources there are ownership FKs from chart to dashboard, indicator to chart, and Occurrence to Schedule, plus a reference FK from Occurrence to Run. Domain transitions include Workspace registration, idempotent Occurrence intake, and advancing the Schedule cursor. Ordinary writes use mutable domain fields plus the intrinsic create/patch/delete: adding a cell or changing the preset is `chart.patch`, adding/removing an indicator is `resources.macro.addIndicator`/`removeIndicator`, placing an existing widget or renaming is `dashboard.patch`, and none of them touch each other's revision.
 
 `server/resources/agent-schedule/schema.ts` owns the `agent_schedule` table and its
 prompt target and recurrence definitions, uses the existing shared envelope columns and constraints, and keeps the full
@@ -306,8 +325,9 @@ How V1 maps to OpenChart:
 | `indicator_definition`                                           | Workspace artifact          | Editable Tea source is stored as `.tea` files; the execution snapshot is stored in the Indicator Resource                                                                                                                                         |
 | `agent_schedule`                                                 | `agent_schedule`            | As is. User-authored, so it is a Resource                                                                                                                                                                                                         |
 | `agent_schedule_occurrence`                                      | `agent_schedule_occurrence` | Stays a separate Resource linked to Schedule and Run through FKs; full backend Store, get/list API, and shared pagination                                                                                                                         |
+| `watchlists` + `watchlist_columns`                               | `watchlist`                 | The recursive `root` tree becomes nested `sections[].sections[]`; `lid:N` keys and the derived `securities` map become provider-scoped listings; columns stay in the aggregate without per-group layouts; `settings` stays in the frontend        |
 
-watchlist, newsfeed, bookmark, basket, and research are not in the first version and are not written here. Alert and Trigger are modeled as Resources; Notification has no Resource; see [alert-trigger.md](alert-trigger.md). Dashboard links to Chart and Drawing through two FKs; Occurrence links to Schedule and Run through FKs; alert_event links to alert_rule through an FK. V1's topology.ts, Resource Tree, path addressing, and virtual scope nodes have no counterpart at all.
+V1 watchlist custom and semantic columns, group aggregation, basket links, sharing, and curated fields are not migrated. Newsfeed, bookmark, basket, and research are not in the first version and are not written here. Alert and Trigger are modeled as Resources; Notification has no Resource; see [alert-trigger.md](alert-trigger.md). Dashboard links to Chart and Drawing through two FKs; Occurrence links to Schedule and Run through FKs; alert_event links to alert_rule through an FK. V1's topology.ts, Resource Tree, path addressing, and virtual scope nodes have no counterpart at all.
 
 ## Agent Resource handle
 
@@ -345,12 +365,12 @@ What the Agent cannot see, and where it went:
 
 V1's facade had only two fields, `expose` and `narrow`, and no transformation at all (the `toAgentFacade` hook existed, but none of the sixteen Resources defined it). What it hid falls into four categories, and OpenChart fixes each one at its owner:
 
-| Hidden by the V1 facade                                                             | OpenChart                                                                                                                                               |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Envelope fields: `userId`, `displayName`, `revision`, timestamps                    | The framework declares the envelope once; `displayName` was a tree label and is gone; the agent actually needs to see `revision`                        |
-| ViewState leaked into the entity: watchlist `settings`, dashboard `layout`          | Display preferences stay in the frontend; Dashboard placement geometry and Chart preset/cells are persisted user data that the Agent can read and write |
-| Machine and derived fields: `firedCount`, `indexLinksByGroupId`                     | Purely to save tokens. If something truly must be hidden, use an `agentHidden` field annotation at the same level as serverManaged, not a file          |
-| `narrow`: agent can read but not write; used only once, for alert-rule `expiration` | This is a write policy; it belongs in an approval predicate, not in the shape                                                                           |
+| Hidden by the V1 facade                                                             | OpenChart                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Envelope fields: `userId`, `displayName`, `revision`, timestamps                    | The framework declares the envelope once; `displayName` was a tree label and is gone; the agent actually needs to see `revision`                                                                                                   |
+| ViewState leaked into the entity: watchlist `settings`, dashboard `layout`          | Display preferences such as watchlist density, decimals, and column widths stay in the frontend; Dashboard placement geometry, Chart preset/cells, and Watchlist columns are persisted user data that the Agent can read and write |
+| Machine and derived fields: `firedCount`, `indexLinksByGroupId`                     | Purely to save tokens. If something truly must be hidden, use an `agentHidden` field annotation at the same level as serverManaged, not a file                                                                                     |
+| `narrow`: agent can read but not write; used only once, for alert-rule `expiration` | This is a write policy; it belongs in an approval predicate, not in the shape                                                                                                                                                      |
 
 If we later want to give the agent a different shape, first ask which of these it is: hiding fields, translating input, or addressing by id. Each has its owner (the `agentHidden` annotation, a transition with `resolve`, a custom transition), and there is no case that is none of the three. "Projected output" is not among them: the server does not join user data with world data; both the app and the agent read the entity and then query the dataset themselves, and there is no second way to read.
 
@@ -368,11 +388,13 @@ A single JSON Patch operation that fails returns the typed failure `PatchRejecte
 
 When all fields are server-managed, the writable object's type is `Readonly<Record<PropertyKey, never>>`, consistent with the existing empty-object parse constraint. The rule also applies recursively to collections, and the Store and intrinsic transitions reuse the same derived type; an incomplete backend body cannot pass as an empty writable object.
 
-Constraints and defaults on writable leaf fields are kept. Cross-field relationships are declared in one place on the entity with `withInvariants(schema, invariant => [...])`, and each rule is written as `invariant(description, (value, {expect}) => {...}, {code})`. For example, `expect(mainSeries, {path: ['cells', index, 'panes']}).toHaveLength(1)`. `Path<T>` infers valid field paths from the writable domain type, checking field names, nesting, and array index types; actual index ranges and the current union branch are the rule's responsibility. Rules can only synchronously read the projection with serverManaged fields recursively excluded, including when reading a complete entity; the framework carries the same rule set to body/createSchema/updateSchema, runs it only on the final value, and collects every assertion failure in the declaration. `lib/resource/invariant.ts` owns the declaration, assertions, path types, the `ResourceIssue` diagnostic schema and its type, and the adapter to Effect Schema errors; business rules stay in each Resource's entity.ts.
+Constraints and defaults on writable leaf fields are kept. Cross-field relationships are declared in one place on the entity with `withInvariants(schema, invariant => [...])`, and each rule is written as `invariant(description, (value, {expect}) => {...}, {code})`. For example, `expect(mainSeries, {path: ['cells', index, 'panes']}).toHaveLength(1)`. `Path<T>` infers valid field paths from the writable domain type, checking field names, nesting, and array index types; actual index ranges and the current union branch are the rule's responsibility. A recursive type is typed down to where it first nests inside itself. Rules that walk recursion call `at(path)` once per level; it returns a context whose paths are relative to that nested value and typed against it, while failures still point into the whole candidate. Rules can only synchronously read the projection with serverManaged fields recursively excluded, including when reading a complete entity; the framework carries the same rule set to body/createSchema/updateSchema, runs it only on the final value, and collects every assertion failure in the declaration. `lib/resource/invariant.ts` owns the declaration, assertions, path types, the `ResourceIssue` diagnostic schema and its type, and the adapter to Effect Schema errors; business rules stay in each Resource's entity.ts.
 
 Rules already expressed by DB constraints or field schemas need not be repeated as invariants. `withInvariants` adds writable-field relationships within the same entity that are not yet expressed; the backend owner guarantees the correctness of serverManaged fields. External facts, cross-Resource relationships, and transition conditions that depend on old state stay with the owner of the corresponding operation, not in synchronous entity checks.
 
-Only framework-registered writable invariants can be rebound along with the container projection. If a container with serverManaged descendants carries any full-object-level check or codec, automatic projection cannot guarantee its semantics, so definition still fails immediately; recursive Schemas need explicit design. An exception thrown by a buggy rule implementation is still a defect.
+Only framework-registered writable invariants can be rebound along with the container projection. If a container with serverManaged descendants carries any full-object-level check or codec, automatic projection cannot guarantee its semantics, so definition still fails immediately.
+
+Recursive entities use `Schema.suspend` and declare their recursive types as `type` aliases, because interfaces are not assignable to the JSON object types Resources require. Write derivation follows the schema graph rather than unfolding it: recursion without serverManaged fields keeps its original schema, and recursion with them maps each source cycle to one derived cycle, with any error reported at definition. Write types follow the suspended schema's declared type. Keep codecs such as decoding defaults out of the recursive cycle: Effect cannot render the encoded side of such a cycle as JSON Schema, and the catalog-wide Agent schema test rejects it. An exception thrown by a buggy rule implementation is still a defect.
 
 `issues[]` contains a stable `code`, an RFC 6901 `path`, and a `message`; assertion errors also carry `actual`/`expected`; ordinary field parse errors use `schema.invalid`. Paths point into the candidate result of this submission. create is parsed once at the transport boundary by the same Effect Schema through a Standard Schema adapter, with input and output types taken from the create Schema's `Encoded` and `Type` respectively, so defaulted fields stay optional; patch produces the same error structure when the final update is parsed. tRPC returns `{resource, issues}` in `data.resourceStateInvalid`, and this field is null for other errors; error types are never inferred from the message string.
 

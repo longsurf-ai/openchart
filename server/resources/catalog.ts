@@ -13,6 +13,7 @@ import { triggerResource } from "@openchart/server/resources/trigger";
 import { postResource } from "@openchart/server/resources/post";
 import { Schema } from "effect";
 import { symbologyResource } from "@openchart/server/resources/symbology";
+import { watchlistResource } from "@openchart/server/resources/watchlist";
 
 /** The sole Resource catalog; every public surface derives from these definitions. */
 export const resources = [
@@ -28,6 +29,7 @@ export const resources = [
   triggerResource,
   symbologyResource,
   postResource,
+  watchlistResource,
 ] as const;
 
 /** Public Resource names always match the registered catalog. */

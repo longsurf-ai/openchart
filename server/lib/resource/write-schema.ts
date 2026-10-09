@@ -53,19 +53,21 @@ export type WritableSchema<S extends Schema.Constraint> =
                   }>
                 : S extends Schema.$Record<infer Key, infer Value>
                   ? Schema.$Record<Key, WritableSchema<Value>>
-                  : S extends Schema.decodeTo<
-                        infer To,
-                        infer From,
-                        infer RD,
-                        infer RE
-                      >
-                    ? Schema.decodeTo<
-                        WritableSchema<To>,
-                        WritableSchema<From>,
-                        RD,
-                        RE
-                      >
-                    : S;
+                  : S extends Schema.suspend<infer Inner>
+                    ? Schema.suspend<WritableSchema<Inner>>
+                    : S extends Schema.decodeTo<
+                          infer To,
+                          infer From,
+                          infer RD,
+                          infer RE
+                        >
+                      ? Schema.decodeTo<
+                          WritableSchema<To>,
+                          WritableSchema<From>,
+                          RD,
+                          RE
+                        >
+                      : S;
 
 /** Compiled write surface and its projection of an already parsed read value. */
 export interface WriteShape<S extends Schema.Constraint> {
@@ -98,7 +100,42 @@ function strictObject(ast: SchemaAST.Objects): SchemaAST.Objects {
   ).ast as SchemaAST.Objects;
 }
 
-function derive(source: SchemaAST.AST): SchemaAST.AST {
+// Whether derive changes anything reachable from `ast`: a managed field to
+// remove or an empty object to make strict. Mirrors derive's cases. Recursive
+// schemas reach themselves, so this walks the schema graph, not its unfolding.
+function rewrites(
+  ast: SchemaAST.AST,
+  seen: Set<SchemaAST.AST> = new Set(),
+): boolean {
+  if (seen.has(ast)) return false;
+  seen.add(ast);
+  switch (ast._tag) {
+    case "Objects":
+      return (
+        (!ast.propertySignatures.length && !ast.indexSignatures.length) ||
+        [...ast.propertySignatures, ...ast.indexSignatures].some(
+          ({ type }) => managed(type) || rewrites(type, seen),
+        )
+      );
+    case "Arrays":
+      return [...ast.elements, ...ast.rest].some((type) =>
+        rewrites(type, seen),
+      );
+    case "Union":
+      return ast.types.some((type) => rewrites(type, seen));
+    case "Suspend":
+      return rewrites(ast.thunk(), seen);
+    default:
+      return false;
+  }
+}
+
+// `suspends` maps each source Suspend to its derivation, so a cycle in the
+// source becomes the same cycle in the result instead of an infinite unfolding.
+function derive(
+  source: SchemaAST.AST,
+  suspends: Map<SchemaAST.Suspend, SchemaAST.AST>,
+): SchemaAST.AST {
   let next: SchemaAST.AST;
   switch (source._tag) {
     case "Objects": {
@@ -108,7 +145,7 @@ function derive(source: SchemaAST.AST): SchemaAST.AST {
           (property) =>
             new SchemaAST.PropertySignature(
               property.name,
-              derive(property.type),
+              derive(property.type, suspends),
             ),
         );
       const indexes = source.indexSignatures.map((index) => {
@@ -119,7 +156,7 @@ function derive(source: SchemaAST.AST): SchemaAST.AST {
         }
         return new SchemaAST.IndexSignature(
           index.parameter,
-          derive(index.type),
+          derive(index.type, suspends),
         );
       });
       const changed =
@@ -144,13 +181,10 @@ function derive(source: SchemaAST.AST): SchemaAST.AST {
       break;
     }
     case "Arrays": {
-      const elements = source.elements.map(derive);
-      const rest = source.rest.map(derive);
-      if (
-        elements.every((element, i) => element === source.elements[i]) &&
-        rest.every((element, i) => element === source.rest[i])
-      )
-        return source;
+      const recur = (type: SchemaAST.AST) => derive(type, suspends);
+      const elements = SchemaAST.mapOrSame(source.elements, recur);
+      const rest = SchemaAST.mapOrSame(source.rest, recur);
+      if (elements === source.elements && rest === source.rest) return source;
       next = new SchemaAST.Arrays(
         source.isMutable,
         elements,
@@ -163,8 +197,10 @@ function derive(source: SchemaAST.AST): SchemaAST.AST {
       break;
     }
     case "Union": {
-      const types = source.types.map(derive);
-      if (types.every((type, i) => type === source.types[i])) return source;
+      const types = SchemaAST.mapOrSame(source.types, (type) =>
+        derive(type, suspends),
+      );
+      if (types === source.types) return source;
       next = new SchemaAST.Union(
         types,
         source.mode,
@@ -175,10 +211,26 @@ function derive(source: SchemaAST.AST): SchemaAST.AST {
       );
       break;
     }
-    case "Suspend":
-      throw new Error(
-        "Recursive Resource schemas need an explicit write schema",
+    case "Suspend": {
+      const known = suspends.get(source);
+      if (known) return known;
+      // Leaving unchanged recursion untouched keeps its containers' checks and codecs.
+      if (!rewrites(source)) return source;
+      const suspended = new SchemaAST.Suspend(
+        () => target,
+        source.annotations,
+        undefined,
+        undefined,
+        source.context,
       );
+      // Register before deriving the target, so the cycle closes on this node.
+      // Deriving eagerly reports invalid recursive shapes at definition time;
+      // parsing forces the thunk only after `target` exists.
+      suspends.set(source, suspended);
+      const target = derive(source.thunk(), suspends);
+      next = suspended;
+      break;
+    }
     default:
       return source;
   }
@@ -246,6 +298,9 @@ function project(ast: SchemaAST.AST, value: Schema.Json): Schema.Json {
       if (!member) throw new Error("Parsed Resource matches no union member");
       return project(member, value);
     }
+    case "Suspend":
+      // The value is finite, so recursion ends with its deepest node.
+      return project(ast.thunk(), value);
     default:
       return value;
   }
@@ -256,6 +311,15 @@ function project(ast: SchemaAST.AST, value: Schema.Json): Schema.Json {
  * Defaults and constraints on unchanged fields survive. Writable invariants
  * rebind to the new projection. Other checks/codecs on a container whose shape
  * changes are rejected rather than silently weakened.
+ *
+ * Recursive schemas built with `Schema.suspend` derive at any depth. Recursion
+ * without managed fields keeps its original schema; otherwise each cycle maps
+ * to one derived cycle. Errors are thrown here, never during a later parse.
+ * Write types follow the suspended schema's declared type, so a recursive
+ * `Schema.Codec<T>` keeps `T` even when the runtime omits managed fields.
+ *
+ * @throws If a managed field sits in a record value or under a container whose
+ * checks or codecs cannot follow the smaller shape.
  *
  * @example
  * ```ts
@@ -268,7 +332,7 @@ function project(ast: SchemaAST.AST, value: Schema.Json): Schema.Json {
 export function deriveWriteShape<S extends Schema.Top>(
   schema: S,
 ): WriteShape<S> {
-  const writable = Schema.make<Schema.Top>(derive(schema.ast));
+  const writable = Schema.make<Schema.Top>(derive(schema.ast, new Map()));
   return {
     schema: writable as WriteShape<S>["schema"],
     project: (value) => project(schema.ast, value),
