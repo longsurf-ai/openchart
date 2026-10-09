@@ -258,6 +258,7 @@ test("runs tRPC prompts through tools, continuation, snapshots, and durable comp
             "symbology_search",
             "publish_post",
             "market_data",
+            "dataset_select",
             "tea_check",
             "tea_run",
           ].map((id) => expect.objectContaining({ id })),

@@ -7,6 +7,7 @@ import type { ProviderId } from "@openchart/market";
 import type { IBarsFeedService } from "@openchart/server/feed/bar/service";
 import type { SymbologySource } from "@openchart/server/feed/symbology/service";
 import type { ILogosFeedService } from "@openchart/server/feed/logo/service";
+import type { SeriesSource } from "@openchart/server/feed/series/service";
 
 /** A pure adapter; only its exact Dataset declaration establishes compatibility. */
 export interface DatasetAdapter<A> {
@@ -56,4 +57,6 @@ export interface ProviderFeeds {
     readonly indexable: boolean;
   };
   readonly logos?: DatasetAdapter<ILogosFeedService>;
+  /** Runtime declarations have no fixed Definition; `adapt` accepts only the Provider's own by identity. */
+  readonly series?: Pick<DatasetAdapter<SeriesSource>, "adapt">;
 }

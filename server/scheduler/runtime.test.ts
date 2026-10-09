@@ -1,5 +1,6 @@
 // Purpose: Verifies restart repair and automatic scheduled execution through the real runtime, HTTP Resource API, and Agent engine.
 
+import type { AgentPromptTarget } from "@openchart/server/agent/contracts/agent-prompt-target";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -111,7 +112,7 @@ test("repairs a durable queued fire after runtime restart and completes it throu
         const accepted = yield* runs.enqueue({
           sessionID: session.id,
           sessionIntentID: `schedule:${schedule.id}:0`,
-          input: schedule.target.prompt,
+          input: (schedule.target as AgentPromptTarget).prompt,
         });
         return { schedule, accepted };
       }).pipe(Effect.provide(setup)),
@@ -197,9 +198,9 @@ test("repairs a durable queued fire after runtime restart and completes it throu
           const runs = yield* AgentRunStore.Service;
           const sessions = yield* Session.Service;
           return {
-            runs: yield* runs.list(occurrence.sessionId),
+            runs: yield* runs.list(occurrence.sessionId!),
             transcript: yield* sessions.readTranscriptPage({
-              sessionID: occurrence.sessionId,
+              sessionID: occurrence.sessionId!,
               turnLimit: Number.MAX_SAFE_INTEGER,
             }),
           };

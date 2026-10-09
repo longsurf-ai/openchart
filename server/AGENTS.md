@@ -30,7 +30,8 @@ substantially simplify the work.
 - `resources/catalog.ts` is shared by transports, tools, and prompts;
   `lib/resource` stays transport-independent.
 - `agent` owns execution; `models` owns the scoped provider registry;
-  `feed` composes Datasets; `scheduler` owns dispatch. `alert` records Tea fires,
+  `feed` composes Datasets; `scheduler` owns dispatch; `collection` runs
+  Workspace Dataset collections. `alert` records Tea fires,
   `bus` carries ids between services, `trigger` runs targets, `notification`
   is a host capability, `monitoring` holds user-facing health. See
   [alert-trigger](../docs/architecture/alert-trigger.md). `proactive` offers

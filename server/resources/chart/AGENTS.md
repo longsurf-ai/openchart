@@ -19,7 +19,7 @@ Owns Chart persistence and invariants.
 - Keep relational checks in ChartEntity withInvariants: stable codes, JSON
   Pointer paths. Composite FKs enforce endpoint membership.
 - Inputs retain provider-scoped Listing JSON. Cells own resolution/session/adjustment.
-  Session constraints follow `SessionType`: regular, extended, and 24h.
+  Session constraints follow `SessionType`: regular, extended, 24h.
   Links synchronize listing/crosshair only.
-- Bindings name [Indicators](../indicator/AGENTS.md) by value, without FKs;
-  macros keep them paired. Reject undeclared fields.
+- Bindings name [Indicators](../indicator/AGENTS.md) and Dataset columns by
+  value without FKs; macros pair Indicators. Reject undeclared fields.

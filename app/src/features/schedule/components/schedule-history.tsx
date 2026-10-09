@@ -54,7 +54,11 @@ export function ScheduleHistory({
             <Button
               variant="ghost"
               className="h-auto w-full justify-start rounded-md px-2 py-2 text-left font-normal"
-              onClick={() => onOpenSession(occurrence.sessionId)}
+              // A script collection has no Run, so there is no Session to open.
+              disabled={occurrence.sessionId === null}
+              onClick={() =>
+                occurrence.sessionId && onOpenSession(occurrence.sessionId)
+              }
             >
               <time
                 className="min-w-0 whitespace-normal"

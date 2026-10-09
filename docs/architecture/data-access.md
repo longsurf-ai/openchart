@@ -308,6 +308,40 @@ Server and client buffers are bounded. Each observer replays from its paired
 snapshot; overflow requires a fresh session. There is no durable replay across
 disconnections or guarantee for exchange events the upstream never supplied.
 
+### Workspace Datasets
+
+A `workspace_dataset` Resource declares a timeseries kept as a CSV file in a
+Workspace: its source file, its time column (epoch milliseconds or ISO 8601),
+its observation columns with number, string or boolean types, and how the file
+is collected. The Workspace owns rows; the Resource owns the declaration. Agents
+create and chart Workspace Datasets through ordinary Resource mutations.
+
+Two lifecycles stay separate. Resource changes drive Dataset lifecycle: the
+`local/workspace` Provider observes the Resource list and declares one runtime
+Dataset per Resource with `defineRuntimeDataset`, named `workspace.<id>`, with a
+`time` range key and select only. A changed source, time or columns retires the
+instance, unregisters its name and publishes a replacement; deletion withdraws
+it. File edits change no instance: every select reads and decodes the current
+file, failing `Dataset.NotFound` or `Dataset.InvalidResult` with the row at
+fault as the cause. Catalog validates contributions against the live registry,
+so declarations made after construction publish normally.
+
+Feed's `series` business binds these Datasets through a runtime adapter that
+recognizes the Provider's own declarations by identity, and serves
+`feed.series.select({id, from?, to?})` as a native DataFrame. The browser's
+`useDataset` keys its read by Feed version and by the Workspace file, so a
+re-declaration or a rewritten file refetches. Charts bind columns by value as
+`{kind: "dataset", datasetId, output}` series and show each bar's latest
+observation known by its close.
+
+`collection` is an Agent prompt target, admitted like a Schedule's, or a Python
+script run with a pinned uv (`uv run --script`, PEP 723 dependencies). Scripts
+write `OPENCHART_OUTPUT`; only a zero exit replaces the data file. A script runs
+only while its content hash equals the server-managed `approvedScriptHash`,
+which only the application can set, so an Agent cannot approve its own script.
+Schedules re-collect through a `data_collection` target; see
+[Scheduler](scheduler.md).
+
 ### Local calendar Dataset
 
 The existing calendar implementation moved to

@@ -9,13 +9,14 @@ Owns best-effort dispatch. See [scheduler contract](../../docs/architecture/sche
   read transaction, filter eligibility, and sort by nextFireAt/id. Admit sequentially
   after that transaction; never await Run execution or starve later fires.
 - Intent is schedule:<scheduleId>:<fireAt>. AgentRunStore.getByIntent supplies the
-  canonical accepted Session/input on retry; edits never replace that request.
-- Manual fireAt uses the server clock; coincident timed fires share admission.
-- Admit via shared admitPromptTarget (Session operations, submitPrompt). Session
+  accepted Session/input on retry; edits never replace it.
+- Manual fireAt uses the server clock.
+- Admit prompts via admitPromptTarget; `data_collection` targets via Collection,
+  checking the Occurrence first (scripts have no Run). Session
   resolution, Run admission, ensureOccurrence, and cursor advancement remain separate
-  commits. Never wrap them in an outer transaction or duplicate their rules.
+  commits. Never wrap them in one transaction or duplicate their rules.
 - Record acceptance idempotently, then advance the cursor only if selected revision
-  and cursor still match. Preserve concurrent edits, pauses, and deletion.
+  and cursor still match. Preserve concurrent edits, pauses, deletion.
 - Cron resumes at the next future instant without replaying missed intervals.
   Accepted one-time fires are exhausted without changing user-authored enabled state.
 - Scan failures log and retry; manual errors and defects/interruption propagate.

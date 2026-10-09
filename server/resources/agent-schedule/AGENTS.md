@@ -4,8 +4,9 @@ Owns user-authored definitions, prompt targets, recurrence, and managed cursors;
 Scheduler owns timing/admission.
 
 - schema.ts owns tables and canonical target/recurrence schemas; entity derives
-  from them. No user ownership. Targets import shared AgentPromptInput; optional
-  binding keys are opaque feature-owned strings.
+  from them. No user ownership. Targets are a shared AgentPromptTarget (opaque
+  binding keys) or `data_collection` of a Workspace Dataset; prompt data
+  migrations must skip the latter.
 - Store calculates the first future cursor on client create, recurrence change,
   and re-enable. Rename, target edits, and pause preserve it. Internal writes
   may supply it. No remaining fire fails without committing writes/events.

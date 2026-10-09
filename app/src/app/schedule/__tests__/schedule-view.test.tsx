@@ -148,7 +148,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function schedule(id = "daily"): Schedule {
+/** Every fixture schedules an Agent prompt; data collections have no prompt editor. */
+type PromptSchedule = Schedule & {
+  target: Extract<Schedule["target"], { kind: "agent_prompt" }>;
+};
+
+function schedule(id = "daily"): PromptSchedule {
   return {
     id: `ags_${id}` as Schedule["id"],
     revision: 3,
@@ -267,7 +272,7 @@ const workflowPart = {
   args: { n: 3, question: "Research Google" },
 };
 
-function withParts(parts: PromptParts): Schedule {
+function withParts(parts: PromptParts): PromptSchedule {
   const value = schedule();
   return {
     ...value,
@@ -276,7 +281,7 @@ function withParts(parts: PromptParts): Schedule {
       prompt: {
         ...value.target.prompt,
         workspaceId: "workspace",
-        parts: parts as Schedule["target"]["prompt"]["parts"],
+        parts: parts as PromptSchedule["target"]["prompt"]["parts"],
       },
     },
   };

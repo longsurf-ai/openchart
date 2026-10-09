@@ -525,4 +525,10 @@ export const migrations = [
     checksum:
       "d2aa23d15ad1595c6b67fc62f70c5bd4e73439cf4bc9d3d45f24592f831bfdf6",
   },
+  {
+    ...(await import("./migration/20261009190611_workspace-datasets")).default,
+    filename: "20261009190611_workspace-datasets.ts",
+    checksum:
+      "42420f06669f82f7fecb750863caf4511277563254f85b7850ed46adda8f40d7",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];

@@ -15,14 +15,16 @@ export interface RuntimeArtifact {
   /** Path of the CLI inside the installed payload. */
   readonly executable: string;
 }
+/** App-pinned archives per runtime id and `<platform>-<arch>`. */
+export type RuntimeManifest<Id extends string> = Readonly<
+  Record<Id, Readonly<Record<string, RuntimeArtifact>>>
+>;
 /**
  * Platform-specific pins. Update Claude SDK dependencies together with its artifacts.
  * Antigravity publishes GitHub release archives; Windows ships zip archives and
  * sign-in needs a POSIX pseudo-terminal, so it has no Windows pin.
  */
-export const PROVIDER_MANIFEST: Readonly<
-  Record<NativeProviderID, Readonly<Record<string, RuntimeArtifact>>>
-> = {
+export const PROVIDER_MANIFEST: RuntimeManifest<NativeProviderID> = {
   codex: {
     "darwin-arm64": {
       version: "0.159.0",

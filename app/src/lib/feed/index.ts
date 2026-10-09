@@ -5,6 +5,7 @@ export type {
   ISymbologyFeed,
   ILogosFeed,
   ICalendarFeed,
+  ISeriesFeed,
   RequestOptions,
 } from "./client";
 export { FeedTransport } from "./transport";

@@ -223,12 +223,15 @@ export const chartMarketSourceTable = sqliteTable(
 
 /**
  * Ordered display bindings owned by explicit panes. Exactly one source branch
- * is present: marketSourceId or indicatorId. `output` names what the binding
- * draws from that source: a market output (price, volume or volume profile), or the
- * indicator's stable output name. indicatorId names an Indicator Resource by
- * value, with no FK: the add and remove macros keep bindings and Indicators
- * paired, and the chart skips a binding whose Indicator is gone. The store maps these columns to the
- * entity's tagged `source` union; no redundant source-kind column is needed.
+ * is present: marketSourceId, indicatorId or datasetId. `output` names what the
+ * binding draws from that source: a market output (price, volume or volume
+ * profile), the indicator's stable output name, or a Workspace Dataset column.
+ * indicatorId names an Indicator Resource by value, with no FK: the add and
+ * remove macros keep bindings and Indicators paired, and the chart skips a
+ * binding whose Indicator is gone. datasetId names a Workspace Dataset the same
+ * way; many charts may bind one Dataset, so deleting it leaves bindings the
+ * chart skips. The store maps these columns to the entity's tagged `source`
+ * union; no redundant source-kind column is needed.
  * Comparisons are normal series of either kind.
  *
  * @agent invariant: Every cell has exactly one main market series. The partial
@@ -254,6 +257,7 @@ export const chartSeriesTable = sqliteTable(
       .default("normal"),
     marketSourceId: text("market_source_id"),
     indicatorId: text("indicator_id"),
+    datasetId: text("dataset_id"),
     output: text("output").notNull(),
     // A volume profile binding's settings; NULL keeps the default.
     profileResolution: text("profile_resolution", {
@@ -301,10 +305,14 @@ export const chartSeriesTable = sqliteTable(
       "chart_series_source_check",
       sql`(
         ${table.marketSourceId} IS NOT NULL AND ${table.indicatorId} IS NULL
+        AND ${table.datasetId} IS NULL
         AND ${inArray(table.output, CHART_MARKET_OUTPUTS).inlineParams()}
       ) OR (
         ${table.marketSourceId} IS NULL AND ${table.indicatorId} IS NOT NULL
-        AND length(${table.output}) > 0
+        AND ${table.datasetId} IS NULL AND length(${table.output}) > 0
+      ) OR (
+        ${table.marketSourceId} IS NULL AND ${table.indicatorId} IS NULL
+        AND length(${table.datasetId}) > 0 AND length(${table.output}) > 0
       )`,
     ),
     check(

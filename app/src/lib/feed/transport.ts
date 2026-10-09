@@ -13,6 +13,7 @@ import {
   SymbolIndexAccepted,
   SymbolIndexStatus,
   LogoResult,
+  SeriesSnapshot,
 } from "@openchart/feed";
 import { HoseError, type HoseErrorCode } from "@openchart/hose";
 import { TRPCClientError } from "@trpc/client";
@@ -180,6 +181,14 @@ export class FeedTransport {
           ),
       },
       calendar: { getCalendar: unsupported },
+      series: {
+        select: (request, options) =>
+          run(options, async (signal) =>
+            Schema.decodeUnknownSync(SeriesSnapshot)(
+              await this.rpc.feed.series.select.query(request, { signal }),
+            ),
+          ),
+      },
       symbology: {
         index: (request, options) =>
           run(options, async (signal) =>

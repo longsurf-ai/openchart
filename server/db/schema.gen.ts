@@ -171,7 +171,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`created_at\` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
           \`updated_at\` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
           \`schedule_id\` text NOT NULL,
-          \`agent_run_id\` text NOT NULL,
+          \`agent_run_id\` text,
           \`fire_at\` integer NOT NULL,
           CONSTRAINT \`fk_agent_schedule_occurrence_schedule_id_agent_schedule_id_fk\` FOREIGN KEY (\`schedule_id\`) REFERENCES \`agent_schedule\`(\`id\`) ON DELETE CASCADE,
           CONSTRAINT \`fk_agent_schedule_occurrence_agent_run_id_agent_run_id_fk\` FOREIGN KEY (\`agent_run_id\`) REFERENCES \`agent_run\`(\`id\`) ON DELETE RESTRICT,
@@ -198,7 +198,13 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           CONSTRAINT "agent_schedule_updated_at_check" CHECK("updated_at" >= 0),
           CONSTRAINT "chk_agent_schedules_name" CHECK(length(trim("name")) BETWEEN 1 AND 160),
           CONSTRAINT "chk_agent_schedules_target_object" CHECK(json_type("target_json") = 'object'),
-          CONSTRAINT "chk_agent_schedules_model" CHECK(COALESCE(
+          CONSTRAINT "chk_agent_schedules_target" CHECK(CASE json_extract("target_json", '$.kind')
+              WHEN 'data_collection' THEN COALESCE(
+                json_type("target_json", '$.datasetId') = 'text'
+                AND length(json_extract("target_json", '$.datasetId')) > 0,
+                0
+              )
+              ELSE COALESCE(
                 json_type("target_json", '$.prompt.model') = 'object'
                 AND json_type("target_json", '$.prompt.model.providerID') = 'text'
                 AND length(json_extract("target_json", '$.prompt.model.providerID')) > 0
@@ -220,7 +226,8 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
                   '$.selectedVariant'
                 )) = '{}',
                 0
-              )),
+              )
+              END),
           CONSTRAINT "chk_agent_schedules_recurrence_shape" CHECK(COALESCE(
                 (
                   json_extract("recurrence", '$.kind') = 'cron'
@@ -378,6 +385,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`role\` text DEFAULT 'normal' NOT NULL,
           \`market_source_id\` text,
           \`indicator_id\` text,
+          \`dataset_id\` text,
           \`output\` text NOT NULL,
           \`profile_resolution\` text,
           \`profile_rows\` integer,
@@ -394,10 +402,14 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
               )),
           CONSTRAINT "chart_series_source_check" CHECK((
                 "market_source_id" IS NOT NULL AND "indicator_id" IS NULL
+                AND "dataset_id" IS NULL
                 AND "output" in ('price', 'volume', 'volumeProfile')
               ) OR (
                 "market_source_id" IS NULL AND "indicator_id" IS NOT NULL
-                AND length("output") > 0
+                AND "dataset_id" IS NULL AND length("output") > 0
+              ) OR (
+                "market_source_id" IS NULL AND "indicator_id" IS NULL
+                AND length("dataset_id") > 0 AND length("output") > 0
               )),
           CONSTRAINT "chart_series_main_market_check" CHECK("role" <> 'main' OR (
                 "market_source_id" IS NOT NULL AND "output" = 'price'
@@ -572,6 +584,35 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           CONSTRAINT "chk_triggers_name" CHECK(length(trim("name")) BETWEEN 1 AND 160),
           CONSTRAINT "chk_triggers_event_object" CHECK(json_type("event_json") = 'object'),
           CONSTRAINT "chk_triggers_target_object" CHECK(json_type("target_json") = 'object')
+        );
+      `);
+      yield* tx.run(`
+        CREATE TABLE \`workspace_dataset\` (
+          \`id\` text PRIMARY KEY,
+          \`revision\` integer DEFAULT 1 NOT NULL,
+          \`created_at\` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
+          \`updated_at\` integer DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)) NOT NULL,
+          \`name\` text NOT NULL,
+          \`description\` text,
+          \`workspace_id\` text NOT NULL,
+          \`path\` text NOT NULL,
+          \`time_column\` text NOT NULL,
+          \`columns\` text NOT NULL,
+          \`collection\` text,
+          \`approved_script_hash\` text,
+          CONSTRAINT "workspace_dataset_id_check" CHECK("id" IS NOT NULL),
+          CONSTRAINT "workspace_dataset_revision_check" CHECK("revision" >= 1),
+          CONSTRAINT "workspace_dataset_created_at_check" CHECK("created_at" >= 0),
+          CONSTRAINT "workspace_dataset_updated_at_check" CHECK("updated_at" >= 0),
+          CONSTRAINT "workspace_dataset_name_check" CHECK(length(trim("name")) > 0),
+          CONSTRAINT "workspace_dataset_workspace_check" CHECK(length("workspace_id") > 0),
+          CONSTRAINT "workspace_dataset_path_check" CHECK(length("path") > 4 AND lower(substr("path", -4)) = '.csv'),
+          CONSTRAINT "workspace_dataset_time_column_check" CHECK(length("time_column") > 0),
+          CONSTRAINT "workspace_dataset_columns_check" CHECK(json_valid("columns") AND json_type("columns") = 'array' AND json_array_length("columns") > 0),
+          CONSTRAINT "workspace_dataset_collection_check" CHECK("collection" IS NULL OR (
+                json_valid("collection")
+                AND json_extract("collection", '$.kind') IN ('agent_prompt', 'script')
+              ))
         );
       `);
       yield* tx.run(`

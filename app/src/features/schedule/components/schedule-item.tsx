@@ -91,6 +91,7 @@ export function ScheduleItem({
                 onClick={() =>
                   run.mutate(schedule.id, {
                     onSuccess: (occurrence) =>
+                      occurrence.sessionId &&
                       onOpenSession(occurrence.sessionId),
                   })
                 }

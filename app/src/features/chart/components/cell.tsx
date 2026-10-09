@@ -25,6 +25,7 @@ import {
 import { DrawingSource } from "@openchart/app/features/chart/components/sources/drawings";
 import { MarketSource } from "@openchart/app/features/chart/components/sources/market";
 import { IndicatorSource } from "@openchart/app/features/chart/components/sources/indicator";
+import { DatasetSource } from "@openchart/app/features/chart/components/sources/dataset";
 import {
   getMainSource,
   moveSeries,
@@ -199,6 +200,19 @@ export function ChartCell({
         : [],
     [cell],
   );
+  // One read per Dataset, however many of its columns this cell draws.
+  const datasetIds = useMemo(
+    () => [
+      ...new Set(
+        cell?.panes.flatMap((pane) =>
+          pane.series.flatMap((series) =>
+            series.source.kind === "dataset" ? [series.source.datasetId] : [],
+          ),
+        ),
+      ),
+    ],
+    [cell],
+  );
   if (!cell)
     return (
       <ResourceNotice
@@ -264,6 +278,18 @@ export function ChartCell({
           />
         ),
       )}
+      {(resolution === cell.resolution ? datasetIds : []).map((datasetId) => (
+        <DatasetSource
+          key={datasetId}
+          datasetId={datasetId}
+          cell={cell}
+          targets={legendTargets}
+          localStore={preferences}
+          disabled={saving || !!drawingId}
+          readOnly={readOnly}
+          onRemove={onRemove}
+        />
+      ))}
       {(resolution === cell.resolution ? marketInputs : []).map((input) => (
         <MarketSource
           key={input.id}

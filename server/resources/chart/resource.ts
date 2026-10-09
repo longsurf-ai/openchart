@@ -19,7 +19,7 @@ export {
 export const chartResource = defineResource({
   name: "chart",
   description:
-    "A saved chart grid belonging to a dashboard, with cells, market sources, indicator file references, panes, series, and links that synchronize listings or crosshairs between cells.",
+    "A saved chart grid belonging to a dashboard, with cells, market sources, indicator file references, panes, series, and links that synchronize listings or crosshairs between cells. A series can draw one column of a workspace_dataset on the cell's bar timeline.",
   entity: ChartEntity,
   store: chartStore,
 });

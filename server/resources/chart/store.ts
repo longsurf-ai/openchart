@@ -100,17 +100,23 @@ function readRows(tx: Tx, roots: readonly ChartRow[]) {
               id: binding.id,
               role: binding.role,
               source:
-                binding.marketSourceId === null
+                binding.marketSourceId !== null
                   ? {
-                      kind: "indicator",
-                      indicatorId: binding.indicatorId,
-                      output: binding.output,
-                    }
-                  : {
                       kind: "market",
                       marketSourceId: binding.marketSourceId,
                       output: binding.output,
-                    },
+                    }
+                  : binding.datasetId !== null
+                    ? {
+                        kind: "dataset",
+                        datasetId: binding.datasetId,
+                        output: binding.output,
+                      }
+                    : {
+                        kind: "indicator",
+                        indicatorId: binding.indicatorId,
+                        output: binding.output,
+                      },
               ...(binding.profileResolution === null
                 ? {}
                 : { resolution: binding.profileResolution }),
@@ -178,6 +184,8 @@ function insertChildren(tx: Tx, chartId: string, body: ChartWrite) {
             binding.source.kind === "indicator"
               ? binding.source.indicatorId
               : null,
+          datasetId:
+            binding.source.kind === "dataset" ? binding.source.datasetId : null,
           output: binding.source.output,
           profileResolution:
             "resolution" in binding ? (binding.resolution ?? null) : null,

@@ -94,6 +94,7 @@ function fixture(bars: Partial<IBarsFeedService> = {}) {
         indexStatus: () => Effect.die("Unexpected index status"),
       },
       logos: { getLogo: () => Effect.die("Unexpected logos") },
+      series: { select: () => Effect.die("Unexpected series") },
       calendar: { getCalendar: () => Effect.die("Unexpected calendar") },
     }),
   );

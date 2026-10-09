@@ -15,6 +15,8 @@ Browser-safe Effect Schema contracts; common/market owns market vocabulary.
 - Times are epoch ms. The server resolves the cutoff once; each Hose channel
   sends its snapshot before updates; Hose done is intentional completion.
 - FeedVersion keys invalidation and caches; requests carry no version.
+- `SeriesRequest`/`SeriesSnapshot` read a declared timeseries by source id,
+  `[from, to)`, as a native DataFrame through the shared codec.
 - Public errors are Schema classes: `FeedError { reason }`, a closed `Feed.*`
   reason union carrying only facts the caller cannot know. Decode them; never
   branch on string codes, only `_tag`. `isRetryable` lives on the reason.
