@@ -16,3 +16,5 @@ bindings in `feed/`, and shared transport in `client.ts`.
   "Data doesn't exist" as an empty window.
 - Provider lifetimes and caller scopes retain their existing cancellation and
   retirement rules. Shared transport/config helpers stay in the parent directory.
+- Empty price slots without volume remain gaps. Partially populated OHLCV fails
+  history and polling with `Dataset.IncompleteData`; never silently drop it.

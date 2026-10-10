@@ -119,7 +119,7 @@ export function MarketSource({
     !!bars.projectionError || (!!failure && offersRetry(failure));
   useErrorToast(bars.projectionError ?? failure, {
     id: `market:${chart.id}:${input.id}`,
-    title: `Couldn’t update ${shown.listing.symbol}`,
+    title: `Couldn’t update ${bars.projectionError ? shown.listing.symbol : input.series.listing.symbol}`,
     retry: retryable ? bars.retry : undefined,
   });
   // The user just saw this failure; the Cloud offer decides whether it applies.
@@ -266,9 +266,15 @@ export function MarketSource({
                           No bars in this range
                         </span>
                       ) : null}
-                      {failure && !retryable ? (
-                        <span className="text-muted-foreground">
+                      {failure ? (
+                        <span role="status" className="text-muted-foreground">
+                          {shown.listing.symbol !== input.series.listing.symbol
+                            ? `${input.series.listing.symbol}: `
+                            : null}
                           {failure.message}
+                          {bars.frame?.numRows
+                            ? " Showing previously loaded bars."
+                            : null}
                         </span>
                       ) : null}
                       {retryable ? (

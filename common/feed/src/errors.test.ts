@@ -27,6 +27,7 @@ const reasons = [
   [new FeedReasons.SourceUnavailable({}), true],
   [new FeedReasons.SourceUnavailable({ provider }), true],
   [new FeedReasons.InvalidSourceData({ provider }), false],
+  [new FeedReasons.IncompleteData({ provider }), true],
   [new FeedReasons.ResyncRequired({ provider }), true],
   [new FeedReasons.Reconfigured({ provider }), true],
 ] as const;

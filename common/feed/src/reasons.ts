@@ -127,6 +127,22 @@ export class InvalidSourceData extends Schema.TaggedError<InvalidSourceData>()(
 }
 
 /**
+ * The source supplied an observation with missing required values. No partial
+ * result is accepted; consumers may keep previously loaded data for display.
+ *
+ * @example new IncompleteData({ provider: ProviderId.make("yfinance") });
+ */
+export class IncompleteData extends Schema.TaggedError<IncompleteData>()(
+  "Feed.IncompleteData",
+  { provider: ProviderId },
+) {
+  /** A later read may succeed after the source completes or repairs its data. */
+  get isRetryable(): boolean {
+    return true;
+  }
+}
+
+/**
  * The live stream must be re-established: it overflowed, disconnected, or the
  * source asked for resynchronization.
  *

@@ -14,14 +14,19 @@ import {
 } from "observable-hooks";
 import { useMemo } from "react";
 import {
+  EMPTY,
   catchError,
+  concat,
   defer,
   distinctUntilChanged,
   map,
   of,
+  retry as retryObservation,
   scan,
   startWith,
   switchMap,
+  throwError,
+  timer,
 } from "rxjs";
 
 import {
@@ -86,7 +91,11 @@ export interface QueryOptions {
  * - B fails before its snapshot: status is error; keep shows A, clear stays empty.
  * - Stream fails after its snapshot: status is error; its view stays visible.
  * - Stream ends normally: keep the view and ready status.
- * - retry(): stop the old channel and reopen the latest request. No auto-retry.
+ * - Retryable live failures reopen with exponential backoff from 1 to 30 seconds.
+ *   Keep the failure visible until a valid snapshot arrives; a snapshot resets
+ *   backoff. Historical requests and non-retryable failures wait for user action.
+ * - retry(): cancel pending backoff and reopen the latest request immediately.
+ *   Changing the request/client or unmounting also cancels pending retries.
  * - Unmount: release the channel. The client keeps a live one open for 5 minutes,
  *   so a remount (for example returning to a Dashboard) reattaches without reloading.
  *
@@ -169,28 +178,40 @@ export function useBars(
         switchMap(([client, request, retries$, retry]) =>
           retries$.pipe(
             startWith(undefined),
-            switchMap(() =>
-              defer(() => client.bars.observe(request)).pipe(
-                map((current): UseBarsResult => ({
-                  status: "ready",
-                  current,
-                  retry,
-                })),
-                startWith({
-                  status: "loading",
-                  current: undefined,
-                  retry,
-                } satisfies UseBarsResult),
-                catchError((error) =>
-                  of({
-                    status: "error",
-                    current: undefined,
-                    error: feedError(error),
-                    retry,
-                  } satisfies UseBarsResult),
-                ),
-              ),
-            ),
+            switchMap(() => {
+              let failures = 0;
+              return defer(() => client.bars.observe(request)).pipe(
+                map((current): UseBarsResult => {
+                  failures = 0;
+                  return { status: "ready", current, retry };
+                }),
+                catchError((error) => {
+                  const failure = feedError(error);
+                  return concat(
+                    of({
+                      status: "error",
+                      current: undefined,
+                      error: failure,
+                      retry,
+                    } satisfies UseBarsResult),
+                    throwError(() => failure),
+                  );
+                }),
+                retryObservation({
+                  delay: (error: FeedError | ClientFailure) =>
+                    request.to === "now" && error.isRetryable
+                      ? timer(
+                          Math.min(1000 * 2 ** Math.min(failures++, 5), 30_000),
+                        )
+                      : EMPTY,
+                }),
+              );
+            }),
+            startWith({
+              status: "loading",
+              current: undefined,
+              retry,
+            } satisfies UseBarsResult),
           ),
         ),
         map((result) => ({ result, placeholder: result.status === "loading" })),
