@@ -4,8 +4,8 @@ Owns Feed composition and availability. See
 [Feed architecture](../../docs/architecture/feeds.md).
 
 - Feed consumes Catalog/Events, never Provider config, acquisition, or lifetimes.
-  Providers own exact-Definition adapters; business folders own services,
-  provisioners and handlers. Matching shapes prove no compatibility. Businesses
+  Providers own exact-Definition or owned-identity runtime adapters; businesses
+  own services, provisioners, handlers. Matching shapes prove nothing. Businesses
   never import each other. Concrete Provider imports belong in the data registry.
 - Root composition commits services and version atomically, then publishes
   feed.version.changed. Feed.get reads once; requests are unversioned. Returned

@@ -121,6 +121,7 @@ function setup(automatic = true) {
       search: vi.fn(),
     },
     logos: { getLogo: vi.fn() },
+    series: { select: vi.fn() },
     calendar: { getCalendar: vi.fn() },
   };
   const wrapper = ({ children }: { children: ReactNode }) => (

@@ -161,10 +161,12 @@ export function useSaveSchedule(transport: AppTransport) {
       schedule?: Schedule;
       name: string;
       recurrence: Schedule["recurrence"];
-      prompt: Promise<SchedulePrompt>;
+      /** Undefined for a data collection, whose Dataset owns what runs. */
+      prompt: Promise<SchedulePrompt | undefined>;
     }) => {
       const input = await prompt;
       if (!schedule) {
+        if (!input) return;
         await transport.rpc.resources.agent_schedule.create.mutate({
           name,
           recurrence,
@@ -181,34 +183,32 @@ export function useSaveSchedule(transport: AppTransport) {
           path: "/recurrence",
           value: recurrence,
         });
-      if (
-        JSON.stringify(input.parts) !==
-        JSON.stringify(schedule.target.prompt.parts)
-      )
-        operations.push({
-          op: "replace" as const,
-          path: "/target/prompt/parts",
-          value: input.parts,
-        });
-      if (
-        JSON.stringify(input.model) !==
-        JSON.stringify(schedule.target.prompt.model)
-      )
-        operations.push({
-          op: "replace" as const,
-          path: "/target/prompt/model",
-          value: input.model,
-        });
-      if (
-        input.workspaceId !== undefined &&
-        input.workspaceId !== schedule.target.prompt.workspaceId
-      )
-        // Add also replaces an existing object member and permits a previously omitted workspace.
-        operations.push({
-          op: "add" as const,
-          path: "/target/prompt/workspaceId",
-          value: input.workspaceId,
-        });
+      // A data collection has no prompt; its Dataset owns what runs.
+      if (input && schedule.target.kind === "agent_prompt") {
+        const saved = schedule.target.prompt;
+        if (JSON.stringify(input.parts) !== JSON.stringify(saved.parts))
+          operations.push({
+            op: "replace" as const,
+            path: "/target/prompt/parts",
+            value: input.parts,
+          });
+        if (JSON.stringify(input.model) !== JSON.stringify(saved.model))
+          operations.push({
+            op: "replace" as const,
+            path: "/target/prompt/model",
+            value: input.model,
+          });
+        if (
+          input.workspaceId !== undefined &&
+          input.workspaceId !== saved.workspaceId
+        )
+          // Add also replaces an existing object member and permits a previously omitted workspace.
+          operations.push({
+            op: "add" as const,
+            path: "/target/prompt/workspaceId",
+            value: input.workspaceId,
+          });
+      }
       const [first, ...rest] = operations;
       if (!first) return;
       await transport.rpc.resources.agent_schedule.patch.mutate({

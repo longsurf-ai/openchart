@@ -16,6 +16,7 @@ import { ToolRegistry } from "@openchart/server/agent/tool/registry";
 import { LLM } from "@openchart/server/agent/llm";
 import { Models } from "@openchart/server/models";
 import { Scheduler } from "@openchart/server/scheduler";
+import { Collection } from "@openchart/server/collection";
 import { Alert } from "@openchart/server/alert";
 import { Bus } from "@openchart/server/bus";
 import { Notification } from "@openchart/server/notification";
@@ -175,6 +176,8 @@ function makeFeedLayer(
   return feedLayer.pipe(
     Layer.provideMerge(datasets),
     Layer.provideMerge(dataProviderLayer),
+    // Workspace Datasets read their files through the shared Workspaces instance.
+    Layer.provideMerge(WorkspacesLayer),
     Layer.provideMerge(database),
   );
 }
@@ -210,12 +213,17 @@ function makeApplicationLayer(options: RuntimeOptions) {
       );
       // Background fibers sit above every dependency, so shutdown interrupts and
       // joins them first. Agent checks and Alert observations share Tea below.
+      // Collection reads Agent admission, Workspaces and Monitoring, so it sits
+      // between them and the application; script runs end before those close.
       return Layer.mergeAll(
         schedulerBackgroundLayer,
         triggerBackgroundLayer,
         alertBackgroundLayer,
         monitoringBackgroundLayer,
-      ).pipe(Layer.provideMerge(application));
+      ).pipe(
+        Layer.provideMerge(Collection.layer),
+        Layer.provideMerge(application),
+      );
     }),
   ).pipe(
     Layer.provideMerge(

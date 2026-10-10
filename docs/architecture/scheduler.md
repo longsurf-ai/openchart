@@ -97,6 +97,16 @@ intervening edit, pause, or deletion. An already selected fire may still be admi
 while those changes race it; deletion or recurrence edits can prevent later repair
 of incomplete bookkeeping. This is the intended best-effort contract.
 
+A `data_collection` target names a Workspace Dataset; the Dataset's own
+`collection` says what runs, and Collection runs it with the same intent. An
+Agent prompt collection is admitted and recorded like a prompt target. A script
+collection has no Run whose intent could replay a retry, so dispatch first looks
+for this fire's Occurrence and starts nothing when it exists; it records the
+Occurrence with no Run or Session. A missing Dataset, no collection, or a script
+changed since its approval is accepted without work, so the cursor advances
+instead of retrying every scan; Collection's Monitoring check reports script
+problems. Storage failures still leave the fire due.
+
 Run execution, terminal status, and crash recovery remain Agent responsibilities.
 Retrying a queued admission can repair a missed wake, but the scheduler does not
 reset or restart a Run that Agent already marked running or terminal. Scheduling

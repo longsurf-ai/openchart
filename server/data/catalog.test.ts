@@ -4,6 +4,7 @@ import {
   Effect,
   Exit,
   ManagedRuntime,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -11,8 +12,13 @@ import {
 import { echo, bars } from "@openchart/server/data/dataset/tests/fixtures";
 import { expect, test, vi } from "vitest";
 import {
+  defineRuntimeDataset,
+  k,
+  Layout,
   makeDataset,
+  unregister,
   type Dataset,
+  type DatasetDefinition,
 } from "@openchart/server/data/dataset/index";
 import { Catalog, catalogLayer } from "./catalog";
 
@@ -57,6 +63,48 @@ test("publishes ready instances and withdraws only the changing provider", async
   } finally {
     await runtime.dispose();
     await Effect.runPromise(Scope.close(owner, Exit.void));
+  }
+});
+
+test("accepts a runtime declaration registered after construction", async () => {
+  const states = Effect.runSync(SubscriptionRef.make<readonly Dataset[]>([]));
+  let declared: readonly DatasetDefinition[] = [];
+  const runtime = ManagedRuntime.make(
+    catalogLayer(
+      Effect.succeed([
+        {
+          get definitions() {
+            return declared;
+          },
+          watch: () => SubscriptionRef.changes(states),
+        },
+      ]),
+    ),
+  );
+  const owner = Scope.makeUnsafe();
+  const definition = defineRuntimeDataset({
+    name: "test.catalog-runtime",
+    keys: Schema.Struct({ time: k.range(Schema.Number) }),
+    schema: Schema.Struct({ time: Schema.Number, value: Schema.Finite }),
+    layout: Layout.Timeseries,
+    access: { select: true },
+  });
+  try {
+    const catalog = await runtime.runPromise(Catalog);
+    declared = [definition];
+    const dataset = await Effect.runPromise(
+      makeDataset(definition, { select: () => Effect.die("unused") }).pipe(
+        Scope.provide(owner),
+      ),
+    );
+    await runtime.runPromise(SubscriptionRef.set(states, [dataset]));
+    await vi.waitFor(async () =>
+      expect(await runtime.runPromise(catalog.list())).toContain(dataset),
+    );
+  } finally {
+    await runtime.dispose();
+    await Effect.runPromise(Scope.close(owner, Exit.void));
+    unregister(definition);
   }
 });
 

@@ -1130,6 +1130,19 @@ const writableCases: Array<{
     },
     issuePath: "/sections/0/sections/0/items/0/listing",
   },
+  {
+    resource: "workspace_dataset",
+    input: () => ({
+      name: "US CPI",
+      description: null,
+      source: { workspaceId: "wsp_test", path: "datasets/cpi.csv" },
+      time: { column: "date" },
+      columns: [{ name: "cpi", type: "number" }],
+      collection: null,
+    }),
+    invalid: { columns: [{ name: "time", type: "number" }] },
+    issuePath: "/columns",
+  },
 ];
 
 // Alert Rule uses its dedicated save tool tests because alertable is server-managed.

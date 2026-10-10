@@ -65,6 +65,7 @@ test("provides the three OpenChart profiles without models, tools, or Permission
           "create_schedule",
           "symbology_search",
           "market_data",
+          "dataset_select",
           "tea_check",
           "tea_run",
         ]) {
@@ -105,6 +106,7 @@ test("describes only implemented tools and the current Resource catalog", async 
         "<tea>",
         "<posts>",
         "<alerts>",
+        "<datasets>",
       ]);
       expect(analyst?.prompt).not.toContain("{{");
       for (const resource of resources)

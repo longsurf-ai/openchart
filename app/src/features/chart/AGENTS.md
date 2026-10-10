@@ -8,7 +8,9 @@ See [README.md](README.md) and [architecture](../../../../docs/architecture/char
 - Serialize writes against cached revisions. Capture IDs; await saves before dialog close.
 - ChartCell composes sources; ChartPanes owns panes; ChartLegend positions targets.
   Visible cells publish identity, main bar settings and focus through `useAssistantContext`.
-  Loading/remounts never prune panes. One MarketSource/useBars per input; preserve
+  Loading/remounts never prune panes. One DatasetSource/useDataset per Dataset holds
+  each bar's latest known value; its Collect action reviews changed scripts before
+  approving. One MarketSource/useBars per input; preserve
   fields/gaps/fresh arrays, convert milliseconds at rendering. Unmount releases
   instances/subscriptions.
 - CSS Grid: tracks; core: pane geometry. Reuse shared Radix controls.

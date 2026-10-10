@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "075f6a43-7fc1-4954-91ea-e03f767adefc",
-  "prevIds": ["c3f861a3-d4e3-4d18-8831-d16cf3798a70"],
+  "id": "c1a107e8-7461-4704-add6-ccc64be634cf",
+  "prevIds": ["075f6a43-7fc1-4954-91ea-e03f767adefc"],
   "ddl": [
     {
       "name": "agent_permission_grants",
@@ -122,6 +122,10 @@
     },
     {
       "name": "watchlist",
+      "entityType": "tables"
+    },
+    {
+      "name": "workspace_dataset",
       "entityType": "tables"
     },
     {
@@ -790,7 +794,7 @@
     },
     {
       "type": "text",
-      "notNull": true,
+      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -1325,6 +1329,16 @@
       "default": null,
       "generated": null,
       "name": "indicator_id",
+      "entityType": "columns",
+      "table": "chart_series"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "dataset_id",
       "entityType": "columns",
       "table": "chart_series"
     },
@@ -2229,6 +2243,126 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "description",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "path",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_column",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "columns",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "collection",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "approved_script_hash",
+      "entityType": "columns",
+      "table": "workspace_dataset"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
       "table": "workspace"
     },
     {
@@ -2754,6 +2888,13 @@
       "nameExplicit": false,
       "name": "watchlist_pk",
       "table": "watchlist",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "workspace_dataset_pk",
+      "table": "workspace_dataset",
       "entityType": "pks"
     },
     {
@@ -3582,8 +3723,8 @@
       "table": "agent_schedule"
     },
     {
-      "value": "COALESCE(\n        json_type(\"target_json\", '$.prompt.model') = 'object'\n        AND json_type(\"target_json\", '$.prompt.model.providerID') = 'text'\n        AND length(json_extract(\"target_json\", '$.prompt.model.providerID')) > 0\n        AND json_extract(\"target_json\", '$.prompt.model.providerID') <> 'unknown'\n        AND json_type(\"target_json\", '$.prompt.model.modelID') = 'text'\n        AND length(json_extract(\"target_json\", '$.prompt.model.modelID')) > 0\n        AND json_extract(\"target_json\", '$.prompt.model.modelID') <> 'unknown'\n        AND (\n          json_type(\"target_json\", '$.prompt.model.selectedVariant') IS NULL\n          OR (\n            json_type(\"target_json\", '$.prompt.model.selectedVariant') = 'text'\n            AND length(json_extract(\"target_json\", '$.prompt.model.selectedVariant')) > 0\n          )\n        )\n        AND json(json_remove(\n          json_extract(\"target_json\", '$.prompt.model'),\n          '$.providerID',\n          '$.modelID',\n          '$.selectedVariant'\n        )) = '{}',\n        0\n      )",
-      "name": "chk_agent_schedules_model",
+      "value": "CASE json_extract(\"target_json\", '$.kind')\n      WHEN 'data_collection' THEN COALESCE(\n        json_type(\"target_json\", '$.datasetId') = 'text'\n        AND length(json_extract(\"target_json\", '$.datasetId')) > 0,\n        0\n      )\n      ELSE COALESCE(\n        json_type(\"target_json\", '$.prompt.model') = 'object'\n        AND json_type(\"target_json\", '$.prompt.model.providerID') = 'text'\n        AND length(json_extract(\"target_json\", '$.prompt.model.providerID')) > 0\n        AND json_extract(\"target_json\", '$.prompt.model.providerID') <> 'unknown'\n        AND json_type(\"target_json\", '$.prompt.model.modelID') = 'text'\n        AND length(json_extract(\"target_json\", '$.prompt.model.modelID')) > 0\n        AND json_extract(\"target_json\", '$.prompt.model.modelID') <> 'unknown'\n        AND (\n          json_type(\"target_json\", '$.prompt.model.selectedVariant') IS NULL\n          OR (\n            json_type(\"target_json\", '$.prompt.model.selectedVariant') = 'text'\n            AND length(json_extract(\"target_json\", '$.prompt.model.selectedVariant')) > 0\n          )\n        )\n        AND json(json_remove(\n          json_extract(\"target_json\", '$.prompt.model'),\n          '$.providerID',\n          '$.modelID',\n          '$.selectedVariant'\n        )) = '{}',\n        0\n      )\n      END",
+      "name": "chk_agent_schedules_target",
       "entityType": "checks",
       "table": "agent_schedule"
     },
@@ -3786,7 +3927,7 @@
       "table": "chart_series"
     },
     {
-      "value": "(\n        \"market_source_id\" IS NOT NULL AND \"indicator_id\" IS NULL\n        AND \"output\" in ('price', 'volume', 'volumeProfile')\n      ) OR (\n        \"market_source_id\" IS NULL AND \"indicator_id\" IS NOT NULL\n        AND length(\"output\") > 0\n      )",
+      "value": "(\n        \"market_source_id\" IS NOT NULL AND \"indicator_id\" IS NULL\n        AND \"dataset_id\" IS NULL\n        AND \"output\" in ('price', 'volume', 'volumeProfile')\n      ) OR (\n        \"market_source_id\" IS NULL AND \"indicator_id\" IS NOT NULL\n        AND \"dataset_id\" IS NULL AND length(\"output\") > 0\n      ) OR (\n        \"market_source_id\" IS NULL AND \"indicator_id\" IS NULL\n        AND length(\"dataset_id\") > 0 AND length(\"output\") > 0\n      )",
       "name": "chart_series_source_check",
       "entityType": "checks",
       "table": "chart_series"
@@ -4228,6 +4369,66 @@
       "name": "watchlist_name_check",
       "entityType": "checks",
       "table": "watchlist"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "workspace_dataset_id_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "workspace_dataset_revision_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "workspace_dataset_created_at_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "workspace_dataset_updated_at_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "length(trim(\"name\")) > 0",
+      "name": "workspace_dataset_name_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "length(\"workspace_id\") > 0",
+      "name": "workspace_dataset_workspace_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "length(\"path\") > 4 AND lower(substr(\"path\", -4)) = '.csv'",
+      "name": "workspace_dataset_path_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "length(\"time_column\") > 0",
+      "name": "workspace_dataset_time_column_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "json_valid(\"columns\") AND json_type(\"columns\") = 'array' AND json_array_length(\"columns\") > 0",
+      "name": "workspace_dataset_columns_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
+    },
+    {
+      "value": "\"collection\" IS NULL OR (\n        json_valid(\"collection\")\n        AND json_extract(\"collection\", '$.kind') IN ('agent_prompt', 'script')\n      )",
+      "name": "workspace_dataset_collection_check",
+      "entityType": "checks",
+      "table": "workspace_dataset"
     },
     {
       "value": "\"id\" IS NOT NULL",

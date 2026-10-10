@@ -80,6 +80,7 @@ it("lets the empty grid retry a failed save and closes its picker only after com
     },
     calendar: { getCalendar: vi.fn() },
     logos: { getLogo: vi.fn() },
+    series: { select: vi.fn() },
     close: vi.fn(),
   };
   const queryClient = createQueryClient({

@@ -6,6 +6,8 @@ import type {
   CalendarResult,
   LogoRequest,
   LogoResult,
+  SeriesRequest,
+  SeriesSnapshot,
   SymbolSearchRequest,
   SymbolSearchResult,
   SymbolIndexRequest,
@@ -63,12 +65,21 @@ export interface ICalendarFeed {
     options?: RequestOptions,
   ): Promise<CalendarResult>;
 }
+/** Declared timeseries, such as Workspace Datasets, read whole or by range. */
+export interface ISeriesFeed {
+  /** Every declared column in the range; an id no ready source serves fails unavailable. @example await feed.select({id: "wsd_x"}); */
+  select(
+    request: SeriesRequest,
+    options?: RequestOptions,
+  ): Promise<SeriesSnapshot>;
+}
 /** Stable access to current backend services; availability changes do not replace this client. */
 export interface FeedClient {
   readonly bars: IBarsFeed;
   readonly symbology: ISymbologyFeed;
   readonly logos: ILogosFeed;
   readonly calendar: ICalendarFeed;
+  readonly series: ISeriesFeed;
   /** Cancels this client's requests and channels; the shared application connection stays open. @example client.close(); */
   close(): void;
 }

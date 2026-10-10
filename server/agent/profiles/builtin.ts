@@ -52,6 +52,7 @@ export function registerBuiltins(
       { action: "symbology_search", resource: "*", decision: "allow" },
       { action: "publish_post", resource: "post", decision: "allow" },
       { action: "market_data", resource: "*", decision: "allow" },
+      { action: "dataset_select", resource: "*", decision: "allow" },
       { action: "tea_check", resource: "*", decision: "allow" },
       { action: "tea_run", resource: "*", decision: "allow" },
     );

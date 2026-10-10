@@ -7,6 +7,7 @@ import { Events } from "@openchart/server/events";
 import { providerFeeds } from "@openchart/server/data/providers";
 import { logosFeed } from "@openchart/server/feed/logo/logo";
 import { calendarFeed } from "@openchart/server/feed/calendar/calendar";
+import { seriesFeed } from "@openchart/server/feed/series/series";
 import { provisionBars } from "@openchart/server/feed/bar/provisioner";
 import { provisionSymbology } from "@openchart/server/feed/symbology/provisioner";
 import { Feed } from "./service";
@@ -21,6 +22,10 @@ const boundDefinitions = new Set(
     ),
   ),
 );
+// Runtime declarations join and leave with their Providers, so check them live.
+const isBound = (dataset: Dataset) =>
+  boundDefinitions.has(dataset.definition) ||
+  providerFeeds.some(({ series }) => series?.adapt(dataset) !== undefined);
 
 const makeSnapshot = Effect.fn("Feed.makeSnapshot")(function* (
   datasets: readonly Dataset[],
@@ -35,6 +40,7 @@ const makeSnapshot = Effect.fn("Feed.makeSnapshot")(function* (
       symbology,
       logos: logosFeed(datasets),
       calendar: calendarFeed(datasets),
+      series: seriesFeed(datasets),
     },
   };
 });
@@ -69,9 +75,7 @@ export const feedLayer = Layer.effect(
       ),
     );
     yield* catalog.watch().pipe(
-      Stream.map((datasets) =>
-        datasets.filter((dataset) => boundDefinitions.has(dataset.definition)),
-      ),
+      Stream.map((datasets) => datasets.filter(isBound)),
       Stream.runForEach(update),
       Effect.catchCause((cause) =>
         Effect.logError("Feed Catalog observation stopped", cause),

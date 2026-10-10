@@ -12,8 +12,8 @@ scoped observations and file APIs.
   RcMap shares shallow directory watchers by active consumer; no eager root watch.
   Directory/tree queries read metadata only; never cache text.
 - Index non-hidden directories, including empty ones, separately from `.tea`,
-  `.workflow.ts`, PDF and supported images/audio/video. `mkdir` stays within
-  the registered root; existing directories succeed.
+  `.workflow.ts`, CSV, Python, PDF and supported media. `mkdir` stays inside
+  the root; existing directories succeed.
 - Read Base64 bytes, MIME and hash. Media reads
   cap at 32 MiB, including concurrent growth. Scans omit oversized media;
   explicit reads fail with `WorkspaceMediaTooLarge`.

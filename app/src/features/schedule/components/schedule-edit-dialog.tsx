@@ -84,7 +84,19 @@ type PromptEditor = {
   content: ReactNode;
   changed: boolean;
   ready: boolean;
-  read: () => Promise<SchedulePrompt>;
+  read: () => Promise<SchedulePrompt | undefined>;
+};
+
+/** A data collection's Dataset owns what runs, so only name and timing change here. */
+const datasetCollection: PromptEditor = {
+  content: (
+    <p className="text-sm text-muted-foreground">
+      Collects a Workspace Dataset with the collection defined on the Dataset.
+    </p>
+  ),
+  changed: false,
+  ready: true,
+  read: () => Promise.resolve(undefined),
 };
 
 /** What the dialog edits: an existing schedule, or a new one that may start from a recurrence such as a clicked calendar slot. */
@@ -101,7 +113,7 @@ export type ScheduleEditDialogProps = {
   stale: boolean;
   onClose: () => void;
   renderPromptEditor: (props: {
-    prompt?: Schedule["target"]["prompt"];
+    prompt?: Extract<Schedule["target"], { kind: "agent_prompt" }>["prompt"];
     disabled: boolean;
     onCancel: () => void;
     children: (editor: PromptEditor) => ReactNode;
@@ -149,6 +161,16 @@ export function ScheduleEditDialog({
     save.reset();
     onClose();
   };
+  const form = (promptEditor: PromptEditor) =>
+    draft && (
+      <ScheduleEditForm
+        draft={draft}
+        stale={stale}
+        save={save}
+        onClose={close}
+        promptEditor={promptEditor}
+      />
+    );
   return (
     <Dialog
       open={draft !== null}
@@ -169,20 +191,14 @@ export function ScheduleEditDialog({
               Choose what this task does and when it runs.
             </DialogDescription>
           </DialogHeader>
-          {renderPromptEditor({
-            prompt: draft.schedule?.target.prompt,
-            disabled: save.isPending || stale,
-            onCancel: close,
-            children: (promptEditor) => (
-              <ScheduleEditForm
-                draft={draft}
-                stale={stale}
-                save={save}
-                onClose={close}
-                promptEditor={promptEditor}
-              />
-            ),
-          })}
+          {draft.schedule?.target.kind === "data_collection"
+            ? form(datasetCollection)
+            : renderPromptEditor({
+                prompt: draft.schedule?.target.prompt,
+                disabled: save.isPending || stale,
+                onCancel: close,
+                children: form,
+              })}
         </DialogContent>
       ) : null}
     </Dialog>

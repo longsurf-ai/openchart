@@ -13,6 +13,7 @@ import { SaveAlertRuleTool } from "@openchart/server/agent/tool/tools/save-alert
 import { SymbologySearchTool } from "@openchart/server/agent/tool/tools/symbology-search";
 import { PublishPostTool } from "@openchart/server/agent/tool/tools/publish-post";
 import { MarketDataTool } from "@openchart/server/agent/tool/tools/market-data";
+import { DatasetSelectTool } from "@openchart/server/agent/tool/tools/dataset-select";
 import { TeaRunTool } from "@openchart/server/agent/tool/tools/tea-run";
 import { TeaCheckTool } from "@openchart/server/agent/tool/tools/tea-check";
 import { Context, Effect, Layer, Record, type Schema } from "effect";
@@ -33,6 +34,7 @@ const builtin = {
   symbology_search: SymbologySearchTool,
   publish_post: PublishPostTool,
   market_data: MarketDataTool,
+  dataset_select: DatasetSelectTool,
   tea_check: TeaCheckTool,
   tea_run: TeaRunTool,
 };

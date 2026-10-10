@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 
 import { resourceQueryKeys } from "@openchart/app/lib/resource/invalidation";
+import { missingResourceAsNull } from "@openchart/app/lib/resource/missing";
 import type {
   AppTransport,
   ResourceOutputs,
@@ -21,6 +22,9 @@ export type ChartResource = Awaited<
 export type CellDefinition = ChartResource["cells"][number];
 /** One chart Indicator Resource: a stored snapshot and explicit parameter choices. */
 export type IndicatorResource = ResourceOutputs["indicator"]["get"];
+/** One Workspace Dataset declaration: its CSV file, time and observation columns. */
+export type WorkspaceDatasetResource =
+  ResourceOutputs["workspace_dataset"]["get"];
 /** Child identities use the same checked identifier primitive as the Resource owner. */
 export const chartIds = {
   cell: defineId("ccl", "ChartCell.ID"),
@@ -69,6 +73,25 @@ export function chartList(transport: AppTransport, dashboardId: string) {
       } while (cursor);
       return charts;
     },
+  });
+}
+
+/** Read one Workspace Dataset declaration, or null once it is deleted; Resource events refresh it.
+ * @example useQuery(workspaceDatasetDetail(transport, datasetId));
+ */
+export function workspaceDatasetDetail(transport: AppTransport, id: string) {
+  return queryOptions({
+    queryKey: [
+      ...resourceQueryKeys.resource("workspace_dataset"),
+      "get",
+      transport.url,
+      id,
+    ],
+    queryFn: ({ signal }) =>
+      transport.rpc.resources.workspace_dataset.get
+        .query({ id }, { signal })
+        .catch(missingResourceAsNull),
+    enabled: !!id,
   });
 }
 
