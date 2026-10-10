@@ -4,11 +4,12 @@ import { CLAUDE_CODE, CODEX } from "@openchart/models/model-tiers";
 import { createInstallations } from "@openchart/server/models/onboarding/installation";
 import { PROVIDER_MANIFEST } from "@openchart/server/models/onboarding/manifest";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import {
   cp,
-  chmod,
   mkdir,
   mkdtemp,
+  open,
   readdir,
   readFile,
   realpath,
@@ -17,20 +18,102 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import {
+  basename,
+  delimiter,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+} from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import {
   _electron,
-  expect,
+  expect as playwrightExpect,
   type ElectronApplication,
   type Page,
+  type Request,
 } from "@playwright/test";
+import { writeNativeExecutable } from "./native-executable.ts";
+
+// Packaged UI readiness includes backend I/O and may run under emulation.
+// Keep assertions bounded consistently with page actions; native waits stay separate.
+const expect = playwrightExpect.configure({ timeout: 30_000 });
 
 const sourceExecutable = process.argv[2];
 assert(
   sourceExecutable && isAbsolute(sourceExecutable),
   "Supply an absolute Electron executable path",
 );
+const buildHost = `${process.platform}-${process.arch}`;
+// Select managed fixture identities from the supplied executable. Reading the
+// single Mach-O slice and Windows PE header never executes application code
+// and does not depend on Electron's RunAsNode fuse.
+let runtime: { platform: string; arch: string };
+if (process.platform === "darwin") {
+  const { stdout } = await promisify(execFile)(
+    "/usr/bin/lipo",
+    ["-archs", sourceExecutable],
+    { timeout: 10_000 },
+  );
+  const architectures = stdout.trim().split(/\s+/);
+  assert.equal(
+    architectures.length,
+    1,
+    "Smoke requires one supported Mac architecture",
+  );
+  const arch = architectures[0] === "x86_64" ? "x64" : architectures[0];
+  assert(
+    arch === "arm64" || arch === "x64",
+    "Unsupported Mac executable architecture",
+  );
+  runtime = { platform: "darwin", arch };
+} else if (process.platform === "win32") {
+  const file = await open(sourceExecutable, "r");
+  try {
+    const header = Buffer.alloc(64);
+    const dos = await file.read(header, 0, header.length, 0);
+    assert.equal(dos.bytesRead, 64, "Truncated Windows executable header");
+    assert.equal(
+      header.toString("ascii", 0, 2),
+      "MZ",
+      "Expected a Windows executable",
+    );
+    const signature = Buffer.alloc(6);
+    const pe = await file.read(
+      signature,
+      0,
+      signature.length,
+      header.readUInt32LE(60),
+    );
+    assert.equal(pe.bytesRead, 6, "Truncated Windows PE signature");
+    assert.equal(
+      signature.readUInt32LE(0),
+      0x4550,
+      "Expected a Windows PE signature",
+    );
+    assert.equal(
+      signature.readUInt16LE(4),
+      0x8664,
+      "Smoke requires a Windows x64 executable",
+    );
+    runtime = { platform: "win32", arch: "x64" };
+  } finally {
+    await file.close();
+  }
+} else throw new Error("Desktop release smoke supports macOS and Windows");
+assert.equal(
+  runtime.platform,
+  process.platform,
+  "Smoke requires the executable's native operating system",
+);
+assert.equal(
+  typeof runtime.arch,
+  "string",
+  "Electron did not report its architecture",
+);
+const runtimeTarget = `${runtime.platform}-${runtime.arch}`;
 const environment = process.argv[3] ?? "production";
 assert(environment === "development" || environment === "production");
 const keychain = process.argv[4] ?? "mock";
@@ -47,7 +130,7 @@ const profile = await realpath(
   await mkdtemp(join(tmpdir(), "openchart-desktop-smoke-")),
 );
 const sourceBundle =
-  process.platform === "darwin"
+  runtime.platform === "darwin"
     ? dirname(dirname(dirname(sourceExecutable)))
     : dirname(sourceExecutable);
 const bundle = join(profile, basename(sourceBundle));
@@ -58,15 +141,69 @@ const errors: string[] = [];
 const processErrors: string[] = [];
 let application: ElectronApplication | undefined;
 let passed = false;
+let packagedConpty: boolean | null = null;
 const nativeState = join(profile, "native-state");
 const nativeBin = join(profile, "bin");
+
+/** Completes the real first-launch pages and tour before entering a new chat. */
+async function verifyOnboarding(page: Page) {
+  const agents = page.getByRole("dialog", {
+    name: "Connect your agent",
+    exact: true,
+  });
+  await expect(agents).toBeVisible({ timeout: 30_000 });
+  for (const name of ["Claude Code", "Codex", "Antigravity"])
+    await expect(
+      agents.getByRole("region", { name, exact: true }),
+    ).toBeVisible();
+  await page.screenshot({
+    path: join(artifacts, "desktop-onboarding-agents.png"),
+  });
+  await agents
+    .getByRole("button", { name: /^(Continue|Skip for now)$/ })
+    .click();
+  const notifications = page.getByRole("dialog", {
+    name: "Turn on notifications",
+    exact: true,
+  });
+  await expect(notifications).toBeVisible();
+  await notifications
+    .getByRole("button", { name: "Continue", exact: true })
+    .click();
+  const dashboard = "/app/dashboards/dsh_88JOx0yX7TH65p";
+  const steps = [
+    ["Watch the market from your dashboard", dashboard],
+    ["Make the chart yours", dashboard],
+    ["Ask the Agent for an indicator", dashboard],
+    ["All your agents, in one place", "/app/sessions/ses_rrbFx6CsSf2Xk8"],
+    ["Alerts put agents to work", "/app/alerts/rules/alr_88PH5QdFSkCg4R"],
+    ["Star us on GitHub", dashboard],
+  ] as const;
+  for (const [index, [name, route]] of steps.entries()) {
+    const card = page.getByRole("dialog", { name, exact: true });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(`${index + 1} of ${steps.length}`);
+    await expect(page).toHaveURL(`openchart://app${route}`);
+    await card
+      .getByRole("button", {
+        name: index === steps.length - 1 ? "Done" : "Next",
+        exact: true,
+      })
+      .click();
+  }
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: /^New Chat/ }).click();
+  await expect(page).toHaveURL("openchart://app/app");
+  return { agentPage: true, notificationPage: true, tourSteps: steps.length };
+}
 
 /** Exercises Settings through the renderer, including native CLI setup and model requests. */
 async function verifySettings(page: Page) {
   const filename = join(home, "settings.json");
   await expect
     .poll(
-      async () => JSON.parse(await readFile(filename, "utf8")).appearance.theme,
+      async () =>
+        JSON.parse(await readFile(filename, "utf8")).appearance?.theme,
     )
     .toBe("dark");
   await page.getByRole("link", { name: "Data Providers", exact: true }).click();
@@ -83,7 +220,8 @@ async function verifySettings(page: Page) {
   await expect
     .poll(
       async () =>
-        JSON.parse(await readFile(filename, "utf8")).providers.binance.enabled,
+        JSON.parse(await readFile(filename, "utf8")).providers?.binance
+          ?.enabled,
     )
     .toBe(false);
 
@@ -164,7 +302,10 @@ async function verifySettings(page: Page) {
   await page
     .getByRole("textbox", { name: "Authorization code for Codex" })
     .fill("smoke-code");
-  await page.getByRole("button", { name: "Send code" }).click();
+  await page
+    .getByRole("region", { name: "Codex", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
   await expect(
     page
       .getByRole("region", { name: "Codex", exact: true })
@@ -190,7 +331,7 @@ async function verifySettings(page: Page) {
   await expect
     .poll(
       async () =>
-        JSON.parse(await readFile(filename, "utf8")).models.defaultModel
+        JSON.parse(await readFile(filename, "utf8")).models?.defaultModel
           ?.modelID,
     )
     .toBe("tier1");
@@ -214,11 +355,13 @@ async function verifySettings(page: Page) {
     (await readFile(join(nativeState, "requests"), "utf8")).includes("chat"),
   );
   const sessionId = new URL(page.url()).pathname.split("/").at(-1);
-  const currentTitle = await page
-    .locator('[data-sidebar="menu-button"][aria-current="page"]')
-    .getAttribute("title");
+  // Auto-title can finish after the reply; resolve the active row at click time.
   await page
-    .getByRole("button", { name: `Options for ${currentTitle}`, exact: true })
+    .locator('[data-sidebar="menu-item"]')
+    .filter({
+      has: page.locator('[data-sidebar="menu-button"][aria-current="page"]'),
+    })
+    .getByRole("button", { name: /^Options for / })
     .click();
   await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
   const sessionTitle = "Native provider smoke";
@@ -234,6 +377,7 @@ async function verifySettings(page: Page) {
   const workspaceRoot = join(home, "workspaces/default");
   assert.deepEqual((await readdir(workspaceRoot)).sort(), [
     "indicators",
+    "studies",
     "workflows",
   ]);
   await writeFile(
@@ -285,6 +429,7 @@ export default defineWorkflow({
   assert.equal(workflowChildren, 1);
   assert.deepEqual((await readdir(workspaceRoot)).sort(), [
     "indicators",
+    "studies",
     "workflows",
     "workspace-smoke.workflow.ts",
   ]);
@@ -375,7 +520,7 @@ async function launch(): Promise<Page> {
   delete env.NODE_PATH;
   delete env.NODE_OPTIONS;
   delete env.OPENCHART_DESKTOP_DEV_URL;
-  env.PATH = `${nativeBin}:${env.PATH ?? ""}`;
+  env.PATH = `${nativeBin}${delimiter}${env.PATH ?? ""}`;
   env.OPENCHART_SMOKE_STATE = nativeState;
   application = await _electron.launch({
     executablePath: executable,
@@ -383,7 +528,7 @@ async function launch(): Promise<Page> {
     args: [
       `--user-data-dir=${userData}`,
       `--openchart-home=${home}`,
-      ...(process.platform === "darwin" && keychain === "mock"
+      ...(runtime.platform === "darwin" && keychain === "mock"
         ? ["--use-mock-keychain"]
         : []),
     ],
@@ -400,15 +545,81 @@ async function launch(): Promise<Page> {
     processErrors.push(chunk.toString());
   });
   assert(await application.evaluate(({ app }) => app.isPackaged));
+  assert.deepEqual(
+    await application.evaluate(() => ({
+      platform: process.platform,
+      arch: process.arch,
+    })),
+    runtime,
+    "Launched Electron must match the executable used to seed native providers",
+  );
   const appPath = await application.evaluate(({ app }) => app.getAppPath());
   assert.equal(
     appPath,
     join(
       bundle,
-      process.platform === "darwin" ? "Contents/Resources" : "resources",
+      runtime.platform === "darwin" ? "Contents/Resources" : "resources",
       "app.asar",
     ),
   );
+  if (runtime.platform === "win32") {
+    // Resolve from the relocated ASAR inside the real Electron main process:
+    // this verifies node-pty's native addon, DLL and worker packaging together.
+    packagedConpty = await application.evaluate(({ app }) => {
+      const { createRequire } = process.getBuiltinModule("node:module");
+      const { join } = process.getBuiltinModule("node:path");
+      const require = createRequire(join(app.getAppPath(), "package.json"));
+      const pty = require("node-pty") as typeof import("node-pty");
+      return new Promise<boolean>((resolve, reject) => {
+        const terminal = pty.spawn(
+          join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe"),
+          ["/d", "/c", "echo OPENCHART_PTY_READY"],
+          {
+            name: "xterm-color",
+            cols: 80,
+            rows: 24,
+            cwd: app.getPath("temp"),
+            useConpty: true,
+          },
+        );
+        let output = "";
+        let settled = false;
+        const finish = (cause?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          data.dispose();
+          exit.dispose();
+          if (cause) {
+            try {
+              terminal.kill();
+            } catch {
+              // An already exited terminal needs no further cleanup.
+            }
+            reject(cause);
+          } else resolve(true);
+        };
+        const timeout = setTimeout(() => {
+          finish(
+            new Error(
+              `Packaged ConPTY did not exit within 10 seconds: ${output}`,
+            ),
+          );
+        }, 10_000);
+        const data = terminal.onData((chunk) => {
+          output = (output + chunk).slice(-4096);
+        });
+        const exit = terminal.onExit(({ exitCode }) => {
+          finish(
+            exitCode === 0 && output.includes("OPENCHART_PTY_READY")
+              ? undefined
+              : new Error(`Packaged ConPTY failed (${exitCode}): ${output}`),
+          );
+        });
+      });
+    });
+    assert.equal(packagedConpty, true);
+  }
   assert.equal(
     await application.evaluate(({ app }) => app.getName()),
     development ? "OpenChart Development" : "OpenChart",
@@ -435,7 +646,7 @@ async function launch(): Promise<Page> {
 
 /** Checks Mac header spacing and clicks its controls with the sidebar open and closed. */
 async function verifyMacHeader(page: Page, route: "chat" | "settings") {
-  if (process.platform !== "darwin") return;
+  if (runtime.platform !== "darwin") return;
   const header = page.locator(".jan-chat-header");
   const sidebarHeader = page.locator(
     '[data-sidebar="header"] > div:first-child',
@@ -476,68 +687,88 @@ try {
   await mkdir(home, { recursive: true });
   await mkdir(nativeState, { recursive: true });
   await mkdir(nativeBin, { recursive: true });
-  const platform = `${process.platform}-${process.arch}`;
   await writeFile(
     join(nativeState, "version"),
-    PROVIDER_MANIFEST[CODEX][platform]!.version,
+    PROVIDER_MANIFEST[CODEX][runtimeTarget]!.version,
   );
   const fixture = await readFile(
-    new URL("./native-cli-fixture.mjs", import.meta.url),
+    new URL("./native-cli-fixture.cjs", import.meta.url),
     "utf8",
   );
-  await writeFile(
-    join(nativeBin, "codex"),
-    `#!${process.execPath}\n${fixture}`,
+  const executableSuffix = runtime.platform === "win32" ? ".exe" : "";
+  await writeNativeExecutable(
+    join(nativeBin, `codex${executableSuffix}`),
+    fixture,
   );
-  await chmod(join(nativeBin, "codex"), 0o755);
   // Claude remains explicitly signed out; no real native account is used.
-  await writeFile(
-    join(nativeBin, "claude"),
-    `#!${process.execPath}\nconsole.log(process.argv.includes("--version") ? "${PROVIDER_MANIFEST[CLAUDE_CODE][platform]!.version} (Claude Code)" : JSON.stringify({loggedIn: false}));`,
+  await writeNativeExecutable(
+    join(nativeBin, `claude${executableSuffix}`),
+    `console.log(process.argv.includes("--version") ? "${PROVIDER_MANIFEST[CLAUDE_CODE][runtimeTarget]!.version} (Claude Code)" : JSON.stringify({loggedIn: false}));`,
   );
-  await chmod(join(nativeBin, "claude"), 0o755);
   // Seed completed managed fixtures before startup reconciliation can download real CLIs.
-  const installations = createInstallations(join(home, "model-providers"));
+  const installations = createInstallations(
+    join(home, "model-providers"),
+    PROVIDER_MANIFEST,
+    runtimeTarget,
+  );
   for (const [providerID, filename] of [
     [CODEX, "codex"],
     [CLAUDE_CODE, "claude"],
   ] as const) {
     const target = installations.executables[providerID];
-    const artifact = PROVIDER_MANIFEST[providerID][platform]!;
+    const artifact = PROVIDER_MANIFEST[providerID][runtimeTarget]!;
     const root = target.slice(0, -artifact.executable.length);
     await mkdir(dirname(target), { recursive: true });
-    await cp(join(nativeBin, filename), target);
+    await cp(join(nativeBin, `${filename}${executableSuffix}`), target);
     await writeFile(join(root, ".installed"), basename(root));
     assert(await installations.installed(providerID));
   }
   await writeFile(join(home, "settings.json"), JSON.stringify({}));
   let page = await launch();
+  const onboarding = await verifyOnboarding(page);
 
   await expect(
     page.getByRole("textbox", { name: "Message", exact: true }),
   ).toBeVisible();
   // Observe the app's normal discovery request; no prompt or market query is sent.
-  // Ignore a late response from the page being replaced by this reload.
+  // Only completed requests started by the new document qualify. React can
+  // cancel discovery during mount; old-document responses have stale CDP handles.
   const models = page
     .waitForEvent("framenavigated", {
       predicate: (frame) => frame === page.mainFrame(),
     })
-    .then(() =>
-      page.waitForResponse(
-        (response) => new URL(response.url()).pathname === "/trpc/models.list",
-      ),
-    );
+    .then(async () => {
+      const requests = new Set<Request>();
+      const remember = (request: Request) => {
+        if (new URL(request.url()).pathname === "/trpc/models.list")
+          requests.add(request);
+      };
+      page.on("request", remember);
+      try {
+        const request = await page.waitForEvent("requestfinished", {
+          predicate: (request) => requests.has(request),
+        });
+        const response = await request.response();
+        assert(response, "Packaged model discovery did not receive a response");
+        return { status: response.status(), body: await response.json() };
+      } finally {
+        page.off("request", remember);
+      }
+    });
   await page.reload();
   const modelResponse = await models;
-  assert.equal(modelResponse.status(), 200);
-  assert(Array.isArray((await modelResponse.json()).result.data));
+  assert.equal(modelResponse.status, 200);
+  assert(Array.isArray(modelResponse.body.result.data));
+  await expect(
+    page.getByRole("dialog", { name: "Connect your agent", exact: true }),
+  ).toHaveCount(0);
   const windowButtons =
-    process.platform === "darwin"
+    runtime.platform === "darwin"
       ? await application!.evaluate(({ BrowserWindow }) =>
           BrowserWindow.getAllWindows()[0]!.getWindowButtonPosition(),
         )
       : undefined;
-  if (process.platform === "darwin")
+  if (runtime.platform === "darwin")
     assert.deepEqual(windowButtons, { x: 20, y: 23 });
   const chatHeader = await verifyMacHeader(page, "chat");
 
@@ -646,7 +877,7 @@ try {
     return app.getAppMetrics().find((metric) => metric.pid === pid)?.sandboxed;
   });
   // Electron exposes OS sandbox status on macOS and Windows.
-  if (process.platform !== "linux") assert.equal(isolation, true);
+  assert.equal(isolation, true);
   assert.deepEqual(
     await page.evaluate("({require: typeof require, process: typeof process})"),
     {
@@ -709,8 +940,12 @@ try {
 
   const result = {
     executable: sourceExecutable,
+    runtimeTarget,
+    buildHost,
     keychain,
     relocatedBundle: bundle,
+    packagedConpty,
+    onboarding,
     titlebar: { windowButtons, chatHeader, settingsHeader },
     isolation,
     boundary,
@@ -719,7 +954,7 @@ try {
     stopped,
     settings,
     tests:
-      "chat shell, settings, native window buttons, draggable headers, clickable header controls, sidebar collapse/expand spacing, theme persistence, no mock worker, models, SSE ready, Hose protocol, hosted backend, new chat, reload, graceful backend exit, restart with persisted chat, renderer isolation",
+      "first-launch agent and notification pages, starter tour, chat shell, settings, native window buttons, draggable headers, clickable header controls, sidebar collapse/expand spacing, theme persistence, no mock worker, models, SSE ready, Hose protocol, hosted backend, new chat, reload, graceful backend exit, restart with persisted chat, renderer isolation",
   };
   await writeFile(
     join(artifacts, "smoke-result.json"),
@@ -735,6 +970,26 @@ try {
   );
   const page = application?.windows()[0];
   if (page) {
+    // The packaged fixture owns this synthetic conversation. Open failed tool
+    // details before capturing so CI reports the actual workflow diagnostic.
+    try {
+      const failedWorkflows = page.getByRole("button", {
+        name: /^Failed: workflow/,
+      });
+      for (const button of await failedWorkflows.all())
+        if ((await button.getAttribute("aria-expanded")) === "false")
+          await button.click({ timeout: 3_000 });
+      const detail = (
+        await page.getByRole("main").innerText({ timeout: 3_000 })
+      ).slice(-16_000);
+      console.error("Packaged smoke main content:\n", detail);
+      await writeFile(join(artifacts, "desktop-main-failure.txt"), detail);
+    } catch (diagnosticError) {
+      console.error(
+        "Could not capture failed workflow details",
+        diagnosticError,
+      );
+    }
     await Promise.allSettled([
       page.screenshot({ path: join(artifacts, "desktop-failure.png") }),
       page

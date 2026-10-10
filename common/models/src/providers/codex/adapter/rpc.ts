@@ -73,7 +73,11 @@ export interface CodexRpc {
 }
 
 const defaultSpawn: SpawnCodex = (executable, args, env) =>
-  spawnProcess(executable, args, { stdio: ["pipe", "pipe", "pipe"], env });
+  spawnProcess(executable, args, {
+    stdio: ["pipe", "pipe", "pipe"],
+    env,
+    windowsHide: true,
+  });
 
 interface Pending {
   resolve(value: unknown): void;

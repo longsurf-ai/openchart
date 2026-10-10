@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import type { InlineConfig, Plugin } from "vite";
+import { normalizePath, type InlineConfig, type Plugin } from "vite";
 
 const require = createRequire(import.meta.url);
 const directory = dirname(require.resolve("@openchart/desktop/package.json"));
@@ -14,7 +14,7 @@ const appDirectory = dirname(require.resolve("@openchart/app/package.json"));
  * @example const server = await createServer({ ...rendererConfig(), server: { port: 43875 } });
  */
 export function rendererConfig(): InlineConfig {
-  const desktopEntry = join(directory, "src/renderer.tsx");
+  const desktopEntry = normalizePath(join(directory, "src/renderer.tsx"));
   const entryPlugin: Plugin = {
     name: "desktop-renderer-entry",
     transformIndexHtml: {

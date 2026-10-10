@@ -10,6 +10,9 @@ import ts from "typescript";
  * @example const javascript = compileWorkflow(source, "/workspace/research.workflow.ts");
  */
 export function compileWorkflow(text: string, filename: string): string {
+  // TypeScript normalizes native Windows paths before calling the host. The
+  // snapshot and its SDK override must share that same source identity.
+  const sourceFilename = filename.replaceAll("\\", "/");
   const declarations = fileURLToPath(
     new URL("./.artifacts/workflow-types/workflow.d.ts", import.meta.url),
   );
@@ -28,7 +31,7 @@ export function compileWorkflow(text: string, filename: string): string {
     inlineSources: true,
   };
   const source = ts.createSourceFile(
-    filename,
+    sourceFilename,
     text,
     ts.ScriptTarget.ES2022,
     true,
@@ -38,17 +41,17 @@ export function compileWorkflow(text: string, filename: string): string {
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile;
   host.getSourceFile = (file, ...args) =>
-    file === filename ? source : getSourceFile(file, ...args);
+    file === sourceFilename ? source : getSourceFile(file, ...args);
   host.resolveModuleNames = (names, containingFile) =>
     names.map((name) =>
-      containingFile === filename
+      containingFile === sourceFilename
         ? name === "@openchart/workflow"
           ? { resolvedFileName: declarations, extension: ts.Extension.Dts }
           : undefined
         : ts.resolveModuleName(name, containingFile, options, host)
             .resolvedModule,
     );
-  const program = ts.createProgram([filename], options, host);
+  const program = ts.createProgram([sourceFilename], options, host);
   const diagnostics = ts.getPreEmitDiagnostics(program);
   if (diagnostics.length)
     throw new Error(ts.formatDiagnostics(diagnostics, host));

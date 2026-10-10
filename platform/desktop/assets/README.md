@@ -3,7 +3,9 @@
 `logo.svg` is the vector master; `icon.svg` composes it on a white macOS tile.
 The master is the symbol from [OpenChart — Vector Identity](https://www.figma.com/design/RRd48shsc2d2oP8G16Aqqg).
 The vector master owns the paths; do not redraw them separately for packaging.
-`icon.icns` is a checked-in export, used by development and production packages.
+`icon.icns` is a checked-in export, used by development and production Mac packages.
+`icon.ico` contains 16, 24, 32, 48, 64, 128, and 256-pixel PNG exports of the same
+icon and supplies the Windows executable and installer icons.
 
 Regenerate from the repository root on macOS with `rsvg-convert` (librsvg) and Apple's `iconutil`:
 

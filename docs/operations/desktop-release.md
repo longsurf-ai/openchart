@@ -1,202 +1,277 @@
-# macOS desktop release runbook
+# Desktop release runbook
 
-Release OpenChart for Apple Silicon from a signing Mac. Run commands from the repository root
-unless another repository is named. Packaging and publishing are separate,
-operator-run steps; merging a PR does not publish an update.
+OpenChart packages Apple Silicon Mac (`darwin-arm64`), Intel Mac (`darwin-x64`),
+and Windows Intel/AMD (`win32-x64`). Build both Mac targets on a signing Mac and
+Windows on Windows. Run repository commands from the root. Packaging, verification
+and publication are separate steps; merging a PR does not publish an update.
+
+The pinned [Electron 44 runtime](https://github.com/electron/electron/blob/v44.2.0/README.md#platform-support)
+requires macOS 13 or newer, or Windows 10 or newer. Native provider prerequisites
+and the tested OS matrix belong in each release's validation record; an Electron
+platform binary alone does not prove every provider on every supported OS release.
 
 ## Prerequisites
 
-- Apple Silicon Mac, Node 24, Bun, `just`, `jq`, and full Xcode selected with
-  its command-line tools available.
-- Longsurf's **Developer ID Application** certificate **and private key** in the
-  signing Mac's Keychain. Keep the production identity `ai.longsurf.openchart`
-  and signing team stable across releases.
-- Valid notarization credentials in the Keychain profile `openchart-notary`.
-  On a new signing Mac, configure them interactively with
-  `xcrun notarytool store-credentials openchart-notary`; never commit credentials.
-- The checked-in `app/.env.production` supplies the public Clerk live key,
-  `VITE_APP_CLERK_PUBLISHABLE_KEY=pk_live_...`; the build environment or
-  `app/.env.production.local` can override it. Only the public key belongs in
-  the bundle. Google OAuth secrets stay in
-  Clerk; see [Clerk configuration](../architecture/desktop.md#clerk-configuration).
-- Cloudflare access to the `openchart-releases` R2 bucket, with its HTTPS custom
-  domain `downloads.longsurf.ai` active. Authenticate using
-  `npx --yes wrangler@4.135.0 login`.
-- `gh` signed in with permission to create releases in `longsurf-ai/openchart`.
+Use the Node version in `.node-version`, Bun `1.4.2`, and `just`. Windows builds
+also need Git Bash's `sh` on PATH. Enable `git config --global core.longpaths true`
+before checkout on Windows. `just install --frozen-lockfile` builds the pinned
+public Tea submodule before installing workspaces.
 
-Check the signing environment without exposing credentials:
+Signed Mac releases require full Xcode, Longsurf's **Developer ID Application**
+certificate and private key, and the `openchart-notary` Keychain profile. Keep
+`ai.longsurf.openchart` and the signing team stable. Configure a new profile with
+`xcrun notarytool store-credentials openchart-notary`; never commit credentials.
 
-```sh
-node --version
-xcode-select -p
-security find-identity -v -p codesigning
-xcrun notarytool history --keychain-profile openchart-notary
-```
+Signed Windows releases require either `OPENCHART_WINDOWS_SIGN_HOOK` naming an
+absolute operator-owned signing module, or `WINDOWS_CERTIFICATE_FILE` naming an
+absolute certificate path with `WINDOWS_CERTIFICATE_PASSWORD` supplied securely.
+The hook follows `@electron/windows-sign`'s `hookModulePath` contract. Signing
+configuration is shared by Electron Packager and Squirrel. Keep credentials and
+hooks outside the repository. The Squirrel package ID `OpenChart` is permanent.
+The checked-in CI lane builds unsigned installers without signing credentials.
 
-## 1. Prepare and package
+The checked-in `app/.env.production` supplies the public Clerk live key. The build
+environment or `app/.env.production.local` can override it. Google OAuth secrets
+stay in Clerk; see [Clerk configuration](../architecture/desktop.md#clerk-configuration).
+Production packaging requires a `pk_live_` key, including unsigned Windows builds.
 
-Choose the source revision, update `platform/desktop/package.json` to a new,
-strictly increasing `x.y.z` version, and commit the release source. In the same
-commit, add the release's entry to `platform/desktop/src/changelog/changelog.json`
-following [its AGENTS.md](../../platform/desktop/src/changelog/AGENTS.md);
-`just check` fails without it. Never reuse a published version for different
-bytes. Keep the previous release directory for recovery and record the source
-commit with the new artifacts.
+Publication requires Cloudflare access to the `openchart-releases` R2 bucket
+(`npx --yes wrangler@4.135.0 login`) and `gh` authenticated for
+`longsurf-ai/openchart`. These credentials are needed only by the operator, not
+by packaging CI. The download domain is `downloads.longsurf.ai`.
+
+## 1. Prepare the source and build
+
+Increment `platform/desktop/package.json` to a new `x.y.z` version and add its
+entry to `platform/desktop/src/changelog/changelog.json` following
+[its AGENTS.md](../../platform/desktop/src/changelog/AGENTS.md). Commit the source
+and run `just check`. Release builds reject changes to tracked files. Build every
+target for that version from the same commit; never reuse a published version for
+different bytes.
+
+On the signing Mac:
 
 ```sh
 just install --frozen-lockfile
 just check
-git rev-parse HEAD
-release_version=$(node -p "require('./platform/desktop/package.json').version")
-just desktop-release
+just desktop-release darwin-arm64
+just desktop-release darwin-x64
 ```
 
-`desktop-release` refuses uncommitted changes to tracked files, then builds the
-renderer and backend, packages and signs the app,
-notarizes/staples it, then creates and verifies the downloads. Apple processing
-can take time; wait for successful completion before proceeding. This command
-does not upload anything to R2.
+The default `just desktop-release` retains `darwin-arm64`. Mac builds sign,
+notarize and staple the app and DMG, verify their signatures and Gatekeeper
+acceptance, and inspect each Mach-O file for the target architecture. They never
+upload releases.
 
-The finished directory `platform/desktop/out/release/<version>/` contains:
-
-| File                                   | Purpose                                                   |
-| -------------------------------------- | --------------------------------------------------------- |
-| `OpenChart-<version>-darwin-arm64.dmg` | Signed, notarized installer with an Applications shortcut |
-| `OpenChart-<version>-darwin-arm64.zip` | Signed, stapled app for the native updater                |
-| `SHA256SUMS`                           | Checksums for both downloads                              |
-| `RELEASES.json`                        | Version and ZIP URL for Electron's update feed            |
-| `SOURCE`                               | The commit the release was built from                     |
-
-The app itself is at
-`platform/desktop/out/<version>/OpenChart-darwin-arm64/OpenChart.app`.
-The release directory appears only after verification succeeds. Preserve the
-exact completed directory; rebuilding produces different signed bytes.
-
-## 2. Verify before publishing
-
-Run the packaged smoke with real Keychain access:
+On Windows, using Git Bash:
 
 ```sh
-release_app="$PWD/platform/desktop/out/$release_version/OpenChart-darwin-arm64/OpenChart.app"
-just desktop-smoke "$release_app/Contents/MacOS/OpenChart" production system
+just install --frozen-lockfile
+just desktop-release win32-x64 unsigned
 ```
 
-The smoke relocates the bundle, uses a temporary profile, and exercises backend
-startup/shutdown, persistence, settings and renderer isolation. Its model CLI is
-a fixture; it does not prove live Google authentication or a real upgrade.
-Keep `platform/desktop/.artifacts/smoke-result.json` with release evidence.
+This produces a real test installer and update package. The build receipt records
+`unsigned`; the app has no automatic update feed, and the public publisher refuses
+it. Once signing is configured, use `just desktop-release win32-x64 signed` from a
+clean source revision with a fresh version. Signing must happen during packaging,
+before Squirrel embeds the app in the update package.
 
-On a test Mac or separate macOS account, install from the DMG into Applications
-and verify Gatekeeper accepts it without a security bypass. Use real Keychain
-storage. Check Google registration through **Sign up** for a new Clerk user,
-returning-user sign-in, the browser callback, and Settings → Profile. Choose
-**Connect account** if shown. Quit and reopen; identity and saved credentials
-must remain usable. Keep only the intended production app running during OAuth.
+The **Desktop Windows** workflow runs the unsigned build, selected native-owner
+tests, and the relocated packaged smoke on `windows-latest`. It uploads the release
+directory as `OpenChart-win32-x64-unsigned-<commit>` and smoke evidence separately.
+The **Desktop Intel Mac** workflow packages and runs the development smoke on
+`macos-15-intel`. Both use read-only repository tokens and no production secrets.
+A failed smoke can still leave a downloadable artifact; record the job conclusion
+alongside the artifact rather than treating upload success as test success.
 
-Do this before exposing the release to existing users. The current setup has one
-public stable feed; it has no staged rollout or private update channel.
-
-## 3. Publish the verified artifacts
-
-This command makes the release available to all production clients:
+Retrieve a known Windows run by its run ID and exact source commit:
 
 ```sh
-just desktop-publish "$release_version"
+gh run view <run-id> --repo longsurf-ai/openchart
+gh run download <run-id> --repo longsurf-ai/openchart --name OpenChart-win32-x64-unsigned-<commit> --dir platform/desktop/out/release/<version>/win32-x64
 ```
 
-The publisher verifies local checksums and the manifest version, then uploads in
-this order:
+Retain the Actions run URL and upload-artifact digest with the release evidence.
+`BUILD.json` records the builder/run and hashes the individual files; the enclosing
+Actions artifact digest is available only after upload and is recorded separately.
 
-1. Versioned DMG and ZIP, followed by `SHA256SUMS-<version>`; these are immutable,
-   cacheable URLs.
-2. `OpenChart.dmg`, the stable website download, with `Cache-Control: no-store`.
-3. `RELEASES.json`, with `Cache-Control: no-store`; this enables updates.
-4. The GitHub Release `v<version>` in `longsurf-ai/openchart`, tagged at the
-   commit in `SOURCE`, with the changelog entry as notes and the DMG, ZIP and
-   `SHA256SUMS` attached, marked Latest. If that release already exists, it is
-   only marked Latest again.
+Each finished target directory is `platform/desktop/out/release/<version>/<target>/`:
 
-Confirm the public endpoints:
+| File                                      | Purpose                                                        |
+| ----------------------------------------- | -------------------------------------------------------------- |
+| `OpenChart-<version>-darwin-<arch>.dmg`   | Signed, notarized Mac installer                                |
+| `OpenChart-<version>-darwin-<arch>.zip`   | Signed, stapled Mac update                                     |
+| `OpenChart-<version>-win32-x64-setup.exe` | Windows installer                                              |
+| `OpenChart-<version>-full.nupkg`          | Squirrel Windows update package; retain its filename           |
+| `RELEASES.json` / `RELEASES`              | Target's Mac / Windows update manifest                         |
+| `SHA256SUMS`                              | Checksums for downloads and feed manifest                      |
+| `SOURCE`                                  | Full source commit                                             |
+| `BUILD.json`                              | Target, source, signing, builder, toolchain and file inventory |
+
+Only platform-appropriate downloads appear in each directory. The directory is
+exposed after verification succeeds and is never overwritten. Retain it exactly;
+rebuilding signed artifacts produces different bytes.
+
+## 2. Verify the packaged app
+
+The production bundle is under `platform/desktop/out/<version>/OpenChart-<target>/`.
+On the signing Mac, run native Apple Silicon smoke with real Keychain access:
 
 ```sh
-release_base=https://downloads.longsurf.ai/openchart/darwin/arm64
-curl -fsS "$release_base/RELEASES.json" | jq -e --arg version "$release_version" '.currentRelease == $version'
-curl -fsSI "$release_base/OpenChart.dmg"
-curl -fsSI "$release_base/OpenChart-$release_version-darwin-arm64.zip"
-curl -fsS "$release_base/SHA256SUMS-$release_version"
-gh release view "v$release_version" --json tagName,isDraft,assets --jq '{tagName, isDraft, assets: [.assets[].name]}'
-gh api repos/longsurf-ai/openchart/releases/latest --jq .tag_name
+just desktop-smoke "$PWD/platform/desktop/out/<version>/OpenChart-darwin-arm64/OpenChart.app/Contents/MacOS/OpenChart" production system
 ```
 
-The stable DMG must return 200, `no-store`, and the expected version in
-`Content-Disposition`. The ZIP must return 200. Compare the published checksums
-with the retained local `SHA256SUMS`.
-
-## 4. Verify the real update and website
-
-Start the previous signed version on the test Mac. Production Apple Silicon
-builds check at startup and hourly, download the full ZIP, and use Squirrel.Mac
-to verify the app signature and install it. Development never checks for updates.
-
-- Wait for the blue update button beside the account at the bottom of the
-  sidebar, then click it. Restart uses normal Quit, allowing unsaved-editor
-  cancellation and waiting for the backend to exit. Without a click, the update
-  installs on the next normal quit. The previous version runs this step, so
-  versions from before the button show a **Restart to update** / **Later** dialog.
-- Quit every production test copy and let installation finish before reopening.
-  Another running copy can make Squirrel abort installation.
-- Confirm the installed version, saved workspace/settings, Google identity and
-  credentials, and that Settings → Changelog lists the new release. Do not count
-  mock-Keychain smoke as this acceptance test.
-- For a test launched with custom `--user-data-dir` / `--openchart-home` flags,
-  leave the button, quit, wait for installation, then manually relaunch with the
-  same flags. Native updater relaunch does not retain those isolation arguments.
-  Record this separately from testing the button on a normal install.
-
-Useful local checks:
+On Windows, supply an absolute Windows path to the packaged executable:
 
 ```sh
-/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /Applications/OpenChart.app/Contents/Info.plist
-codesign --verify --deep --strict /Applications/OpenChart.app
-xcrun stapler validate /Applications/OpenChart.app
-spctl --assess --type execute -vv /Applications/OpenChart.app
+just desktop-smoke 'C:\checkout\platform\desktop\out\<version>\OpenChart-win32-x64\OpenChart.exe' production
 ```
 
-If installation fails, inspect
-`~/Library/Caches/ai.longsurf.openchart.ShipIt/ShipIt_stderr.log`.
-Keep the tested versions, source commit, checksums, notarization results and
-actual login/update outcomes in the release record.
+The smoke relocates the whole app, uses an isolated temporary profile, and verifies
+backend startup/shutdown, persistence, settings, model fixture requests, workflows
+and renderer isolation. Windows fixtures are real Node SEA executables. Mac Intel
+CI executes on an x64 runner; an optional local Rosetta run is emulation and should
+be recorded as such. Smoke results and screenshots live under
+`platform/desktop/.artifacts`.
 
-The separately deployed website
-download buttons point at the stable `OpenChart.dmg` URL, so normal app
-releases need **no website redeploy**. If website source changes, run from that
-repository:
+On Windows, `just desktop-windows-probe` checks the pinned Antigravity CLI's
+authorization URL and code prompt under real ConPTY without authenticating.
+`terminalExitObserved` proves that the native exit callback fired, not that all
+internal PTY resources were released. Local use removes the fixture after the
+Vitest process exits: whole-removal retries have one 10-second window and a
+15-second process deadline. Probe failures and local cleanup failures fail the
+command. Direct opt-in test execution requires
+`OPENCHART_WINDOWS_RUNTIME_PROBE_DIRECTORY` naming an existing empty directory
+whose parent process owns cleanup.
+
+The hosted Windows workflow explicitly sets
+`OPENCHART_WINDOWS_RUNTIME_PROBE_RETAIN_FIXTURE=1`. This mode requires
+`GITHUB_ACTIONS=true`, `RUNNER_ENVIRONMENT=github-hosted`, and an absolute
+`RUNNER_TEMP`, using GitHub's [documented environment contract](https://docs.github.com/en/actions/reference/workflows-and-actions/variables).
+It creates a unique fixture under `RUNNER_TEMP` and reports
+`fixtureDisposition=retained-for-runner-teardown`. The directory belongs to the
+ephemeral job/VM lifetime, and in-probe directory cleanup is **not verified**.
+GitHub documents temporary-directory cleanup at job boundaries, subject to
+filesystem permissions, and [fresh hosted VMs](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners).
+Any probe/test failure still fails the command. Local and self-hosted use cannot
+enable this mode. Status checkpoints contain no authorization URLs, codes or
+credentials.
+
+The pinned CLI opens an external browser during authentication. A persistent busy
+file was observed under the isolated `LOCALAPPDATA` after terminal exit; its OS
+owner remains unproven. Manual Windows acceptance must still cover repeated
+sign-in/cancellation, application-owned process/handle lifetimes, and eventual
+temporary-directory release after the relevant applications exit.
+
+Automated smoke uses fake model accounts. Live Google/Clerk sign-in, real provider
+credentials, notifications and actual upgrades remain separate acceptance checks.
+On Mac, install the DMG into Applications without a Gatekeeper bypass and test
+new-user registration, returning-user login, browser callback, Profile and
+credential reuse after restart. Keep only the intended production app running
+during OAuth.
+
+For Windows device acceptance, retain the artifact version, source commit and
+hashes, and check:
+
+- Install and launch; an unsigned test build may show SmartScreen.
+- Browser account sign-in/callback and encrypted credentials after restart.
+- Charts, data feeds, Tea and workspace workflows.
+- Codex, Claude and Antigravity discovery, login, tool calls and cancellation.
+- No unexpected console windows; paths with spaces and Unicode work.
+- Notifications and Action Center activation, and normal Quit cleanup.
+- Uninstall removes shortcuts and the `openchart:` handler. Data is intentionally
+  retained in `%APPDATA%\OpenChart` and `%USERPROFILE%\.openchart`.
+- Upgrade from one test version to a later version preserves settings, workspace
+  and credentials. A build alone does not establish this outcome.
+
+## 3. Validate and publish an explicit target set
+
+Validate signed local artifacts without network requests or writes:
 
 ```sh
-just check
-just landing-deploy
+just desktop-publish <version> darwin-arm64 darwin-x64 --dry-run
 ```
 
-That deployment uses the existing AWS Secrets Manager credential and Cloudflare
-Pages project `longsurf`. Verify `https://longsurf.ai/` links downloads to the
-stable DMG and Sign in to `https://accounts.longsurf.ai/sign-in`.
+Omitting targets requires all three. Explicit subsets allow Mac publication while
+Windows signing is being configured. Every selected target must have matching
+SOURCE/receipt commits, correct checksums and a feed referencing its own target
+and version. Windows `RELEASES` is additionally verified against each package's
+SHA-1 and size. Unsigned receipts are rejected even in public-channel dry runs.
+
+After platform acceptance, the same command without `--dry-run` publishes:
+
+```sh
+just desktop-publish <version> darwin-arm64 darwin-x64
+```
+
+The publisher performs these operations:
+
+1. Check every remote immutable object and existing GitHub asset. Identical bytes
+   can be reused; conflicts abort before any write. An existing GitHub tag must
+   resolve to the recorded source commit.
+2. Upload missing versioned downloads and target metadata, then download and hash
+   them to verify each upload.
+3. Update stable download pointers for all selected targets, verifying each.
+4. Write and verify the feeds after all downloads and pointers are ready.
+5. Create or reuse the source-matched GitHub release, add missing assets, verify
+   their digests, then publish/mark it Latest. Target-qualified `SHA256SUMS`,
+   `SOURCE` and `BUILD.json` assets allow later target additions without replacing
+   another target's inventory or the historical unqualified `SHA256SUMS` asset.
+
+Remote directories under `https://downloads.longsurf.ai/openchart/` are:
+
+| Target directory | Stable download      | Feed            |
+| ---------------- | -------------------- | --------------- |
+| `darwin/arm64`   | `OpenChart.dmg`      | `RELEASES.json` |
+| `darwin/x64`     | `OpenChart.dmg`      | `RELEASES.json` |
+| `win32/x64`      | `OpenChartSetup.exe` | `RELEASES`      |
+
+Apple Silicon URLs remain unchanged. Versioned artifacts and metadata use immutable
+caching; stable pointers and feeds use `no-store`. Squirrel package names are never
+changed. GitHub hosts all selected downloads in one release with target-qualified
+metadata; feed manifests remain on R2.
+
+## 4. Verify a real update and download links
+
+Signed production apps derive the feed from their own platform and architecture,
+check at startup and hourly, and expose downloaded updates through the sidebar
+button. Windows skips updater initialization on Squirrel's first run. Mac installs
+the update at quit; Windows prepares the new version during download and launches
+it on restart. Development and unsigned packages never check automatically.
+
+Start the previous signed release, download its update and test the sidebar
+restart. Unsaved-editor cancellation must keep the app open; proceeding must wait
+for backend exit. Verify the new version, saved settings/workspace, credentials,
+account identity and Changelog. On Mac, quit every other production copy before
+installation. Custom isolation flags are not retained by native updater relaunch;
+record manual relaunch with those flags separately from a normal installed update.
+
+Unsigned Windows test builds can exercise Squirrel installation mechanics with
+`Update.exe --update <folder>` against a folder containing `RELEASES` and its
+`.nupkg`. That does not test the in-app HTTPS feed or signed-update trust. The
+public publisher does not upload unsigned builds, and no test feed is provisioned
+by these commands.
+
+Verify each published stable pointer, manifest and checksum URL, and inspect
+`gh release view v<version> --repo longsurf-ai/openchart`. The separately owned
+website needs explicit Apple Silicon, Intel Mac and Windows download choices.
+Enable a link only after its target is published; do not infer Mac architecture
+from the browser. Website deployment is a separate operation in its owning repo.
 
 ## Failure and recovery
 
-- **Packaging/notarization fails:** do not publish. Inspect the build output and
-  `xcrun notarytool log <submission-id> --keychain-profile openchart-notary`.
-  Correct the cause, then rebuild. Never bypass signature or Gatekeeper checks.
-- **A release directory already exists:** keep it. Reuse its verified artifacts,
-  or choose a new version; the release builder will not replace it.
-- **Upload fails partway:** the feed is written after the downloads, but the
-  stable DMG may already have changed. Rerun `just desktop-publish <version>`
-  with the exact same artifacts and verify both endpoints. Do not rebuild that
-  version to retry. If GitHub left a draft release, delete it with
-  `gh release delete v<version> --yes` before rerunning.
-- **A published release is bad:** using the retained, verified previous release
-  artifacts, run `just desktop-publish <last-good-version>` from the repository root to restore the feed,
-  website download and GitHub Latest release. A release directory built before
-  `SOURCE` existed needs that file added by hand if it has no GitHub Release. This cannot revoke an already downloaded update or
-  downgrade an installed app. Ship the fix with a version greater than every
-  published version. Do not run an older app against newer persisted data unless
-  its compatibility has been verified.
+- Packaging, notarization, signature or architecture verification failure: do not
+  publish. On Mac inspect `xcrun notarytool log <id> --keychain-profile openchart-notary`.
+- Existing release directory: retain it and reuse its verified artifacts, or use a
+  new version. Never delete a completed directory merely to rebuild a retry.
+- Partial upload: rerun with the exact same files. Immutable matches are skipped,
+  missing GitHub assets are added, and an existing draft is completed. A differing
+  object or asset is an error and is never silently replaced.
+- Bad public release: restoring an older verified target inventory changes its
+  feed/pointer and GitHub Latest but cannot revoke a download or downgrade an
+  installed app. Ship a fix with a higher version. Older release directories
+  without BUILD.json are not accepted by this publisher; do not fabricate signing
+  evidence to bypass the check.
+- A Mac update failure can be diagnosed with
+  `~/Library/Caches/ai.longsurf.openchart.ShipIt/ShipIt_stderr.log`. Preserve build,
+  signing, CI and real-device outcomes with the release evidence.

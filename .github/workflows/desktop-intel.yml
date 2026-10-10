@@ -1,0 +1,79 @@
+name: Desktop Intel Mac
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "platform/desktop/**"
+      - "server/**"
+      - "common/models/**"
+      - "app/**"
+      - "bun.lock"
+      - "justfile"
+      - ".node-version"
+      - ".github/workflows/desktop-intel.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  OPENCHART_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: desktop-intel-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          ref: ${{ env.OPENCHART_SOURCE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: vendor/tea/package-lock.json
+      - name: Install Tea's supported npm version
+        run: npm install --global npm@11.11.1
+      - uses: extractions/setup-just@v2
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - uses: actions/cache/restore@v4
+        id: bun-cache
+        with:
+          path: ~/.bun/install/cache
+          key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: desktop-bun-${{ runner.os }}-
+      - name: Install dependencies
+        run: just install --frozen-lockfile
+      - name: Save installed dependency cache
+        if: ${{ steps.bun-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.bun/install/cache
+          key: desktop-bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Package for Intel
+        run: just desktop-package development darwin-x64
+      - name: Verify relocated Intel package
+        run: just desktop-smoke "$PWD/platform/desktop/.artifacts/dev/OpenChart Development-darwin-x64/OpenChart Development.app/Contents/MacOS/OpenChart Development" development
+      - name: Retain smoke evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-intel-evidence-${{ env.OPENCHART_SOURCE_SHA }}
+          include-hidden-files: true
+          path: |
+            platform/desktop/.artifacts/*.json
+            platform/desktop/.artifacts/*.png
+            platform/desktop/.artifacts/*.txt
+          if-no-files-found: warn
+          retention-days: 14

@@ -19,6 +19,7 @@ test.skipIf(process.env.OPENCHART_VERIFY_PROVIDER_DOWNLOADS !== "1")(
     try {
       for (const [key, folder] of [
         ["HOME", "home"],
+        ["USERPROFILE", "windows-home"],
         ["CODEX_HOME", "codex-auth"],
         ["CLAUDE_CONFIG_DIR", "claude-auth"],
       ]) {
@@ -34,7 +35,7 @@ test.skipIf(process.env.OPENCHART_VERIFY_PROVIDER_DOWNLOADS !== "1")(
       const installations = createInstallations(
         path.join(directory, "model-providers"),
       );
-      // Antigravity has no Windows pin.
+      // Keep unsupported architectures explicit; Windows x64 has a ZIP pin.
       const antigravity =
         PROVIDER_MANIFEST[ANTIGRAVITY][
           `${process.platform}-${process.arch}`

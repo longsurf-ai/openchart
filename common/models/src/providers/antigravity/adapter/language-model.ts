@@ -1,5 +1,5 @@
 // Purpose: Implements the AI SDK language model as one headless Antigravity CLI turn per request.
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -29,6 +29,8 @@ const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const STDERR_LIMIT = 4096;
 /** A CLI that ignores SIGINT is killed after this grace period. */
 const KILL_AFTER_MS = 5_000;
+/** An exited Windows CLI can leave descendants holding its inherited pipes. */
+const CLOSE_AFTER_EXIT_MS = 250;
 
 const ProviderOptions = z.object({
   cwd: z.string().optional(),
@@ -52,6 +54,8 @@ export interface AntigravityLanguageModelOptions {
   continuation: Continuation;
   /** Aborts every request when the provider is disposed. */
   disposal: AbortSignal;
+  /** The provider awaits these request acquisitions and child-process lifetimes during disposal. */
+  pendingProcesses: Set<Promise<void>>;
 }
 
 /**
@@ -59,8 +63,9 @@ export interface AntigravityLanguageModelOptions {
  * single turn. An append-only prompt resumes the remembered conversation with
  * only the new user message; otherwise a fresh conversation receives the
  * system instructions and replayed transcript as text. OpenChart tools run
- * in-process behind the host MCP server. Abort sends SIGINT; the CLI then
- * reports an interrupted result and the stream finishes as interrupted.
+ * in-process behind the host MCP server. Abort sends SIGINT on Unix and kills
+ * the process tree on Windows. An interrupted stream settles even when the
+ * CLI exits without a final result; process and pipe cleanup are bounded.
  * @example const model = provider.languageModel("gemini-3.1-pro");
  */
 export class AntigravityLanguageModel implements LanguageModelV4 {
@@ -78,6 +83,27 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
   ): Promise<Awaited<ReturnType<LanguageModelV4["doStream"]>>> {
     call.abortSignal?.throwIfAborted();
     this.options.disposal.throwIfAborted();
+    let release!: () => void;
+    const lifetime = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.options.pendingProcesses.add(lifetime);
+    const closed = () => {
+      this.options.pendingProcesses.delete(lifetime);
+      release();
+    };
+    try {
+      return await this.startStream(call, closed);
+    } catch (error) {
+      closed();
+      throw error;
+    }
+  }
+
+  private async startStream(
+    call: LanguageModelV4CallOptions,
+    closed: () => void,
+  ): Promise<Awaited<ReturnType<LanguageModelV4["doStream"]>>> {
     const request =
       (await parseProviderOptions({
         provider: ANTIGRAVITY_PROVIDER,
@@ -98,7 +124,9 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
       ]),
     });
     const { continuation, env, executable } = this.options;
-    const home = env.HOME ?? os.homedir();
+    const home =
+      (process.platform === "win32" ? env.USERPROFILE : env.HOME) ??
+      os.homedir();
     let resume = continuation.take(call.prompt, configuration);
     // A remembered conversation may have been deleted; check before committing input to it.
     if (
@@ -149,7 +177,6 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
       if (settled) return;
       settled = true;
       call.abortSignal?.removeEventListener("abort", interrupt);
-      this.options.disposal.removeEventListener("abort", interrupt);
       host?.close();
       finish();
     };
@@ -178,20 +205,60 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
           translator.hostToolFinished(id, name, output, isError),
       });
     }
+    if (call.abortSignal?.aborted || this.options.disposal.aborted) {
+      host?.close();
+      call.abortSignal?.throwIfAborted();
+      this.options.disposal.throwIfAborted();
+    }
     const child = spawn(executable, args, {
       cwd: request.cwd,
       env: { ...env, ...host?.env },
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
+    let interrupted = false;
+    let killTimer: NodeJS.Timeout | undefined;
+    let closeTimer: NodeJS.Timeout | undefined;
+    const running = () => child.exitCode === null && child.signalCode === null;
+    const terminate = (signal: NodeJS.Signals) => {
+      if (!running()) return;
+      if (process.platform !== "win32" || child.pid === undefined) {
+        child.kill(signal);
+        return;
+      }
+      // Windows signals kill only the immediate process. Kill the tree while
+      // the parent still exists, including shell tools and the MCP relay.
+      execFile(
+        path.win32.join(
+          process.env.SystemRoot ?? "C:\\Windows",
+          "System32",
+          "taskkill.exe",
+        ),
+        ["/PID", String(child.pid), "/T", "/F"],
+        { windowsHide: true, timeout: KILL_AFTER_MS },
+        (error) => {
+          if (error && running()) child.kill("SIGKILL");
+        },
+      );
+    };
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
       stderr = (stderr + chunk.toString("utf8")).slice(-STDERR_LIMIT);
     });
     const interrupt = () => {
       translator.markInterrupted();
-      if (child.exitCode !== null || child.signalCode !== null) return;
-      child.kill("SIGINT");
-      setTimeout(() => child.kill("SIGKILL"), KILL_AFTER_MS).unref();
+      // Release the relay as well: it may otherwise keep inherited pipes open
+      // while the CLI is waiting for a tool response or shutting down.
+      host?.close();
+      if (interrupted || !running()) return;
+      interrupted = true;
+      terminate("SIGINT");
+      killTimer = setTimeout(() => {
+        // taskkill already had the full grace period to terminate the tree.
+        // Direct termination is a final fallback if it failed or hung.
+        if (running()) child.kill("SIGKILL");
+      }, KILL_AFTER_MS);
+      killTimer.unref();
     };
     call.abortSignal?.addEventListener("abort", interrupt, { once: true });
     this.options.disposal.addEventListener("abort", interrupt, { once: true });
@@ -219,12 +286,30 @@ export class AntigravityLanguageModel implements LanguageModelV4 {
         if (event) translator.handle(event);
       } catch (error) {
         settle(() => controller.error(error));
-        child.kill("SIGKILL");
+        terminate("SIGKILL");
       }
     });
+    child.once("exit", () => {
+      clearTimeout(killTimer);
+      if (process.platform !== "win32") return;
+      // `close` waits for every descendant's pipe handle. Give buffered output
+      // time to drain, then release our handles even if a descendant escaped.
+      closeTimer = setTimeout(() => {
+        lines.close();
+        child.stdin.destroy();
+        child.stdout.destroy();
+        child.stderr.destroy();
+        translator.end(stderr.trim());
+      }, CLOSE_AFTER_EXIT_MS);
+      closeTimer.unref();
+    });
     child.on("close", () => {
+      clearTimeout(killTimer);
+      clearTimeout(closeTimer);
+      this.options.disposal.removeEventListener("abort", interrupt);
       lines.close();
       translator.end(stderr.trim());
+      closed();
     });
     return {
       stream,

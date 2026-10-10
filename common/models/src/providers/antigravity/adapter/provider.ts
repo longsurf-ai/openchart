@@ -36,13 +36,14 @@ export interface AntigravityProvider extends ProviderV4 {
    * @example const usage = await provider.readUsage();
    */
   readUsage(): Promise<NativeUsageReport | undefined>;
-  /** Interrupts active requests and forgets remembered conversations. Idempotent. */
+  /** Interrupts requests, awaits their process cleanup and forgets conversations. Idempotent. */
   dispose(): Promise<void>;
 }
 
 /**
  * Construction performs no I/O. Each model call owns one CLI process; the
- * provider owns only the shared environment and the conversation hints.
+ * provider owns the shared environment, conversation hints and the completion
+ * of pending request cleanup during disposal.
  * @example
  * const provider = createAntigravityProvider({ executable });
  * try { const model = provider.languageModel("gemini-3.8-flash"); }
@@ -57,6 +58,7 @@ export function createAntigravityProvider(
   Object.assign(env, settings.env);
   const continuation = createContinuation();
   const disposal = new AbortController();
+  const pendingProcesses = new Set<Promise<void>>();
   const assertActive = () => {
     if (disposal.signal.aborted)
       throw new Error("Antigravity provider is disposed");
@@ -66,8 +68,14 @@ export function createAntigravityProvider(
     assertActive();
     const pending = execute(settings.executable, args, {
       env,
+      windowsHide: true,
       signal: AbortSignal.any([disposal.signal, AbortSignal.timeout(30_000)]),
     });
+    const closed = new Promise<void>((resolve) =>
+      pending.child.once("close", () => resolve()),
+    );
+    pendingProcesses.add(closed);
+    void closed.then(() => pendingProcesses.delete(closed));
     // The CLI reads piped stdin as a prompt; closing it makes a signed-out CLI
     // fail at once instead of starting an interactive sign-in.
     pending.child.stdin?.end();
@@ -85,6 +93,7 @@ export function createAntigravityProvider(
         env,
         continuation,
         disposal: disposal.signal,
+        pendingProcesses,
       });
     },
     embeddingModel: (modelId) => {
@@ -135,6 +144,7 @@ export function createAntigravityProvider(
     async dispose() {
       disposal.abort(new Error("Antigravity provider is disposed"));
       continuation.clear();
+      await Promise.all(pendingProcesses);
     },
   };
 }

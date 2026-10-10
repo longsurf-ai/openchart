@@ -144,7 +144,9 @@
     "@opentelemetry/sdk-trace-base": "2.6.0",
     "vscode-languageserver": "10.1.1",
     "tar": "7.5.22",
-    "@openchart/notification": "workspace:*"
+    "@openchart/notification": "workspace:*",
+    "yauzl": "3.4.0",
+    "node-pty": "1.1.0"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
@@ -153,6 +155,7 @@
     "@ag-ui/client": "0.0.59",
     "eventsource": "3.0.7",
     "@openchart/app": "workspace:*",
-    "@tanstack/react-query": "^5.32.0"
+    "@tanstack/react-query": "^5.32.0",
+    "@types/yauzl": "3.4.0"
   }
 }

@@ -3,14 +3,10 @@
 Owns Electron startup, backend, storage, packaging, updates and the
 [changelog](src/changelog/AGENTS.md). See [architecture](../../docs/architecture/desktop.md).
 
-- Main owns windows, credentials, run token and host capabilities
-  (notifications), no business logic; backend-entry sets network defaults,
-  then starts server.
-  Preload exposes connection, folder picker, updates, notification opt-in and
-  Clerk's bridge.
-- Parse all four host-protocol messages. Secrets stay in messages, never argv/URLs/logs.
-  Readiness expires after 30 seconds. Quit/repeated Quit await backend cleanup
-  and exit. Pre-ready failures log/exit in development; release dialogs await ready.
+- Main owns windows, credentials, run token and host capabilities, not business
+  logic. Backend-entry sets network defaults before starting server.
+- Parse all host-protocol messages. Secrets stay in messages, never argv/URLs/logs.
+  Readiness expires after 30 seconds. Quit awaits backend cleanup.
 - Credentials use async safeStorage; reject unavailable/basic_text encryption
   and plaintext fallback. Re-encryption preserves the key.
 - Open windows after backend readiness. IPC accepts only the renderer's main
@@ -18,12 +14,11 @@ Owns Electron startup, backend, storage, packaging, updates and the
   denied device permissions/new windows, navigation restrictions and CSP.
 - Config owns settings; Home owns paths. Assets stay inside bundles; missing
   files/APIs never become HTML. Only development accepts loopback URLs.
-- Development/release share ASAR layout and packaged dependencies. Tea
-  transpiles in-process. Dev profile persists; dev/smoke use mock Keychain.
-  Smoke relocates packages.
-- Releases require bundled `pk_live_`; Clerk owns sessions; Auth owns account RPC.
-  Only development builds honor `--openchart-test-account` (Clerk test mode).
-- Production uses Longsurf Developer ID and `openchart-notary`; development is
-  ad-hoc. Verify downloads before publishing R2 metadata last. Sidebar
-  update restart honors editor cancellation and backend exit. Development never
-  auto-updates.
+- Development/release share runtime assembly. Smoke relocates packages.
+  Windows alone stages/unpacks node-pty; Mac staging remains architecture-neutral.
+- Production bundles `pk_live_`; Clerk owns sessions. Only development honors
+  `--openchart-test-account`. Development/unsigned builds never auto-update.
+- Targets owns platform routing. Mac releases use Longsurf Developer ID and
+  `openchart-notary`; Windows signing is explicit. Unsigned installers are test-only.
+- Handle Squirrel lifecycle before normal startup. Update restart preserves editor
+  cancellation and backend cleanup. Verify downloads before publishing feeds last.

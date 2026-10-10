@@ -14,12 +14,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as tar from "tar";
 import { Effect, Fiber } from "effect";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test as nativeTest, vi } from "vitest";
 import { ANTIGRAVITY, CODEX, CLAUDE_CODE } from "@openchart/models/model-tiers";
 import { createInstallations, installationTask } from "./installation";
 import type { RuntimeArtifact } from "./manifest";
 
 const cleanups: (() => Promise<void>)[] = [];
+// These fixtures are real Unix executables. Windows ZIP transactions have a separate owner suite.
+const test = nativeTest.skipIf(process.platform === "win32");
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
