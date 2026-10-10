@@ -942,6 +942,14 @@ it("keeps the previous symbol label, rejects retired updates, and exposes retry"
   const failureToast = await findErrorToast(
     "Yahoo Finance is unavailable right now.",
   );
+  expect(
+    within(failureToast).getByText("Couldn’t update MSFT"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "MSFT: Yahoo Finance is unavailable right now. Showing previously loaded bars.",
+    ),
+  ).toBeInTheDocument();
   act(() =>
     within(failureToast).getByRole("button", { name: "Retry" }).click(),
   );
@@ -976,6 +984,48 @@ it("offers no Retry for a failure that cannot succeed on retry", async () => {
   ).not.toBeInTheDocument();
   fixture.view.unmount();
   await waitFor(() => expect(failureToast).not.toBeInTheDocument());
+});
+
+it("keeps incomplete-data wording beside retained bars until recovery", async () => {
+  const fixture = setup();
+  fixture.snapshot("AAPL");
+  await waitFor(() =>
+    expect(
+      v2.ChartStateUtils.getSeries(
+        fixture.runtime.store.getState(),
+        "csr_price",
+      )?.data,
+    ).toMatchObject([{ close: 2 }]),
+  );
+  act(() =>
+    fixture.active("AAPL").sink.error(
+      new FeedError({
+        reason: new FeedReasons.IncompleteData({
+          provider: ProviderId.make("yfinance"),
+        }),
+      }),
+    ),
+  );
+  const message =
+    "Yahoo Finance returned incomplete data. Showing previously loaded bars.";
+  expect(screen.getByText(message)).toBeInTheDocument();
+  const failureToast = await findErrorToast(
+    "Yahoo Finance returned incomplete data.",
+  );
+  act(() =>
+    within(failureToast).getByRole("button", { name: "Retry" }).click(),
+  );
+  expect(screen.getByText(message)).toBeInTheDocument();
+  expect(
+    v2.ChartStateUtils.getSeries(fixture.runtime.store.getState(), "csr_price")
+      ?.data,
+  ).toMatchObject([{ close: 2 }]);
+  fixture.snapshot("AAPL");
+  await waitFor(() =>
+    expect(screen.queryByText(message)).not.toBeInTheDocument(),
+  );
+  await waitFor(() => expect(failureToast).not.toBeInTheDocument());
+  fixture.view.unmount();
 });
 
 it("follows appended bars without resetting zoom and holds a historical viewport", async () => {

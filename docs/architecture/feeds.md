@@ -154,7 +154,12 @@ consumers must not label it as the pending target's data.
 A valid new snapshot replaces current. Errors are caught inside each request so
 retry and later requests remain usable. If a stream fails after its snapshot,
 its accepted view is preserved with error status. Normal completion retains ready
-data. There is one active window observation per hook, no two-session handoff,
+data. Retryable live failures automatically reopen with exponential backoff from
+1 to 30 seconds; historical reads and non-retryable failures require user action.
+The error stays visible during retries until a valid snapshot resets the backoff.
+Manual Retry bypasses the delay. Request/client changes and unmount cancel it.
+Chart legends retain the failure wording beside previously loaded bars, even
+after the error toast disappears. There is one active window observation per hook, no two-session handoff,
 Promise session, manual Registry or multi-window history cache in the browser;
 browser reuse is limited to the shared live views above. Historical spans are
 reused by the backend Dataset cache independently of consumer observations.
@@ -323,6 +328,13 @@ trail the local clock by over 10 seconds. Yahoo is degraded when
 `regularMarketTime` has not advanced for 60 seconds inside Yahoo's reported
 regular trading period; delayed exchanges still advance. Local `asOf` never
 proves freshness.
+
+Yahoo empty price slots with null or zero volume remain gaps. Partially populated
+OHLCV inside a requested window fails with `Dataset.IncompleteData`, mapped to
+the retryable `Feed.IncompleteData`. History and polling use the same validation;
+failed reads do not commit cache coverage. Quotes never fill missing bar fields.
+This detects incomplete observations actually returned by the source; it does
+not infer missing sessions or prove that an entirely omitted bar is current.
 
 ## Verification
 

@@ -47,6 +47,10 @@ test("each Dataset reason maps to its Feed reason with the provider", () => {
     ],
     [new DatasetReasons.Retired(), { _tag: "Feed.Reconfigured", provider }],
     [
+      new DatasetReasons.IncompleteData(),
+      { _tag: "Feed.IncompleteData", provider },
+    ],
+    [
       new DatasetReasons.Unavailable(),
       { _tag: "Feed.SourceUnavailable", provider },
     ],
