@@ -81,9 +81,17 @@ export default function RichEditor({
             {reason}
           </p>
         ) : null}
-        <TabsList aria-label={views[viewer].list}>
-          <TabsTrigger value="rich">{views[viewer].label}</TabsTrigger>
-          <TabsTrigger value="source">Source</TabsTrigger>
+        {/* Portaled outside Tabs, so it sizes itself to sit inside the 32px toolbar. */}
+        <TabsList
+          aria-label={views[viewer].list}
+          className="h-6 rounded-md p-0.5"
+        >
+          <TabsTrigger value="rich" className="text-xs">
+            {views[viewer].label}
+          </TabsTrigger>
+          <TabsTrigger value="source" className="text-xs">
+            Source
+          </TabsTrigger>
         </TabsList>
       </ToolbarControls>
       <TabsContent value="rich" className="min-h-0">

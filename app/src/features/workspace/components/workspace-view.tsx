@@ -286,7 +286,7 @@ function WorkspaceContents({
   }>();
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState<TreeEntry | null>(null);
-  // Collapse folders remounts the tree, which starts with every folder closed.
+  // Collapse all remounts the tree, which starts with every folder closed.
   const [collapses, collapse] = useReducer((count: number) => count + 1, 0);
   const { isMobile, setOpenMobile } = useSidebar();
   const { navigation, collapsible } = useWorkspaceView();

@@ -59,8 +59,9 @@ export function WorkspaceSwitcher({
           size="sm"
           title={selected?.root}
           aria-label={`Browse workspace: ${selected ? workspaceName(selected.root) : "none"}`}
-          // Styled like the header's Widgets picker; long names truncate.
-          className="h-7 min-w-0 justify-start gap-1.5 px-2 font-medium"
+          // Styled like the header's Widgets picker; sized to its name, it
+          // shrinks and truncates when the row is narrow.
+          className="h-7 min-w-0 shrink justify-start gap-1.5 px-2 font-medium"
           onKeyDown={(event) => event.stopPropagation()}
         >
           <Folder aria-hidden className="shrink-0 text-muted-foreground" />
@@ -93,7 +94,7 @@ export function WorkspaceSwitcher({
           <FolderOpen /> Reveal in Finder
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCollapse}>
-          <ListCollapse /> Collapse folders
+          <ListCollapse /> Collapse all
         </DropdownMenuItem>
         {selected && defaultId && selected.id !== defaultId ? (
           <DropdownMenuItem onSelect={() => onForget(selected)}>
@@ -111,7 +112,7 @@ export function WorkspaceSwitcher({
             })
           }
         >
-          <FolderPlus /> Add folder…
+          <FolderPlus /> Add workspace…
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

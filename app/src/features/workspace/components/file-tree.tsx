@@ -380,7 +380,8 @@ function TreeRow({
                 className="size-1.5 shrink-0 rounded-full bg-foreground/60"
               />
             ) : null}
-            <div className="flex shrink-0 items-center opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 has-[[data-state=open]]:opacity-100">
+            {/* Takes no width until needed, so names use the whole row. */}
+            <div className="hidden shrink-0 items-center group-hover/row:flex group-focus-visible/row:flex has-[[data-state=open]]:flex">
               {entry.folder ? (
                 <Button
                   variant="ghost"
