@@ -82,6 +82,10 @@ export function defaultWorkspaceQueryOptions(transport: AppTransport) {
   });
 }
 
+/** A registration's display name: its folder's name, or the whole root for a drive. @example workspaceName("/Users/me/research"); // "research" */
+export const workspaceName = (root: string) =>
+  root.split(/[\\/]/).filter(Boolean).at(-1) ?? root;
+
 /** Reads the registered root without opening file contents. @example useQuery(workspaceQueryOptions(transport, id)); */
 export function workspaceQueryOptions(transport: AppTransport, id: string) {
   return queryOptions({
@@ -301,31 +305,12 @@ export function useWorkspaceFileMutations(
     onSuccess: (_, input) => onRemoved?.(input.path),
     onSettled,
   });
-  // Files move under compare-and-swap on the hash read just before; folders move whole.
+  // Files and folders move whole; a rename never changes contents, so no hash guards it.
   const move = useMutation({
     meta: { errorTitle: "Couldn’t move" },
-    mutationFn: async (input: {
-      from: string;
-      to: string;
-      folder: boolean;
-    }) => {
-      if (input.folder)
-        return transport.rpc.workspace.renameDirectory.mutate({
-          workspaceId,
-          from: input.from,
-          to: input.to,
-        });
-      const file = await transport.rpc.workspace.read.query({
-        workspaceId,
-        path: input.from,
-      });
-      await transport.rpc.workspace.rename.mutate({
-        workspaceId,
-        from: input.from,
-        to: input.to,
-        expected: file.entry.hash,
-      });
-    },
+    mutationFn: (
+      input: Omit<Parameters<FileRpc["rename"]["mutate"]>[0], "workspaceId">,
+    ) => transport.rpc.workspace.rename.mutate({ workspaceId, ...input }),
     retry: false,
     onSettled,
   });

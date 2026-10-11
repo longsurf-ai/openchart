@@ -31,7 +31,7 @@ import {
 import { WorkspaceChanged } from "./events";
 import {
   RelativePath,
-  RelPath,
+  type RelPath,
   assetMediaType,
   WORKSPACE_MEDIA_MAX_BYTES,
   type DirectoryPath,
@@ -191,28 +191,6 @@ export interface Workspace {
   >;
 
   /**
-   * Moves one folder and everything under it; case-only renames are allowed.
-   * An existing target fails with EntryExists, a target inside the source with
-   * WorkspacePathInvalid, and a folder holding built-in originals with
-   * WorkspaceFileProtected.
-   * @example yield* workspace.renameDirectory(from, to);
-   */
-  readonly renameDirectory: (
-    from: RelativePath,
-    to: RelativePath,
-  ) => Effect.Effect<
-    void,
-    | WorkspaceClosed
-    | WorkspaceReadFailed
-    | WorkspacePathInvalid
-    | WorkspaceMissing
-    | WorkspaceWriteFailed
-    | WorkspaceFileProtected
-    | EntryExists
-    | EntryMissing
-  >;
-
-  /**
    * Permanently deletes one folder and everything under it, without a content
    * comparison; a missing folder is already removed. A folder holding built-in
    * originals fails with WorkspaceFileProtected.
@@ -231,26 +209,27 @@ export interface Workspace {
   >;
 
   /**
-   * Renames one artifact without overwriting an observed target. Changed source
-   * content or an existing target fails with EntryStale; returns the new metadata.
-   * Built-in original paths reject rename in either direction.
-   * @example yield* workspace.rename(from, to, hash);
+   * Moves one file or folder, with everything under it, without comparing
+   * contents. Missing parents of the target are created and case-only renames
+   * are allowed. A missing source fails with EntryMissing, an existing target
+   * with EntryExists, a folder moved into itself or a symlink with
+   * WorkspacePathInvalid, and a built-in original, or a folder holding one, on
+   * either side with WorkspaceFileProtected.
+   * @example yield* workspace.rename(from, to);
    */
   readonly rename: (
-    from: RelPath,
-    to: RelPath,
-    expected: string,
+    from: RelativePath,
+    to: RelativePath,
   ) => Effect.Effect<
-    Entry,
+    void,
     | WorkspaceClosed
     | WorkspaceReadFailed
     | WorkspacePathInvalid
     | WorkspaceMissing
     | WorkspaceWriteFailed
-    | EntryMissing
-    | WorkspaceMediaTooLarge
     | WorkspaceFileProtected
-    | EntryStale
+    | EntryExists
+    | EntryMissing
   >;
 }
 
@@ -306,7 +285,7 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
   });
   const checkedPath = Effect.fn("Workspace.path")(function* (
     relative: RelativePath,
-    kind: "file" | "directory" = "file",
+    kind: "file" | "directory" | "any" = "file",
   ) {
     const destination = path.resolve(root, relative);
     const contained = path.relative(root, destination);
@@ -328,12 +307,14 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
       filename = path.join(filename, part);
       const value = yield* info(filename);
       if (!value) break;
-      if (
-        value.isSymbolicLink() ||
-        (index < parts.length - 1 || kind === "directory"
-          ? !value.isDirectory()
-          : !value.isFile())
-      )
+      // lstat reports a symlink as neither a file nor a directory.
+      const actual = value.isDirectory()
+        ? "directory"
+        : value.isFile()
+          ? "file"
+          : "other";
+      const wanted = index < parts.length - 1 ? "directory" : kind;
+      if (actual === "other" || (wanted !== "any" && wanted !== actual))
         return yield* new WorkspacePathInvalid({
           workspaceId: id,
           path: relative,
@@ -420,12 +401,9 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         if (stat.isDirectory()) {
           directories.push(relative);
           if (recursive) pending.push(relative);
-        } else if (
-          stat.isFile() &&
-          Schema.is(RelPath)(relative) &&
-          stat.size <= WORKSPACE_MEDIA_MAX_BYTES
-        ) {
-          entries.push({ path: relative });
+        } else if (stat.isFile() && stat.size <= WORKSPACE_MEDIA_MAX_BYTES) {
+          // RelPath only brands RelativePath, which the check above validated.
+          entries.push({ path: relative as RelPath });
         }
       }
     }
@@ -483,17 +461,18 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
     return item;
   });
   const committed = notify;
-  const isReadOnly = (relative: RelPath) =>
+  // Built-in paths are lowercase, so comparing a lowercased path is case-insensitive.
+  const isReadOnly = (relative: RelativePath) =>
     isDefault && builtinIndicatorPaths.has(relative.toLowerCase());
   const holdsBuiltin = (directory: RelativePath) => {
     const prefix = `${directory.toLowerCase()}/`;
     return (
       isDefault &&
-      [...builtinIndicatorPaths].some((builtin) =>
-        builtin.toLowerCase().startsWith(prefix),
-      )
+      [...builtinIndicatorPaths].some((builtin) => builtin.startsWith(prefix))
     );
   };
+  const protects = (relative: RelativePath) =>
+    isReadOnly(relative) || holdsBuiltin(relative);
   const writeText = Effect.fn("Workspace.writeText")(function* (
     relative: RelPath,
     text: string,
@@ -650,43 +629,6 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         }),
         true,
       ).pipe(Effect.asVoid),
-    renameDirectory: (from: RelativePath, to: RelativePath) =>
-      admit(
-        Effect.gen(function* () {
-          if (holdsBuiltin(from) || holdsBuiltin(to))
-            return yield* new WorkspaceFileProtected({
-              workspaceId: id,
-              path: from,
-            });
-          if (to.toLowerCase().startsWith(`${from.toLowerCase()}/`))
-            return yield* new WorkspacePathInvalid({
-              workspaceId: id,
-              path: to,
-            });
-          const source = yield* checkedPath(from, "directory");
-          if (!(yield* info(source)))
-            return yield* new EntryMissing({ workspaceId: id, path: from });
-          const target = yield* checkedPath(to, "directory");
-          // A case-only rename on a case-insensitive disk finds the source itself.
-          if (from.toLowerCase() !== to.toLowerCase() && (yield* info(target)))
-            return yield* new EntryExists({ workspaceId: id, path: to });
-          yield* fs
-            .makeDirectory(path.dirname(target), { recursive: true })
-            .pipe(
-              Effect.andThen(fs.rename(source, target)),
-              Effect.mapError(
-                (cause) =>
-                  new WorkspaceWriteFailed({
-                    workspaceId: id,
-                    path: from,
-                    cause,
-                  }),
-              ),
-            );
-          yield* committed;
-        }),
-        true,
-      ),
     removeDirectory: (relative: RelativePath) =>
       admit(
         Effect.gen(function* () {
@@ -711,20 +653,34 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         }),
         true,
       ),
-    rename: (from: RelPath, to: RelPath, expected: string) =>
+    rename: (from: RelativePath, to: RelativePath) =>
       admit(
         Effect.gen(function* () {
-          if (isReadOnly(from) || isReadOnly(to))
+          const locked = [from, to].find(protects);
+          if (locked)
             return yield* new WorkspaceFileProtected({
               workspaceId: id,
-              path: isReadOnly(from) ? from : to,
+              path: locked,
             });
-          const item = yield* compare(from, expected);
-          if (!item)
+          if (to.toLowerCase().startsWith(`${from.toLowerCase()}/`))
+            return yield* new WorkspacePathInvalid({
+              workspaceId: id,
+              path: to,
+            });
+          const source = yield* checkedPath(from, "any");
+          const current = yield* info(source);
+          if (!current)
             return yield* new EntryMissing({ workspaceId: id, path: from });
-          yield* compare(to, null);
-          const source = yield* checkedPath(from);
-          const target = yield* checkedPath(to);
+          const target = yield* checkedPath(to, "any");
+          const existing = yield* info(target);
+          // A case-only rename on a case-insensitive disk finds the source
+          // itself; on a case-sensitive disk another entry must not be replaced.
+          const sameEntry =
+            from.toLowerCase() === to.toLowerCase() &&
+            existing?.ino === current.ino &&
+            existing.dev === current.dev;
+          if (existing && !sameEntry)
+            return yield* new EntryExists({ workspaceId: id, path: to });
           yield* fs
             .makeDirectory(path.dirname(target), { recursive: true })
             .pipe(
@@ -739,7 +695,6 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
               ),
             );
           yield* committed;
-          return { path: to, hash: item.entry.hash };
         }),
         true,
       ),

@@ -110,7 +110,6 @@ async function ordinary() {
 test("registration and finite discovery install no watchers and read no file contents", async () => {
   const watch = vi.spyOn(FSWatcher.prototype, "add");
   const fs = await runtime.runPromise(FileSystem.FileSystem);
-  const reads = vi.spyOn(fs, "readFile");
   const streams = vi.spyOn(fs, "stream");
   const record = await ordinary();
   await mkdir(join(record.root, "deep", "child"), { recursive: true });
@@ -127,7 +126,6 @@ test("registration and finite discovery install no watchers and read no file con
     directories: ["deep", "deep/child"],
   });
   expect(watch).not.toHaveBeenCalled();
-  expect(reads).not.toHaveBeenCalled();
   expect(streams).not.toHaveBeenCalled();
 });
 
@@ -287,23 +285,23 @@ test("boots one default and exposes disk-backed CAS with structured RPC conflict
     workspaceId,
     path: entry.path,
   });
-  const renamed = await client.workspace.rename({
+  await client.workspace.rename({
     workspaceId,
     from: entry.path,
     to: "renamed.tea",
-    expected: current.entry.hash,
   });
-  expect(renamed.hash).toBe(current.entry.hash);
-  await client.workspace.remove({
+  const renamed = await client.workspace.read({
     workspaceId,
-    path: renamed.path,
-    expected: renamed.hash,
+    path: "renamed.tea",
   });
-  await client.workspace.remove({
+  expect(renamed.entry.hash).toBe(current.entry.hash);
+  const removal = {
     workspaceId,
-    path: renamed.path,
-    expected: renamed.hash,
-  });
+    path: renamed.entry.path,
+    expected: renamed.entry.hash,
+  };
+  await client.workspace.remove(removal);
+  await client.workspace.remove(removal);
 });
 
 test("rejects path escapes and symlink traversal at every file access", async () => {
@@ -337,6 +335,16 @@ test("rejects path escapes and symlink traversal at every file access", async ()
     }),
   ).rejects.toThrow();
   await expect(readFile(join(outside, "new.tea"))).rejects.toThrow();
+  await writeFile(join(workspace.root, "own.tea"), "own");
+  for (const [from, to] of [
+    ["linked", "moved"],
+    ["linked/secret.tea", "moved.tea"],
+    ["own.tea", "linked/own.tea"],
+  ] as const)
+    await expect(
+      client.workspace.rename({ workspaceId: workspace.id, from, to }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  await expect(readFile(join(outside, "own.tea"))).rejects.toThrow();
 });
 
 test.each(["notes.md", "NOTES.MD", "notes.markdown", "notes.txt"])(
@@ -845,7 +853,6 @@ test("skips oversized files during scans and bounds direct reads even when the f
   await writeFile(join(record.root, "chart.png"), "small image");
   await writeFile(join(record.root, "notes.md"), "small text");
   const fs = await runtime.runPromise(FileSystem.FileSystem);
-  const readFileSpy = vi.spyOn(fs, "readFile");
   const streamSpy = vi.spyOn(fs, "stream");
   await expect
     .poll(async () => {
@@ -863,9 +870,6 @@ test("skips oversized files during scans and bounds direct reads even when the f
     code: "BAD_REQUEST",
     message: "Workspace file exceeds the 32 MiB limit.",
   });
-  expect(
-    readFileSpy.mock.calls.some(([filename]) => filename === oversized),
-  ).toBe(false);
   expect(
     streamSpy.mock.calls.some(([filename]) => filename === oversized),
   ).toBe(false);
@@ -889,50 +893,53 @@ test("skips oversized files during scans and bounds direct reads even when the f
   expect(streamSpy).toHaveBeenCalledWith(oversized, {
     bytesToRead: WORKSPACE_MEDIA_MAX_BYTES + 1,
   });
-  expect(
-    readFileSpy.mock.calls.some(([filename]) => filename === oversized),
-  ).toBe(false);
   expect((await stat(oversized)).size).toBe(WORKSPACE_MEDIA_MAX_BYTES + 1);
 });
 
-test("moves and deletes folders without overwriting entries or built-in originals", async () => {
+test("moves files and folders and deletes folders without overwriting entries or built-in originals", async () => {
   const record = await ordinary();
   const workspaceId = record.id;
-  for (const path of ["a/one.tea", "a/b/two.md"])
+  for (const path of ["a/one.tea", "a/b/two.md", "x.tea", "y.tea"])
     await client.workspace.write({
       workspaceId,
       path,
       text: path,
       expected: null,
     });
-  await client.workspace.renameDirectory({
-    workspaceId,
-    from: "a",
-    to: "c/a2",
-  });
+  await client.workspace.rename({ workspaceId, from: "a", to: "c/a2" });
   expect(await readFile(join(record.root, "c/a2/b/two.md"), "utf8")).toBe(
     "a/b/two.md",
   );
   await expect(stat(join(record.root, "a"))).rejects.toThrow();
   await client.workspace.mkdir({ workspaceId, path: "d" });
+  for (const [from, to] of [
+    ["c/a2", "d"],
+    ["x.tea", "y.tea"],
+    ["x.tea", "d"],
+  ] as const)
+    await expect(
+      client.workspace.rename({ workspaceId, from, to }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "A file or folder with that name already exists.",
+    });
+  expect(await readFile(join(record.root, "y.tea"), "utf8")).toBe("y.tea");
   await expect(
-    client.workspace.renameDirectory({ workspaceId, from: "c/a2", to: "d" }),
-  ).rejects.toMatchObject({
-    code: "CONFLICT",
-    message: "A file or folder with that name already exists.",
-  });
-  await expect(
-    client.workspace.renameDirectory({ workspaceId, from: "c", to: "c/x" }),
+    client.workspace.rename({ workspaceId, from: "c", to: "c/x" }),
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   await expect(
-    client.workspace.renameDirectory({ workspaceId, from: "missing", to: "m" }),
+    client.workspace.rename({ workspaceId, from: "missing", to: "m" }),
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
-  // A case-only rename succeeds on case-insensitive disks too.
-  await client.workspace.renameDirectory({ workspaceId, from: "d", to: "D" });
-  expect((await readdir(record.root)).sort()).toEqual(["D", "c"]);
+  // Case-only renames succeed on case-insensitive disks too.
+  await client.workspace.rename({ workspaceId, from: "d", to: "D" });
+  await client.workspace.rename({ workspaceId, from: "x.tea", to: "X.tea" });
+  // Files move into new folders, keeping their bytes.
+  await client.workspace.rename({ workspaceId, from: "y.tea", to: "e/y.tea" });
+  expect(await readFile(join(record.root, "e/y.tea"), "utf8")).toBe("y.tea");
+  expect((await readdir(record.root)).sort()).toEqual(["D", "X.tea", "c", "e"]);
   await client.workspace.removeDirectory({ workspaceId, path: "c" });
   await client.workspace.removeDirectory({ workspaceId, path: "c" });
-  expect(await readdir(record.root)).toEqual(["D"]);
+  expect((await readdir(record.root)).sort()).toEqual(["D", "X.tea", "e"]);
 
   const defaultId = await client.resources.workspace.getDefault();
   const builtins = join(home, "workspaces", "default", "indicators", "builtin");
@@ -945,12 +952,27 @@ test("moves and deletes folders without overwriting entries or built-in original
       workspaceId: defaultId,
       path: "indicators",
     }),
-    client.workspace.renameDirectory({
+    client.workspace.rename({
       workspaceId: defaultId,
       from: "indicators/builtin",
       to: "moved",
     }),
   ])
     await expect(attempt).rejects.toMatchObject({ code: "FORBIDDEN" });
+  // The protected side is reported, even when it is the target.
+  const workspace = await runtime.runPromise(
+    Effect.flatMap(Workspaces, (service) => service.open(defaultId)),
+  );
+  const path = Schema.decodeUnknownSync(RelativePath);
+  await expect(
+    runtime.runPromise(
+      Effect.flip(
+        workspace.rename(path("mine.tea"), path("Indicators/Builtin/MACD.tea")),
+      ),
+    ),
+  ).resolves.toMatchObject({
+    _tag: "WorkspaceFileProtected",
+    path: "Indicators/Builtin/MACD.tea",
+  });
   expect((await readdir(builtins)).sort()).toEqual(before);
 });

@@ -44,7 +44,6 @@ const rpc = vi.hoisted(() => ({
     read: { query: vi.fn() },
     remove: { mutate: vi.fn() },
     rename: { mutate: vi.fn() },
-    renameDirectory: { mutate: vi.fn() },
     removeDirectory: { mutate: vi.fn() },
   },
 }));
@@ -56,11 +55,7 @@ type Panel = {
     dirty?: boolean;
     saving?: boolean;
   };
-  api: {
-    close: () => void;
-    setActive: () => void;
-    onDidParametersChange: () => { dispose: () => void };
-  };
+  api: { close: () => void; setActive: () => void };
 };
 const api = vi.hoisted(() => ({
   panels: [] as Panel[],
@@ -69,17 +64,11 @@ const api = vi.hoisted(() => ({
   activePanel: undefined as
     | { params: { workspaceId: string; path: string; dirty?: boolean } }
     | undefined,
-  activeListeners: new Set<() => void>(),
-  onDidActivePanelChange: (listener: () => void) => {
-    api.activeListeners.add(listener);
-    return { dispose: () => api.activeListeners.delete(listener) };
+  listeners: new Set<() => void>(),
+  onDidLayoutChange: (listener: () => void) => {
+    api.listeners.add(listener);
+    return { dispose: () => api.listeners.delete(listener) };
   },
-  panelListeners: new Set<(panel: unknown) => void>(),
-  onDidAddPanel: (listener: (panel: unknown) => void) => {
-    api.panelListeners.add(listener);
-    return { dispose: () => api.panelListeners.delete(listener) };
-  },
-  onDidRemovePanel: () => ({ dispose: () => {} }),
 }));
 vi.mock("@trpc/client", async (original) => ({
   ...(await original<typeof import("@trpc/client")>()),
@@ -124,7 +113,7 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
   api.panels.length = 0;
   api.activePanel = undefined;
-  api.panelListeners.clear();
+  api.listeners.clear();
   localStorage.clear();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
@@ -230,7 +219,7 @@ function setup(
     readContext: () => aui.current!.modelContext.getModelContext().system,
   };
 }
-/** An open tab, announced like Dockview so the tree sees its dirty flag. */
+/** An open tab, announced like Dockview's layout event so the tree sees its dirty flag. */
 function openPanel(workspaceId: string, path: string, dirty = true) {
   const panel: Panel = {
     id: `${workspaceId}/${path}`,
@@ -240,11 +229,10 @@ function openPanel(workspaceId: string, path: string, dirty = true) {
         api.panels.splice(api.panels.indexOf(panel), 1);
       }),
       setActive: vi.fn(),
-      onDidParametersChange: () => ({ dispose: () => {} }),
     },
   };
   api.panels.push(panel);
-  act(() => api.panelListeners.forEach((listener) => listener(panel)));
+  act(() => api.listeners.forEach((listener) => listener()));
   return panel;
 }
 async function chooseWorkspace(
@@ -265,7 +253,7 @@ test("publishes only the active file and clears its context on close and route e
       api.activePanel = {
         params: { workspaceId, path: "main.tea", dirty: true },
       };
-      api.activeListeners.forEach((listener) => listener());
+      api.listeners.forEach((listener) => listener());
     });
     expect(readContext()).toBe(
       JSON.stringify({
@@ -276,12 +264,12 @@ test("publishes only the active file and clears its context on close and route e
   }
   act(() => {
     api.activePanel = undefined;
-    api.activeListeners.forEach((listener) => listener());
+    api.listeners.forEach((listener) => listener());
   });
   expect(readContext()).toBe(JSON.stringify({ view: "workspace", file: null }));
   await act(() => router.navigate("/next"));
   expect(readContext()).toBeUndefined();
-  expect(api.activeListeners.size).toBe(0);
+  expect(api.listeners.size).toBe(0);
 });
 
 test("shows one workspace at a time and remembers the choice for the next visit", async () => {
@@ -380,7 +368,7 @@ test("opens a requested file after Dockview is ready, shows its workspace and pu
   const file = { workspaceId: "wsp_research", path: "indicators/My study.tea" };
   api.addPanel.mockImplementation(({ params }) => {
     api.activePanel = { params };
-    api.activeListeners.forEach((listener) => listener());
+    api.listeners.forEach((listener) => listener());
   });
   const { readContext } = setup(
     [],
@@ -451,20 +439,10 @@ test("Add creates a folder at the root and refreshes it from disk", async () => 
   expect(rpc.workspace.write.mutate).not.toHaveBeenCalled();
 });
 
-test("a folder's menu and hover button create inside it and open the new tab", async () => {
+test("a folder's New file creates inside it and opens the new tab", async () => {
   const { user } = setup(["src"]);
   openContextMenu(await row("src"));
-  expect(
-    (await screen.findAllByRole("menuitem")).map((item) => item.textContent),
-  ).toEqual([
-    "New file",
-    "New folder",
-    "Rename",
-    "Copy path",
-    "Reveal in Finder",
-    "Delete",
-  ]);
-  await user.click(screen.getByRole("menuitem", { name: "New file" }));
+  await user.click(await screen.findByRole("menuitem", { name: "New file" }));
   const dialog = await screen.findByRole("dialog", { name: "Create file" });
   expect(
     within(dialog).getByRole("textbox", { name: "File path" }),
@@ -489,12 +467,6 @@ test("a folder's menu and hover button create inside it and open the new tab", a
       params: { workspaceId: "wsp_test", path: "src/untitled.workflow.ts" },
     }),
   );
-  await user.click(screen.getByRole("button", { name: "New file in src" }));
-  expect(
-    within(
-      await screen.findByRole("dialog", { name: "Create file" }),
-    ).getByRole("textbox", { name: "File path" }),
-  ).toHaveValue("src/untitled.workflow.ts");
 });
 
 test("Add targets the focused folder, or the focused file's folder", async () => {
@@ -718,7 +690,7 @@ test("deleting a folder confirms it and closes only tabs inside it", async () =>
   expect(prefixed.api.close).not.toHaveBeenCalled();
 });
 
-test("renaming moves a file with its current hash and its clean tab follows; dirty tabs block it", async () => {
+test("renaming moves a file and its clean tab follows; dirty tabs block it", async () => {
   const { user } = setup(["src"], [defaultWorkspace], ["src/main.tea"]);
   await user.click(await row("src"));
   const clean = openPanel(defaultWorkspace.id, "src/main.tea", false);
@@ -735,7 +707,6 @@ test("renaming moves a file with its current hash and its clean tab follows; dir
       workspaceId: defaultWorkspace.id,
       from: "src/main.tea",
       to: "src/renamed.tea",
-      expected: "a".repeat(64),
     }),
   );
   await waitFor(() => expect(clean.api.close).toHaveBeenCalledOnce());
@@ -756,20 +727,46 @@ test("renaming moves a file with its current hash and its clean tab follows; dir
   ).toHaveAttribute("aria-disabled", "true");
 });
 
-test("reveals rows and the workspace in Finder by absolute path", async () => {
-  const { user, appHost } = setup(["src"]);
-  openContextMenu(await row("src"));
+test("a tab edited while its move runs stays at the old path; clean tabs follow", async () => {
+  const { user } = setup(["src"]);
+  const edited = openPanel(defaultWorkspace.id, "src/main.tea", false);
+  const clean = openPanel(defaultWorkspace.id, "src/other.tea", false);
+  let finish!: () => void;
+  rpc.workspace.rename.mutate.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const folder = await row("src");
+  act(() => folder.focus());
+  fireEvent.keyDown(folder, { key: "F2", code: "F2" });
+  fireEvent.keyUp(folder, { key: "F2", code: "F2" });
+  const input = await screen.findByRole("textbox", { name: "Rename src" });
+  await user.clear(input);
+  await user.type(input, "lib{Enter}");
+  await waitFor(() => expect(rpc.workspace.rename.mutate).toHaveBeenCalled());
+  edited.params.dirty = true;
+  await act(async () => finish());
+  await waitFor(() => expect(clean.api.close).toHaveBeenCalledOnce());
+  expect(edited.api.close).not.toHaveBeenCalled();
+  expect(api.addPanel).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      params: { workspaceId: defaultWorkspace.id, path: "lib/other.tea" },
+    }),
+  );
+});
+
+test("the switcher reveals the workspace folder in Finder", async () => {
+  const { user, appHost } = setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Browse workspace: default" }),
+  );
   await user.click(
     await screen.findByRole("menuitem", { name: "Reveal in Finder" }),
   );
-  expect(appHost.revealPath).toHaveBeenCalledWith("/workspaces/default/src");
-  await user.click(
-    screen.getByRole("button", { name: "Browse workspace: default" }),
+  expect(appHost.revealPath).toHaveBeenCalledExactlyOnceWith(
+    "/workspaces/default",
   );
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Reveal in Finder" }),
-  );
-  expect(appHost.revealPath).toHaveBeenLastCalledWith("/workspaces/default");
 });
 
 test("forget is offered only for non-default workspaces and closes only that workspace's tabs", async () => {

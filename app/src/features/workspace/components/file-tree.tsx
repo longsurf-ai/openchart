@@ -49,10 +49,12 @@ import {
 import { useErrorToast } from "@openchart/app/hooks/use-error-toast";
 import {
   workspaceDirectoryQueryOptions,
+  workspaceName,
   workspaceTreeQueryOptions,
 } from "@openchart/app/lib/workspace/workspace";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { cn } from "@openchart/app/utils/cn";
+import { useWorkspaceShell } from "../hooks/use-workspace-shell";
 import { useWorkspaceView } from "./context";
 import { QuickLook } from "./file-panel/quick-look";
 
@@ -224,8 +226,6 @@ export type FileTreeActions = {
   onCreate: (kind: CreateKind, directory: string) => void;
   onDelete: (entry: TreeEntry) => void;
   onMove: (entry: TreeEntry, to: string) => void;
-  onReveal: (path: string) => void;
-  onCopyPath: (path: string) => void;
   /** False while an open tab under the entry has unsaved or saving edits. */
   canMove: (entry: TreeEntry) => boolean;
 };
@@ -240,6 +240,7 @@ type RowAction = {
 function rowActions(
   entry: Node,
   actions: FileTreeActions,
+  shell: ReturnType<typeof useWorkspaceShell>,
   rename: () => void,
 ): RowAction[] {
   const shared: RowAction[] = [
@@ -252,12 +253,12 @@ function rowActions(
     {
       label: "Copy path",
       icon: <Copy />,
-      onSelect: () => actions.onCopyPath(entry.path),
+      onSelect: () => shell.copy(entry.path),
     },
     {
       label: "Reveal in Finder",
       icon: <FolderOpen />,
-      onSelect: () => actions.onReveal(entry.path),
+      onSelect: () => shell.reveal(entry.path),
     },
     {
       label: "Delete",
@@ -287,18 +288,20 @@ function TreeRow({
   active,
   dirty,
   actions,
+  shell,
   onQuickLook,
 }: {
   item: ItemInstance<Node>;
   active: boolean;
   dirty: boolean;
   actions: FileTreeActions;
+  shell: ReturnType<typeof useWorkspaceShell>;
   onQuickLook: () => void;
 }) {
   const entry = item.getItemData();
   const level = item.getItemMeta().level;
   // Menus restore focus to their trigger on close; start renaming after that.
-  const menu = rowActions(entry, actions, () =>
+  const menu = rowActions(entry, actions, shell, () =>
     setTimeout(() => item.startRenaming()),
   );
   // Row buttons stay out of the tab order; the tree owns keyboard focus.
@@ -456,19 +459,17 @@ function TreeRow({
 /**
  * One Workspace's files: folders load lazily while expanded and stay live through
  * Query/SSE; a non-empty `search` instead filters the recursive listing with every
- * matching folder open. Selection, rename and drops report through `actions`; the
- * caller keys this component by workspace so expansion resets on switching.
- * @example <FileTree key={workspace.id} workspace={workspace} search="" focused={null} onFocus={setFocused} dirty={new Set()} {...actions} />
+ * matching folder open. The tree owns expansion and focus, reporting focus through
+ * `onFocus`; rename and drops report through `actions`. Remount it (a new `key`) to
+ * collapse every folder, as switching workspaces does.
+ * @example <FileTree key={workspace.id} workspace={workspace} search="" onFocus={setFocused} dirty={new Set()} {...actions} />
  */
 export function FileTree({
   workspace,
   active,
   dirty,
   search,
-  focused,
   onFocus,
-  expanded,
-  onExpandedChange,
   ...actions
 }: FileTreeActions & {
   workspace: { id: string; root: string };
@@ -477,13 +478,13 @@ export function FileTree({
   /** Paths in this workspace whose open tab has unsaved edits. */
   dirty: ReadonlySet<string>;
   search: string;
-  /** The keyboard-focused row; the view targets new files at it. */
-  focused: TreeEntry | null;
+  /** Reports the keyboard-focused row; the view targets new files at it. */
   onFocus: (entry: TreeEntry | null) => void;
-  expanded: readonly string[];
-  onExpandedChange: (expanded: string[]) => void;
 }) {
   const { transport } = useWorkspaceView();
+  const shell = useWorkspaceShell(workspace.root);
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [focused, setFocused] = useState<string | null>(null);
   const searching = search.trim().length > 0;
   // One Quick Look at a time, positioned against its row.
   const [quickLook, setQuickLook] = useState<string | null>(null);
@@ -538,22 +539,19 @@ export function FileTree({
   };
   const tree = useTree<Node>({
     rootItemId: ROOT,
-    state: {
-      expandedItems: view.expanded,
-      focusedItem: focused ? focused.path || ROOT : null,
-    },
-    // The tree may re-apply unchanged state while rendering; only report changes.
+    state: { expandedItems: view.expanded, focusedItem: focused },
+    // The tree may re-apply unchanged state while rendering; only store changes.
     setExpandedItems: (update) => {
       if (searching) return;
       const next = (
         typeof update === "function" ? update(view.expanded) : update
       ).filter((id) => id !== ROOT);
-      if (next.join("\0") !== expanded.join("\0")) onExpandedChange(next);
+      if (next.join("\0") !== expanded.join("\0")) setExpanded(next);
     },
     setFocusedItem: (update) => {
-      const current = focused ? focused.path || ROOT : null;
-      const id = typeof update === "function" ? update(current) : update;
-      if (id === current) return;
+      const id = typeof update === "function" ? update(focused) : update;
+      if (id === focused) return;
+      setFocused(id);
       const entry = id ? view.nodes.get(id) : undefined;
       onFocus(entry ? { path: entry.path, folder: entry.folder } : null);
     },
@@ -650,11 +648,9 @@ export function FileTree({
     return (
       <p className="p-2 text-sm text-muted-foreground">No matching files.</p>
     );
-  const name =
-    basename(workspace.root.replace(/[\\/]+$/, "")) || workspace.root;
   return (
     <div
-      {...tree.getContainerProps(`${name} files`)}
+      {...tree.getContainerProps(`${workspaceName(workspace.root)} files`)}
       className="flex flex-col outline-none"
     >
       {tree.getItems().map((item) => {
@@ -666,6 +662,7 @@ export function FileTree({
             active={!entry.folder && entry.path === active}
             dirty={!entry.folder && dirty.has(entry.path)}
             actions={actions}
+            shell={shell}
             onQuickLook={() => toggleQuickLook(item)}
           />
         );

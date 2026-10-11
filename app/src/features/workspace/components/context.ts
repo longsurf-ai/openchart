@@ -18,8 +18,6 @@ export type WorkspaceContextValue = {
   openReference: (name?: string) => void;
   /** Each editor tab's current save, keyed by Dockview panel ID and removed on unmount. It resolves at once when there is nothing to save and rejects when the write fails. */
   saves: MutableRefObject<Map<string, () => Promise<void>>>;
-  /** Optional view filter for widgets; each file's identity comes from panel parameters. */
-  workspaceId?: string;
   instanceId: string;
   /** Widgets may collapse the file panel; the full page keeps it open. */
   collapsible: boolean;

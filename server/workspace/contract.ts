@@ -103,7 +103,7 @@ export type WatchTarget = WorkspaceInterest["target"];
 export const WatchInput = Schema.Struct({
   interests: Schema.Array(WorkspaceInterest),
 });
-/** Creates a folder and any missing parents inside the registered root. */
+/** One folder: `mkdir` creates it with missing parents; `removeDirectory` deletes it. */
 export const MkdirInput = Schema.Struct({
   ...ByWorkspace.fields,
   path: RelativePath,
@@ -116,11 +116,6 @@ export const ReadInput = Schema.Struct({
 /** Null expected hash means create only if the target is absent. Media paths never take text. */
 export const WriteInput = Schema.Struct({
   ...ReadInput.fields,
-  path: RelPath.check(
-    Schema.makeFilter((value) => assetMediaType(value) === undefined, {
-      message: "Expected a text file path, not an image, PDF, audio or video",
-    }),
-  ),
   text: Schema.String,
   expected: Schema.NullOr(Hash),
 });
@@ -129,21 +124,9 @@ export const RemoveInput = Schema.Struct({
   ...ReadInput.fields,
   expected: Hash,
 });
-/** Moves a folder and its contents within one workspace; never overwrites an existing entry. */
-export const RenameDirectoryInput = Schema.Struct({
+/** Moves a file or folder within one workspace; never overwrites an existing entry. */
+export const RenameInput = Schema.Struct({
   ...ByWorkspace.fields,
   from: RelativePath,
   to: RelativePath,
-});
-/** Permanently deletes a folder and its contents. */
-export const RemoveDirectoryInput = Schema.Struct({
-  ...ByWorkspace.fields,
-  path: RelativePath,
-});
-/** Rename stays within the same workspace and never intentionally overwrites a target. */
-export const RenameInput = Schema.Struct({
-  ...ByWorkspace.fields,
-  from: RelPath,
-  to: RelPath,
-  expected: Hash,
 });

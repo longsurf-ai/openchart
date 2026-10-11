@@ -1,24 +1,20 @@
 # Workspace files
 
 - `workspace-view.tsx` composes the shared Sidebar (switcher and Add above, search
-  below) and one Dockview group. Only widgets are `collapsible`.
-- One Workspace shows at a time; `stores/view.ts` remembers it per placement and
-  requested files select theirs. `file-tree.tsx` (Headless Tree) keeps 24px rows;
-  badges fill the disclosure slot. Entries under dirty tabs never move.
-- Dockview owns tabs/activation; identity is `{workspaceId, path}` in parameters and IDs,
-  never view filters. `openWorkspaceFile` serves tree and language jumps.
-- Each panel's toolbar: breadcrumb, view switches via `ToolbarControls`, then `file-actions.tsx`
-  (Save while dirty, `.tea`'s `WorkspaceFileActions`, one menu). Editors register `save` in
-  `saves` by panel id. Quick Look (eye or Space) reuses the viewers read-only.
-- The view owns one Tea reference dialog (`reference-manual.tsx`, data from `tea.reference`):
-  `.tea` tabs' button opens it, ⌘ Click on a name opens its entry (`tea/referenceName`).
-- WorkspaceContents publishes active-file `useAssistantContext` until unmount.
-- Reads supply `readOnly`: built-ins cannot draft or save. Editable panels own drafts and
-  original hashes; refresh preserves dirty text. Hash differences derive the conflict banner;
-  AI admission must preserve the draft before clearing it. Saves use CAS; save and refresh failures stay distinct.
-- `viewers.ts` maps MIME, then path, to one viewer: text edits; PDF/media/OOXML are
-  read-only; other bytes open externally. Crepe setup isn't editing; non-Tea uses `inmemory:` URIs.
-- Each view owns one lazy Tea session per workspace, disposed on unmount; library tabs are read-only.
-- `UnsavedChangesProvider` shares route/window protection; removal reads live dirty/saving flags.
-- Query/SSE owns metadata; disk owns files. Clean up Blob URLs. App owns routes and placement;
-  widgets open, reveal, then clear their placement's file request, even one made before mount.
+  below) and one Dockview group; only widgets are `collapsible`. One Workspace
+  shows at a time; `stores/view.ts` remembers it per placement.
+- Dockview owns tabs and activation; identity is `{workspaceId, path}` in params
+  and IDs. `openWorkspaceFile` serves tree and language jumps. Entries under dirty
+  tabs never move; removal reads live dirty/saving flags.
+- Toolbars: breadcrumb, `ToolbarControls` view switches, then `file-actions.tsx`.
+  Editors register `save` in `saves` by panel id.
+- `viewers.ts` maps MIME, then path, to one viewer: text edits; other bytes show
+  read-only in `FilePreview` (shared with Quick Look) or open externally.
+- Reads supply `readOnly`: built-ins never draft or save. Panels own drafts and
+  original hashes; refresh keeps dirty text; hash differences show the conflict
+  banner. AI merge preserves the draft before clearing it. Saves use CAS.
+- The view owns one Tea reference (⌘ Click opens an entry) and one lazy Tea session
+  per workspace, disposed on unmount. Library tabs are read-only; non-Tea files
+  use `inmemory:` URIs. Active files reach `useAssistantContext`.
+- Query/SSE owns metadata; disk owns files. Clean up Blob URLs. Widgets open,
+  reveal, then clear their placement's file request.

@@ -27,10 +27,7 @@ const dock = vi.hoisted(() => ({
     {
       id: string;
       params: unknown;
-      api: {
-        setActive: () => void;
-        onDidParametersChange: () => { dispose: () => void };
-      };
+      api: { setActive: () => void };
     }
   >(),
   addPanel: vi.fn(),
@@ -54,15 +51,10 @@ vi.mock("dockview-react", async (original) => ({
         dock.panels.set(panel.id, {
           id: panel.id,
           params: panel.params,
-          api: {
-            setActive: dock.setActive,
-            onDidParametersChange: () => ({ dispose() {} }),
-          },
+          api: { setActive: dock.setActive },
         });
       },
-      onDidActivePanelChange: () => ({ dispose() {} }),
-      onDidAddPanel: () => ({ dispose() {} }),
-      onDidRemovePanel: () => ({ dispose() {} }),
+      onDidLayoutChange: () => ({ dispose() {} }),
     }));
     useEffect(() => {
       dock.ready();

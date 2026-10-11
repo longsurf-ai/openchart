@@ -10,9 +10,10 @@ scoped observations and file APIs.
   and subscriptions, drains mutations and releases watchers; never deletes files.
 - Effect owns scopes, queues, retries and caches; Chokidar owns watching.
   RcMap shares shallow directory watchers by active consumer; no eager root watch.
-  Directory/tree queries read metadata only; never cache text.
+  Listings read metadata only; never cache text.
 - Index non-hidden directories, even empty ones, and files of any type.
-  `mkdir` stays in-root, keeping existing folders; folder moves never overwrite.
+  `mkdir` keeps existing folders; `rename` moves files and folders without
+  overwriting.
 - Reads return Base64, hash and MIME: media by extension, else `text/plain`
   for UTF-8 without NUL. Reads cap at 32 MiB, even under growth; scans skip more.
 - Text writes reject media paths and binary content. Reads install no

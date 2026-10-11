@@ -6,14 +6,13 @@ import {
   useEffect,
   useId,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useStore } from "zustand";
-import { toast } from "sonner";
-import { URI, Utils } from "vscode-uri";
 import { useAssistantContext } from "@assistant-ui/react";
 import { useUnsavedChanges } from "@openchart/app/lib/unsaved-changes/unsaved-changes";
 import { useDarkTheme } from "@openchart/app/lib/theme/theme";
@@ -24,7 +23,6 @@ import {
   themeDark,
   themeLight,
   type DockviewApi,
-  type IDockviewPanel,
   type IDockviewPanelHeaderProps,
 } from "dockview-react";
 import { FilePlus, Files, FolderPlus, Plus, Search, X } from "lucide-react";
@@ -59,9 +57,9 @@ import {
 import {
   defaultWorkspaceQueryOptions,
   useWorkspaceFileMutations,
+  workspaceName,
   workspacesQueryOptions,
 } from "@openchart/app/lib/workspace/workspace";
-import { useAppHost } from "@openchart/app/lib/host/host";
 import { cn } from "@openchart/app/utils/cn";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import {
@@ -72,7 +70,8 @@ import { WorkspaceContext, useWorkspaceView } from "./context";
 import { ReferenceManual } from "./reference-manual";
 import { FileTree, type CreateKind, type TreeEntry } from "./file-tree";
 import { CreateEntryDialog } from "./create-entry-dialog";
-import { WorkspaceSwitcher, workspaceName } from "./workspace-switcher";
+import { useWorkspaceShell } from "../hooks/use-workspace-shell";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import {
   DeleteFileDialog,
   DeleteFolderDialog,
@@ -159,41 +158,6 @@ function FileTab(props: IDockviewPanelHeaderProps<FilePanelParams>) {
     </>
   );
 }
-/** Open tab IDs (`workspaceId/path`) holding unsaved drafts, following Dockview's live params. */
-function useDirtyFiles(api: DockviewApi | undefined) {
-  const [dirty, setDirty] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    if (!api) return;
-    const update = () =>
-      setDirty(
-        new Set(
-          api.panels
-            .filter((panel) => (panel.params as FilePanelParams).dirty)
-            .map((panel) => panel.id),
-        ),
-      );
-    const listeners = new Map<string, { dispose: () => void }>();
-    const watch = (panel: IDockviewPanel) =>
-      listeners.set(panel.id, panel.api.onDidParametersChange(update));
-    api.panels.forEach(watch);
-    const added = api.onDidAddPanel((panel) => {
-      watch(panel);
-      update();
-    });
-    const removed = api.onDidRemovePanel((panel) => {
-      listeners.get(panel.id)?.dispose();
-      listeners.delete(panel.id);
-      update();
-    });
-    update();
-    return () => {
-      added.dispose();
-      removed.dispose();
-      listeners.forEach((listener) => listener.dispose());
-    };
-  }, [api]);
-  return dirty;
-}
 /** True for the path itself or anything inside it when it is a folder. */
 const within = (path: string, entry: TreeEntry) =>
   path === entry.path || (entry.folder && path.startsWith(`${entry.path}/`));
@@ -204,9 +168,8 @@ function hasUnsavedFiles(api: DockviewApi | undefined) {
     false
   );
 }
-/** File explorer with shared draft protection; widgets may restrict it to their bound workspace. The docked file panel stays open and only resizes unless `collapsible`; a page `title` heads it at the shared 60px header height. @example <WorkspaceView transport={transport} title="Workspace" /> */
+/** File explorer for one registered Workspace at a time, with shared draft protection. The docked file panel stays open and only resizes unless `collapsible`; a page `title` heads it at the shared 60px header height. @example <WorkspaceView transport={transport} title="Workspace" /> */
 export function WorkspaceView({
-  workspaceId,
   file,
   onFileOpen,
   scopeId,
@@ -216,7 +179,6 @@ export function WorkspaceView({
   actions,
   navigation,
 }: {
-  workspaceId?: string;
   /** Opened and scrolled into view once Dockview is ready, then reported through `onFileOpen`. */
   file?: Pick<FilePanelParams, "workspaceId" | "path">;
   onFileOpen?: () => void;
@@ -253,7 +215,6 @@ export function WorkspaceView({
     () => ({
       transport,
       instanceId,
-      workspaceId,
       collapsible,
       dark,
       actions,
@@ -267,7 +228,6 @@ export function WorkspaceView({
     [
       transport,
       instanceId,
-      workspaceId,
       collapsible,
       dark,
       actions,
@@ -282,7 +242,6 @@ export function WorkspaceView({
           transport={transport}
           dark={dark}
           view={view}
-          workspaceId={workspaceId}
           file={file}
           onFileOpen={onFileOpen}
           scopeId={scopeId ?? instanceId}
@@ -299,7 +258,6 @@ export function WorkspaceView({
   );
 }
 function WorkspaceContents({
-  workspaceId,
   file,
   onFileOpen,
   scopeId,
@@ -308,7 +266,6 @@ function WorkspaceContents({
   dark,
   view,
 }: {
-  workspaceId?: string;
   file?: Pick<FilePanelParams, "workspaceId" | "path">;
   onFileOpen?: () => void;
   scopeId: string;
@@ -329,42 +286,42 @@ function WorkspaceContents({
   }>();
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState<TreeEntry | null>(null);
-  const [expanded, setExpanded] = useState<string[]>([]);
+  // Collapse folders remounts the tree, which starts with every folder closed.
+  const [collapses, collapse] = useReducer((count: number) => count + 1, 0);
   const { isMobile, setOpenMobile } = useSidebar();
   const { navigation, collapsible } = useWorkspaceView();
-  const { revealPath } = useAppHost();
   const [api, setApi] = useState<DockviewApi>();
-  const dirty = useDirtyFiles(api);
+  // Dockview's layout event covers tabs opening, closing, activating and changing params.
+  const [, refresh] = useReducer((count: number) => count + 1, 0);
+  useEffect(() => {
+    if (!api) return;
+    const listener = api.onDidLayoutChange(refresh);
+    return () => listener.dispose();
+  }, [api]);
+  const tabs = (api?.panels ?? []).map(
+    (panel) => panel.params as FilePanelParams,
+  );
+  const active = api?.activePanel?.params as FilePanelParams | undefined;
   const fileWorkspaceId = file?.workspaceId;
   const filePath = file?.path;
   const files = useRef<HTMLDivElement>(null);
-  const [active, setActive] =
-    useState<Pick<FilePanelParams, "workspaceId" | "path">>();
-  // A `workspaceId` prop locks the view; otherwise the remembered choice wins
-  // while it stays registered, then the default, then the first registration.
+  // The remembered choice wins while it stays registered, then the default,
+  // then the first registration.
   const remembered = useStore(view, (state) => state.workspaceId);
   const registered = query.data ?? [];
   const workspace =
-    registered.find(({ id }) => id === workspaceId) ??
-    (workspaceId
-      ? undefined
-      : (registered.find(({ id }) => id === remembered) ??
-        registered.find(({ id }) => id === defaultWorkspace.data) ??
-        registered[0]));
-  const select = (id: string) => {
-    if (workspaceId || id === workspace?.id) return;
-    view.setState({ workspaceId: id });
+    registered.find(({ id }) => id === remembered) ??
+    registered.find(({ id }) => id === defaultWorkspace.data) ??
+    registered[0];
+  // Every switch, from the menu or a file request, starts without search or focus.
+  const [shown, setShown] = useState(workspace?.id);
+  if (shown !== workspace?.id) {
+    setShown(workspace?.id);
     setSearch("");
     setFocused(null);
-    setExpanded([]);
-  };
+  }
   const mutations = useWorkspaceFileMutations(transport, workspace?.id ?? "");
-  const reveal = useMutation({
-    meta: { errorTitle: "Couldn’t reveal in Finder" },
-    mutationFn: ({ root, path }: { root: string; path: string }) =>
-      revealPath(Utils.joinPath(URI.file(root), path).fsPath),
-    retry: false,
-  });
+  const shell = useWorkspaceShell(workspace?.root);
   useAssistantContext({
     getContext: () =>
       JSON.stringify({
@@ -382,21 +339,14 @@ function WorkspaceContents({
     [changes, scopeId, api],
   );
   useEffect(() => {
-    if (!api) return;
-    const activeListener = api.onDidActivePanelChange(() =>
-      setActive(api.activePanel?.params as FilePanelParams | undefined),
-    );
-    return () => activeListener.dispose();
-  }, [api]);
-  useEffect(() => {
     if (!api || !fileWorkspaceId || !filePath) return;
     openWorkspaceFile(api, fileWorkspaceId, filePath);
     // A request for another workspace's file also shows that workspace.
-    if (!workspaceId) view.setState({ workspaceId: fileWorkspaceId });
+    view.setState({ workspaceId: fileWorkspaceId });
     // A dashboard widget may sit below the fold; jsdom has no scrollIntoView.
     files.current?.scrollIntoView?.({ block: "nearest" });
     onFileOpen?.();
-  }, [api, fileWorkspaceId, filePath, onFileOpen, workspaceId, view]);
+  }, [api, fileWorkspaceId, filePath, onFileOpen, view]);
   const openFile = (workspaceId: string, path: string) => {
     if (!api) return;
     openWorkspaceFile(api, workspaceId, path);
@@ -418,12 +368,14 @@ function WorkspaceContents({
     if (!workspace || !canMove(entry)) return;
     const owner = workspace.id;
     mutations.move.mutate(
-      { from: entry.path, to, folder: entry.folder },
+      { from: entry.path, to },
       {
-        // Clean tabs follow their file to its new path.
+        // Clean tabs follow their file to its new path; one edited while the
+        // move ran keeps its draft open at the old path.
         onSuccess: () => {
           for (const panel of tabsWithin(owner, entry)) {
-            const path = (panel.params as FilePanelParams).path;
+            const { path, dirty, saving } = panel.params as FilePanelParams;
+            if (dirty || saving) continue;
             panel.api.close();
             if (api)
               openWorkspaceFile(api, owner, to + path.slice(entry.path.length));
@@ -471,12 +423,9 @@ function WorkspaceContents({
             workspaces={registered}
             selected={workspace}
             defaultId={defaultWorkspace.data}
-            locked={!!workspaceId}
-            onSelect={select}
-            onReveal={(selected) =>
-              reveal.mutate({ root: selected.root, path: "" })
-            }
-            onCollapse={() => setExpanded([])}
+            onSelect={(id) => view.setState({ workspaceId: id })}
+            onReveal={() => shell.reveal("")}
+            onCollapse={collapse}
             onForget={(selected) =>
               setRemoving({
                 kind: "workspace",
@@ -537,7 +486,7 @@ function WorkspaceContents({
               ) : null}
               {workspace ? (
                 <FileTree
-                  key={workspace.id}
+                  key={`${workspace.id}:${collapses}`}
                   workspace={workspace}
                   active={
                     active?.workspaceId === workspace.id
@@ -546,16 +495,16 @@ function WorkspaceContents({
                   }
                   dirty={
                     new Set(
-                      [...dirty]
-                        .filter((id) => id.startsWith(`${workspace.id}/`))
-                        .map((id) => id.slice(workspace.id.length + 1)),
+                      tabs
+                        .filter(
+                          (tab) =>
+                            tab.dirty && tab.workspaceId === workspace.id,
+                        )
+                        .map((tab) => tab.path),
                     )
                   }
                   search={search}
-                  focused={focused}
                   onFocus={setFocused}
-                  expanded={expanded}
-                  onExpandedChange={setExpanded}
                   onOpen={(path) => openFile(workspace.id, path)}
                   onCreate={(kind, directory) =>
                     setCreating({ kind, directory })
@@ -569,14 +518,6 @@ function WorkspaceContents({
                   }
                   onMove={move}
                   canMove={canMove}
-                  onReveal={(path) =>
-                    reveal.mutate({ root: workspace.root, path })
-                  }
-                  onCopyPath={(path) =>
-                    void navigator.clipboard
-                      .writeText(path)
-                      .catch(() => toast.error("Couldn’t copy to clipboard"))
-                  }
                 />
               ) : null}
             </SidebarGroupContent>

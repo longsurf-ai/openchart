@@ -28,7 +28,7 @@ function WorkspaceWidget() {
     </Suspense>
   );
 }
-/** Workspace shows all registered directories; placement identity scopes editor drafts and file requests. */
+/** Workspace browses one registered directory at a time; placement identity scopes the remembered choice, editor drafts and file requests. */
 export const workspaceWidget: WidgetDefinition = {
   kind: "workspace",
   title: "Workspace",

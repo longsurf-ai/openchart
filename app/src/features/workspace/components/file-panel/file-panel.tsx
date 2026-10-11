@@ -46,18 +46,19 @@ import {
   WorkspaceFileMerge,
 } from "@openchart/app/lib/workspace/workspace";
 import { useWorkspaceView } from "@openchart/app/features/workspace/components/context";
-import { useAppHost } from "@openchart/app/lib/host/host";
+import { useWorkspaceShell } from "@openchart/app/features/workspace/hooks/use-workspace-shell";
 import { FileActions } from "@openchart/app/features/workspace/components/file-actions";
 import { fileViewer, type FileViewer } from "./viewers";
 import type { OfficeFormat } from "./office-viewer";
 
 const CodeEditor = lazy(() => import("./code-editor"));
-const MarkdownEditor = lazy(() => import("./markdown-editor"));
-const DelimitedEditor = lazy(() => import("./delimited-editor"));
+const RichEditor = lazy(() => import("./rich-editor"));
 const PdfPreview = lazy(() => import("./pdf-preview"));
 const OfficeViewer = lazy(() => import("./office-viewer"));
 type TextViewer = Extract<FileViewer, "markdown" | "delimited" | "code">;
-type AssetViewer = Exclude<FileViewer, TextViewer>;
+/** Viewers that edit text drafts; the rest show bytes read-only. */
+export const isTextViewer = (viewer: FileViewer): viewer is TextViewer =>
+  viewer === "markdown" || viewer === "delimited" || viewer === "code";
 export type FilePanelParams = {
   workspaceId: string;
   path: string;
@@ -84,7 +85,8 @@ export function openWorkspaceFile(
     });
 }
 
-const decodeBytes = (base64: string) =>
+/** Bytes of a Base64 read. @example new TextDecoder().decode(decodeBytes(read.base64)); */
+export const decodeBytes = (base64: string) =>
   Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
 
 function decodeTextFile(file: {
@@ -101,31 +103,35 @@ function decodeTextFile(file: {
   };
 }
 
-function AssetPanel({
+/**
+ * Read-only view of a non-text read, shared by tabs and Quick Look: media through a
+ * Blob URL revoked on change or unmount, Office files through OOXML (a failed parse
+ * falls back to the default app until new bytes arrive), anything else an
+ * Open in default app prompt.
+ * @example <FilePreview file={read} viewer="xlsx" workspaceId={id} path="book.xlsx" />
+ */
+export function FilePreview({
+  file,
   viewer,
   ...params
-}: FilePanelParams & { viewer: AssetViewer }) {
-  const { transport } = useWorkspaceView();
-  const query = useQuery(
-    workspaceFileQueryOptions(transport, params.workspaceId, params.path),
-  );
-  if (query.isError) return <FileError retry={() => void query.refetch()} />;
-  if (!query.data) return <LoadingFile />;
+}: FilePanelParams & {
+  file: { base64: string; mediaType: string; entry: { hash: string } };
+  viewer: Exclude<FileViewer, TextViewer>;
+}) {
   if (viewer === "none") return <NoPreview {...params} />;
   if (viewer === "docx" || viewer === "xlsx" || viewer === "pptx")
     return (
       <OfficePreview
-        key={query.data.entry.hash}
-        base64={query.data.base64}
+        key={file.entry.hash}
+        base64={file.base64}
         format={viewer}
         {...params}
       />
     );
-  return <MediaPreview file={query.data} viewer={viewer} path={params.path} />;
+  return <MediaPreview file={file} viewer={viewer} path={params.path} />;
 }
 
-/** Shows PDF, image, audio or video bytes through a Blob URL it revokes on change or unmount. @example <MediaPreview file={read} viewer="image" path="chart.png" /> */
-export function MediaPreview({
+function MediaPreview({
   file,
   viewer,
   path,
@@ -180,8 +186,7 @@ export function MediaPreview({
   );
 }
 
-/** Renders an Office file read-only; a failed parse falls back to the default app, and callers key it by hash to retry. @example <OfficePreview key={hash} base64={read.base64} format="xlsx" workspaceId={id} path="book.xlsx" /> */
-export function OfficePreview({
+function OfficePreview({
   base64,
   format,
   ...params
@@ -202,15 +207,9 @@ export function OfficePreview({
 
 function NoPreview({ workspaceId, path }: FilePanelParams) {
   const { transport } = useWorkspaceView();
-  const { openPath } = useAppHost();
-  const root = useQuery(workspaceQueryOptions(transport, workspaceId)).data
-    ?.root;
-  const open = useMutation({
-    meta: { errorTitle: "Couldn’t open file" },
-    mutationFn: (root: string) =>
-      openPath(Utils.joinPath(URI.file(root), path).fsPath),
-    retry: false,
-  });
+  const shell = useWorkspaceShell(
+    useQuery(workspaceQueryOptions(transport, workspaceId)).data?.root,
+  );
   return (
     <Empty>
       <EmptyHeader>
@@ -226,10 +225,8 @@ function NoPreview({ workspaceId, path }: FilePanelParams) {
         <Button
           size="sm"
           variant="outline"
-          disabled={!root || open.isPending}
-          onClick={() => {
-            if (root) open.mutate(root);
-          }}
+          disabled={!shell.ready || shell.opening}
+          onClick={() => shell.open(path)}
         >
           Open in default app
         </Button>
@@ -261,12 +258,6 @@ function TextPanel({
   viewer: TextViewer;
   wordWrap: boolean;
 }) {
-  const Editor =
-    viewer === "markdown"
-      ? MarkdownEditor
-      : viewer === "delimited"
-        ? DelimitedEditor
-        : CodeEditor;
   const { transport, instanceId, saves } = useWorkspaceView();
   const { workspaceId } = params;
   const workspace = useQuery(workspaceQueryOptions(transport, workspaceId));
@@ -368,6 +359,28 @@ function TextPanel({
     ) : (
       <LoadingFile />
     );
+  const editor = {
+    path: params.path.endsWith(".tea")
+      ? Utils.joinPath(URI.file(workspace.data.root), params.path).toString()
+      : `inmemory:///${instanceId}/${workspaceId}/${params.path}`,
+    workspaceId,
+    workspaceRoot: workspace.data.root,
+    onOpenFile: (path: string) =>
+      openWorkspaceFile(containerApi, workspaceId, path),
+    value: buffer?.text ?? query.data.text,
+    readOnly,
+    wordWrap,
+    onChange: (text: string) => {
+      if (readOnly) return;
+      setBuffer((current) => {
+        const base = current?.base ?? {
+          text: query.data.text,
+          hash: query.data.entry.hash,
+        };
+        return text === base.text && !write.isPending ? null : { text, base };
+      });
+    },
+  };
   return (
     <div
       className="flex size-full min-h-0 flex-col"
@@ -422,36 +435,11 @@ function TextPanel({
       ) : null}
       <div className="min-h-0 flex-1">
         <Suspense fallback={<LoadingFile />}>
-          <Editor
-            path={
-              params.path.endsWith(".tea")
-                ? Utils.joinPath(
-                    URI.file(workspace.data.root),
-                    params.path,
-                  ).toString()
-                : `inmemory:///${instanceId}/${workspaceId}/${params.path}`
-            }
-            workspaceId={workspaceId}
-            workspaceRoot={workspace.data.root}
-            onOpenFile={(path) =>
-              openWorkspaceFile(containerApi, workspaceId, path)
-            }
-            value={buffer?.text ?? query.data.text}
-            readOnly={readOnly}
-            wordWrap={wordWrap}
-            onChange={(text) => {
-              if (readOnly) return;
-              setBuffer((current) => {
-                const base = current?.base ?? {
-                  text: query.data.text,
-                  hash: query.data.entry.hash,
-                };
-                return text === base.text && !write.isPending
-                  ? null
-                  : { text, base };
-              });
-            }}
-          />
+          {viewer === "code" ? (
+            <CodeEditor {...editor} />
+          ) : (
+            <RichEditor viewer={viewer} {...editor} />
+          )}
         </Suspense>
       </div>
     </div>
@@ -547,9 +535,10 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
   const read = useQuery({
     ...workspaceFileQueryOptions(transport, workspaceId, path),
     enabled: !library,
-    select: (file) => fileViewer(path, file.mediaType),
   });
-  const viewer = library ? "code" : read.data;
+  const viewer = library
+    ? "code"
+    : read.data && fileViewer(path, read.data.mediaType);
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   return (
     <div className="flex size-full min-h-0 flex-col">
@@ -581,12 +570,10 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
         <div className="min-h-0 flex-1">
           {library ? (
             <LibraryPanel {...props} wordWrap={wordWrap} />
-          ) : viewer === "code" ||
-            viewer === "markdown" ||
-            viewer === "delimited" ? (
+          ) : viewer && isTextViewer(viewer) ? (
             <TextPanel {...props} viewer={viewer} wordWrap={wordWrap} />
-          ) : viewer ? (
-            <AssetPanel {...props.params} viewer={viewer} />
+          ) : viewer && read.data ? (
+            <FilePreview {...props.params} file={read.data} viewer={viewer} />
           ) : read.isError ? (
             <FileError retry={() => void read.refetch()} />
           ) : (

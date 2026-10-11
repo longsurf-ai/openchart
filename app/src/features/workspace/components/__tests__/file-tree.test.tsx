@@ -1,6 +1,5 @@
 /// <reference types="vitest/jsdom" />
 // Purpose: Verify the tree's identity, lazy listings, badges and row actions without a view around it.
-import { useState } from "react";
 import {
   act,
   fireEvent,
@@ -14,10 +13,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   FileTree,
   type FileTreeActions,
-  type TreeEntry,
 } from "@openchart/app/features/workspace/components/file-tree";
 import { WorkspaceContext } from "@openchart/app/features/workspace/components/context";
+import { AppHostProvider } from "@openchart/app/lib/host/host";
 import { createTransport } from "@openchart/app/lib/transport/transport";
+import { testAppHost } from "@openchart/app/testing/test-utils";
 
 const rpc = vi.hoisted(() => ({
   workspace: { listDirectory: { query: vi.fn() }, read: { query: vi.fn() } },
@@ -26,30 +26,6 @@ vi.mock("@trpc/client", async (original) => ({
   ...(await original<typeof import("@trpc/client")>()),
   createTRPCClient: () => rpc,
 }));
-
-function Harness(props: Partial<FileTreeActions>) {
-  const [expanded, setExpanded] = useState<string[]>([]);
-  const [focused, setFocused] = useState<TreeEntry | null>(null);
-  return (
-    <FileTree
-      workspace={{ id: "wsp_test", root: "/workspaces/default" }}
-      dirty={new Set()}
-      search=""
-      focused={focused}
-      onFocus={setFocused}
-      expanded={expanded}
-      onExpandedChange={setExpanded}
-      onOpen={vi.fn()}
-      onCreate={vi.fn()}
-      onDelete={vi.fn()}
-      onMove={vi.fn()}
-      onReveal={vi.fn()}
-      onCopyPath={vi.fn()}
-      canMove={() => true}
-      {...props}
-    />
-  );
-}
 
 function setup(
   paths: string[],
@@ -86,13 +62,28 @@ function setup(
           dark: false,
         }}
       >
-        <Harness {...actions} />
+        <AppHostProvider value={testAppHost()}>
+          <FileTree
+            workspace={{ id: "wsp_test", root: "/workspaces/default" }}
+            dirty={new Set()}
+            search=""
+            onFocus={vi.fn()}
+            onOpen={vi.fn()}
+            onCreate={vi.fn()}
+            onDelete={vi.fn()}
+            onMove={vi.fn()}
+            canMove={() => true}
+            {...actions}
+          />
+        </AppHostProvider>
       </WorkspaceContext.Provider>
     </QueryClientProvider>,
   );
   return { user: userEvent.setup() };
 }
 const row = (name: string) => screen.findByRole("treeitem", { name });
+const menuItems = async () =>
+  (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
 
 // Context Menu attaches DOM listeners with a signal from the browser realm.
 beforeEach(() =>
@@ -164,14 +155,25 @@ test("folder rows add files without toggling, and menus target their own row", a
   expect(create).toHaveBeenCalledExactlyOnceWith("file", "src");
   expect(folder).toHaveAttribute("aria-expanded", "false");
   fireEvent.contextMenu(folder);
-  await user.click(await screen.findByRole("menuitem", { name: "New folder" }));
+  expect(await menuItems()).toEqual([
+    "New file",
+    "New folder",
+    "Rename",
+    "Copy path",
+    "Reveal in Finder",
+    "Delete",
+  ]);
+  await user.click(screen.getByRole("menuitem", { name: "New folder" }));
   expect(create).toHaveBeenLastCalledWith("folder", "src");
   await user.click(folder);
   const file = await row("main.tea");
   fireEvent.contextMenu(file);
-  expect(
-    (await screen.findAllByRole("menuitem")).map((item) => item.textContent),
-  ).toEqual(["Rename", "Copy path", "Reveal in Finder", "Delete"]);
+  expect(await menuItems()).toEqual([
+    "Rename",
+    "Copy path",
+    "Reveal in Finder",
+    "Delete",
+  ]);
   expect(open).not.toHaveBeenCalled();
 });
 

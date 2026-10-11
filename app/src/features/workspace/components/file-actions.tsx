@@ -1,6 +1,5 @@
 // Purpose: The right side of each file panel's toolbar: Save while dirty, `.tea` actions, and one menu for the rest.
 import { useContext } from "react";
-import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DockviewPanelApi } from "dockview-react";
 import {
@@ -11,7 +10,6 @@ import {
   ExternalLinkIcon,
   FolderOpenIcon,
 } from "lucide-react";
-import { URI, Utils } from "vscode-uri";
 import { Button } from "@openchart/app/components/ui/button";
 import {
   DropdownMenu,
@@ -20,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@openchart/app/components/ui/dropdown";
 import { TooltipIconButton } from "@openchart/app/components/ui/tooltip-icon-button/tooltip-icon-button";
-import { useAppHost } from "@openchart/app/lib/host/host";
 import {
   WorkspaceFileActions,
   duplicateWorkspaceFile,
@@ -29,6 +26,7 @@ import {
   workspaceQueryOptions,
 } from "@openchart/app/lib/workspace/workspace";
 import type { FilePanelParams } from "@openchart/app/features/workspace/components/file-panel/file-panel";
+import { useWorkspaceShell } from "../hooks/use-workspace-shell";
 import { useWorkspaceView } from "./context";
 
 /**
@@ -49,11 +47,11 @@ export function FileActions({
 }) {
   const { transport, saves, openReference } = useWorkspaceView();
   const extraActions = useContext(WorkspaceFileActions);
-  const { openPath, revealPath } = useAppHost();
   const queryClient = useQueryClient();
   const { workspaceId, path, dirty, saving } = params;
-  const root = useQuery(workspaceQueryOptions(transport, workspaceId)).data
-    ?.root;
+  const shell = useWorkspaceShell(
+    useQuery(workspaceQueryOptions(transport, workspaceId)).data?.root,
+  );
   // Shares the panel's read, so these labels cost no extra request.
   const file = useQuery({
     ...workspaceFileQueryOptions(transport, workspaceId, path),
@@ -67,15 +65,6 @@ export function FileActions({
       queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.workspace(transport.url, workspaceId),
       }),
-    retry: false,
-  });
-  const native = useMutation({
-    meta: { errorTitle: "Couldn’t open in Finder" },
-    mutationFn: ({ reveal }: { reveal: boolean }) => {
-      if (!root) throw new Error("The workspace folder is unavailable.");
-      const absolute = Utils.joinPath(URI.file(root), path).fsPath;
-      return reveal ? revealPath(absolute) : openPath(absolute);
-    },
     retry: false,
   });
   // The editor's save resolves at once when there is nothing to save.
@@ -115,13 +104,7 @@ export function FileActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            onSelect={() =>
-              void navigator.clipboard
-                .writeText(path)
-                .catch(() => toast.error("Couldn’t copy to clipboard"))
-            }
-          >
+          <DropdownMenuItem onSelect={() => shell.copy(path)}>
             <CopyIcon /> Copy path
           </DropdownMenuItem>
           {/* Copies are written as text, so only text files can be duplicated. */}
@@ -135,14 +118,14 @@ export function FileActions({
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem
-            disabled={!root}
-            onSelect={() => native.mutate({ reveal: true })}
+            disabled={!shell.ready}
+            onSelect={() => shell.reveal(path)}
           >
             <FolderOpenIcon /> Reveal in Finder
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={!root}
-            onSelect={() => native.mutate({ reveal: false })}
+            disabled={!shell.ready}
+            onSelect={() => shell.open(path)}
           >
             <ExternalLinkIcon /> Open in default app
           </DropdownMenuItem>

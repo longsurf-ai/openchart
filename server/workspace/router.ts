@@ -11,8 +11,6 @@ import {
   WriteInput,
   RemoveInput,
   RenameInput,
-  RenameDirectoryInput,
-  RemoveDirectoryInput,
 } from "./contract";
 import { Workspaces } from "./workspace";
 
@@ -113,19 +111,8 @@ export const workspaceRouter = trpc.router({
       }),
     ),
   ),
-  renameDirectory: trpc.procedure
-    .input(parser(RenameDirectoryInput))
-    .mutation(({ ctx, input }) =>
-      ctx.runtime.runPromise(
-        Effect.gen(function* () {
-          const workspaces = yield* Workspaces;
-          const workspace = yield* workspaces.open(input.workspaceId);
-          return yield* workspace.renameDirectory(input.from, input.to);
-        }),
-      ),
-    ),
   removeDirectory: trpc.procedure
-    .input(parser(RemoveDirectoryInput))
+    .input(parser(MkdirInput))
     .mutation(({ ctx, input }) =>
       ctx.runtime.runPromise(
         Effect.gen(function* () {
@@ -140,7 +127,7 @@ export const workspaceRouter = trpc.router({
       Effect.gen(function* () {
         const workspaces = yield* Workspaces;
         const workspace = yield* workspaces.open(input.workspaceId);
-        return yield* workspace.rename(input.from, input.to, input.expected);
+        return yield* workspace.rename(input.from, input.to);
       }),
     ),
   ),

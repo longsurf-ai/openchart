@@ -6,8 +6,9 @@ import { findErrorToast } from "@openchart/app/testing/test-utils";
 import userEvent from "@testing-library/user-event";
 import { AppHostProvider } from "@openchart/app/lib/host/host";
 import { createQueryClient } from "@openchart/app/lib/react-query/react-query";
-// Purpose: Verify draft preservation, disk-hash saves and the path breadcrumb independently of Monaco's browser runtime.
-import { QueryClientProvider } from "@tanstack/react-query";
+// Purpose: Verify draft preservation, disk-hash saves, the breadcrumb and each toolbar's file actions independently of Monaco's browser runtime.
+import { useState } from "react";
+import { QueryClientProvider, useMutation } from "@tanstack/react-query";
 import {
   fireEvent,
   screen,
@@ -15,10 +16,12 @@ import {
   act,
   within,
 } from "@testing-library/react";
+import { toast } from "sonner";
 import type { IDockviewPanelProps } from "dockview-react";
 import { createTransport } from "@openchart/app/lib/transport/transport";
 import {
   workspaceFileQueryOptions,
+  WorkspaceFileActions,
   WorkspaceFileMerge,
 } from "@openchart/app/lib/workspace/workspace";
 import { WorkspaceContext } from "@openchart/app/features/workspace/components/context";
@@ -29,7 +32,11 @@ import {
 
 const rpc = vi.hoisted(() => ({
   resources: { workspace: { get: { query: vi.fn() } } },
-  workspace: { read: { query: vi.fn() }, write: { mutate: vi.fn() } },
+  workspace: {
+    read: { query: vi.fn() },
+    write: { mutate: vi.fn() },
+    listDirectory: { query: vi.fn() },
+  },
 }));
 vi.mock("@trpc/client", async (original) => ({
   ...(await original<typeof import("@trpc/client")>()),
@@ -61,7 +68,7 @@ vi.mock(
   }),
 );
 vi.mock(
-  "@openchart/app/features/workspace/components/file-panel/markdown-editor",
+  "@openchart/app/features/workspace/components/file-panel/crepe-editor",
   () =>
     import("@openchart/app/features/workspace/components/file-panel/code-editor"),
 );
@@ -99,12 +106,48 @@ const disk = (text: string, path = "main.tea") => ({
   readOnly: false,
   base64: Buffer.from(text, "utf8").toString("base64"),
 });
+const blobs = { createObjectURL: vi.fn(), revokeObjectURL: vi.fn() };
 const submitMerge =
   vi.fn<(workspaceId: string, prompt: string) => Promise<void>>();
+/** Re-renders the panel with merged params on every update, like Dockview. */
+function Panel({
+  api,
+  initial,
+  containerApi,
+}: {
+  api: { updateParameters: (next: Partial<FilePanelParams>) => void };
+  initial: FilePanelParams;
+  containerApi: unknown;
+}) {
+  const [params, setParams] = useState(initial);
+  const [merging] = useState(() => ({
+    ...api,
+    updateParameters: (next: Partial<FilePanelParams>) => {
+      api.updateParameters(next);
+      setParams((current) => ({ ...current, ...next }));
+    },
+  }));
+  return (
+    <FilePanel
+      {...({
+        api: merging,
+        params,
+        containerApi,
+      } as unknown as IDockviewPanelProps<FilePanelParams>)}
+    />
+  );
+}
 function setup(
   file = disk("original"),
-  workspaceId = "wsp_test",
-  teaSessions = new Map(),
+  {
+    workspaceId = "wsp_test",
+    teaSessions = new Map(),
+    extraActions = null,
+  }: {
+    workspaceId?: string;
+    teaSessions?: Map<string, unknown>;
+    extraActions?: Parameters<typeof WorkspaceFileActions.Provider>[0]["value"];
+  } = {},
 ) {
   rpc.resources.workspace.get.query.mockResolvedValue({ root: "/workspace" });
   rpc.workspace.read.query.mockResolvedValue(file);
@@ -117,22 +160,23 @@ function setup(
     updateParameters: vi.fn(),
     setTitle: vi.fn(),
   };
-  const props = {
-    api,
-    params: { workspaceId, path: file.entry.path },
-  } as unknown as IDockviewPanelProps<FilePanelParams>;
+  const containerApi = { getPanel: vi.fn(), addPanel: vi.fn() };
   const saves = new Map<string, () => Promise<void>>();
-  const openPath = vi.fn(async () => {});
+  const openReference = vi.fn();
+  const host = testAppHost({
+    openPath: vi.fn(async () => {}),
+    revealPath: vi.fn(async () => {}),
+  });
   const view = render(
-    <AppHostProvider value={testAppHost({ openPath })}>
+    <AppHostProvider value={host}>
       <QueryClientProvider client={client}>
         <WorkspaceContext.Provider
           value={{
             transport,
             languageError: undefined,
             onLanguageError: vi.fn(),
-            teaSessions: { current: teaSessions },
-            openReference: vi.fn(),
+            teaSessions: { current: teaSessions as never },
+            openReference,
             saves: { current: saves },
             instanceId: "test",
             collapsible: false,
@@ -140,7 +184,13 @@ function setup(
           }}
         >
           <WorkspaceFileMerge.Provider value={submitMerge}>
-            <FilePanel {...props} />
+            <WorkspaceFileActions.Provider value={extraActions}>
+              <Panel
+                api={api}
+                initial={{ workspaceId, path: file.entry.path }}
+                containerApi={containerApi}
+              />
+            </WorkspaceFileActions.Provider>
           </WorkspaceFileMerge.Provider>
         </WorkspaceContext.Provider>
       </QueryClientProvider>
@@ -150,14 +200,36 @@ function setup(
     client,
     transport,
     api,
+    containerApi,
     saves,
-    openPath,
+    host,
+    openReference,
+    user: userEvent.setup(),
     cleanup: () => {
       view.unmount();
       client.clear();
     },
   };
 }
+async function menuItems(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole("button", { name: "More file actions" }),
+  );
+  return (await screen.findAllByRole("menuitem")).map((item) =>
+    item.textContent?.trim(),
+  );
+}
+beforeEach(() => {
+  // Previews create Blob URLs, which jsdom does not implement.
+  blobs.createObjectURL.mockReturnValue("blob:preview");
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static createObjectURL = blobs.createObjectURL;
+      static revokeObjectURL = blobs.revokeObjectURL;
+    },
+  );
+});
 afterEach(() => {
   vi.resetAllMocks();
   vi.unstubAllGlobals();
@@ -173,7 +245,7 @@ test.each([
   "decodes UTF-8 and saves %s via %s+S in %s",
   async (path, modifier, workspaceId) => {
     const original = "// Unicode € 🌍\r\nclose";
-    const { cleanup } = setup(disk(original, path), workspaceId);
+    const { cleanup } = setup(disk(original, path), { workspaceId });
     await waitFor(() =>
       expect(rpc.workspace.read.query).toHaveBeenCalledWith(
         { workspaceId, path },
@@ -219,15 +291,6 @@ test.each([
 ])(
   "previews %s through the shared read API and releases its Blob URL",
   async (path, mediaType) => {
-    const createObjectURL = vi.fn(() => "blob:workspace-preview");
-    const revokeObjectURL = vi.fn();
-    vi.stubGlobal(
-      "URL",
-      class extends URL {
-        static createObjectURL = createObjectURL;
-        static revokeObjectURL = revokeObjectURL;
-      },
-    );
     const { cleanup } = setup({
       entry: { path, hash: "binary-hash" },
       mediaType,
@@ -244,16 +307,16 @@ test.each([
       expect(preview.tagName).toBe(
         mediaType.startsWith("audio/") ? "AUDIO" : "VIDEO",
       );
-    expect(preview).toHaveAttribute("src", "blob:workspace-preview");
+    expect(preview).toHaveAttribute("src", "blob:preview");
     expect(rpc.workspace.read.query).toHaveBeenCalledWith(
       { workspaceId: "wsp_test", path },
       { signal: expect.any(AbortSignal) },
     );
-    expect(createObjectURL).toHaveBeenCalledWith(
+    expect(blobs.createObjectURL).toHaveBeenCalledWith(
       expect.objectContaining({ type: mediaType, size: 2 }),
     );
     cleanup();
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:workspace-preview");
+    expect(blobs.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
   },
 );
 
@@ -443,8 +506,8 @@ test("editing during save stays dirty and the next save uses the committed hash"
   cleanup();
 });
 
-test("built-in source opens read-only and cannot create a draft or save", async () => {
-  const { api, cleanup } = setup({
+test("built-in source opens read-only, cannot create a draft or save, and offers Duplicate to edit", async () => {
+  const { api, user, cleanup } = setup({
     ...disk("original", "indicators/builtin/sma.tea"),
     readOnly: true,
   });
@@ -459,6 +522,7 @@ test("built-in source opens read-only and cannot create a draft or save", async 
     dirty: false,
     saving: false,
   });
+  expect(await menuItems(user)).toContain("Duplicate to edit");
   cleanup();
 });
 
@@ -493,13 +557,16 @@ test("word wrap updates the code view while preserving its draft and save state"
   cleanup();
 });
 
-test("Markdown's visual editor does not offer a code-only wrap control", async () => {
+test("Markdown offers neither a code-only wrap control nor the Tea reference", async () => {
   const { cleanup } = setup(disk("# Notes", "notes.md"));
   expect(await screen.findByRole("textbox", { name: "Code" })).toHaveValue(
     "# Notes",
   );
   expect(
     screen.queryByRole("button", { name: "Word wrap" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Tea reference" }),
   ).not.toBeInTheDocument();
   cleanup();
 });
@@ -521,18 +588,19 @@ test("the breadcrumb shows the workspace folder, then each path segment", async 
   cleanup();
 });
 
-test("a library tab's breadcrumb shows the library and its file name", async () => {
+test("a library tab shows the library in its breadcrumb and has no file actions", async () => {
   const readLibrary = vi.fn().mockResolvedValue("export fn ta() {}");
-  const { cleanup } = setup(
-    disk("", "tea-lib:/std/ta.tea"),
-    "wsp_test",
-    new Map([["wsp_test", { readLibrary }]]),
-  );
+  const { cleanup } = setup(disk("", "tea-lib:/std/ta.tea"), {
+    teaSessions: new Map([["wsp_test", { readLibrary }]]),
+  });
   expect(await crumbs()).toEqual(["Tea library", "ta.tea"]);
   expect(await screen.findByRole("textbox", { name: "Code" })).toHaveValue(
     "export fn ta() {}",
   );
   expect(readLibrary).toHaveBeenCalledWith("tea-lib:/std/ta.tea");
+  expect(
+    screen.queryByRole("button", { name: "More file actions" }),
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Word wrap" }));
   expect(screen.getByRole("textbox", { name: "Code" })).toHaveAttribute(
     "wrap",
@@ -542,8 +610,8 @@ test("a library tab's breadcrumb shows the library and its file name", async () 
   cleanup();
 });
 
-test("bytes without a viewer offer the default app at the file's absolute path", async () => {
-  const { openPath, cleanup } = setup({
+test("bytes without a viewer offer the default app", async () => {
+  const { host, cleanup } = setup({
     entry: { path: "exports/archive.zip", hash: "zip-hash" },
     mediaType: "application/octet-stream",
     readOnly: false,
@@ -552,7 +620,7 @@ test("bytes without a viewer offer the default app at the file's absolute path",
   await userEvent.click(
     await screen.findByRole("button", { name: "Open in default app" }),
   );
-  expect(openPath).toHaveBeenCalledWith("/workspace/exports/archive.zip");
+  expect(host.openPath).toHaveBeenCalledOnce();
   cleanup();
 });
 
@@ -585,5 +653,206 @@ test("CSV opens as a table of the draft and edits as source", async () => {
   expect(
     screen.queryByRole("button", { name: "Word wrap" }),
   ).not.toBeInTheDocument();
+  cleanup();
+});
+
+test("Save shows only while the tab is dirty and writes the draft with its CAS hash", async () => {
+  const { cleanup } = setup();
+  const editor = await screen.findByRole("textbox", { name: "Code" });
+  expect(
+    screen.queryByRole("button", { name: "Save" }),
+  ).not.toBeInTheDocument();
+  fireEvent.change(editor, { target: { value: "draft" } });
+  rpc.workspace.write.mutate.mockResolvedValue(disk("draft").entry);
+  rpc.workspace.read.query.mockResolvedValue(disk("draft"));
+  fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Save" }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(rpc.workspace.write.mutate).toHaveBeenCalledExactlyOnceWith({
+    workspaceId: "wsp_test",
+    path: "main.tea",
+    text: "draft",
+    expected: "original",
+  });
+  cleanup();
+});
+
+test("Copy path copies the Workspace-relative path", async () => {
+  const { user, cleanup } = setup(disk("original", "indicators/rsi.tea"));
+  const copy = vi
+    .spyOn(navigator.clipboard, "writeText")
+    .mockResolvedValue(undefined);
+  await menuItems(user);
+  await user.click(screen.getByRole("menuitem", { name: "Copy path" }));
+  expect(copy).toHaveBeenCalledExactlyOnceWith("indicators/rsi.tea");
+  cleanup();
+});
+
+test("Duplicate creates the copy under a free name without overwriting, then opens it", async () => {
+  rpc.workspace.listDirectory.query.mockResolvedValue({
+    status: "ready",
+    entries: [
+      { path: "indicators/rsi.tea" },
+      { path: "indicators/rsi-copy.tea" },
+    ],
+    directories: ["indicators/rsi-copy-2.tea"],
+  });
+  rpc.workspace.write.mutate.mockResolvedValue({});
+  const { user, containerApi, cleanup } = setup(
+    disk("original", "indicators/rsi.tea"),
+  );
+  await screen.findByRole("textbox", { name: "Code" });
+  await menuItems(user);
+  await user.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+  await waitFor(() => expect(containerApi.addPanel).toHaveBeenCalledOnce());
+  expect(rpc.workspace.write.mutate).toHaveBeenCalledExactlyOnceWith({
+    workspaceId: "wsp_test",
+    path: "indicators/rsi-copy-3.tea",
+    text: "original",
+    expected: null,
+  });
+  expect(containerApi.addPanel).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "wsp_test/indicators/rsi-copy-3.tea",
+      params: { workspaceId: "wsp_test", path: "indicators/rsi-copy-3.tea" },
+    }),
+  );
+  cleanup();
+});
+
+test.each([
+  [
+    "notes.md",
+    "text/plain",
+    ["Copy path", "Duplicate", "Reveal in Finder", "Open in default app"],
+  ],
+  [
+    "data.bin",
+    "application/octet-stream",
+    ["Copy path", "Reveal in Finder", "Open in default app"],
+  ],
+  [
+    "chart.png",
+    "image/png",
+    ["Copy path", "Reveal in Finder", "Open in default app"],
+  ],
+])(
+  "%s offers only the menu actions its type supports and no app action",
+  async (path, mediaType, names) => {
+    const extraActions = vi.fn(() => (
+      <button type="button">Add to chart</button>
+    ));
+    const { user, client, cleanup } = setup(
+      { ...disk("original", path), mediaType },
+      { extraActions },
+    );
+    // Duplicate depends on the read's MIME, so assert once every read settles.
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(await menuItems(user)).toEqual(names);
+    expect(extraActions).not.toHaveBeenCalled();
+    cleanup();
+  },
+);
+
+test("Finder and default-app actions use the file's absolute path", async () => {
+  const { user, host, cleanup } = setup(disk("original", "indicators/rsi.tea"));
+  await screen.findByRole("textbox", { name: "Code" });
+  await menuItems(user);
+  await user.click(screen.getByRole("menuitem", { name: "Reveal in Finder" }));
+  expect(host.revealPath).toHaveBeenCalledExactlyOnceWith(
+    "/workspace/indicators/rsi.tea",
+  );
+  await menuItems(user);
+  await user.click(
+    screen.getByRole("menuitem", { name: "Open in default app" }),
+  );
+  expect(host.openPath).toHaveBeenCalledExactlyOnceWith(
+    "/workspace/indicators/rsi.tea",
+  );
+  cleanup();
+});
+
+test("a .tea tab renders the app-provided action, whose prepare() saves the dirty draft first", async () => {
+  const steps: string[] = [];
+  const { cleanup } = setup(disk("original", "rsi.tea"), {
+    extraActions: (file, prepare) => (
+      <button
+        type="button"
+        onClick={async () => {
+          await prepare();
+          steps.push(`add ${file.workspaceId}/${file.path}`);
+        }}
+      >
+        Add to chart
+      </button>
+    ),
+  });
+  const editor = await screen.findByRole("textbox", { name: "Code" });
+  fireEvent.click(screen.getByRole("button", { name: "Add to chart" }));
+  await waitFor(() => expect(steps).toEqual(["add wsp_test/rsi.tea"]));
+  expect(rpc.workspace.write.mutate).not.toHaveBeenCalled();
+  fireEvent.change(editor, { target: { value: "draft" } });
+  rpc.workspace.write.mutate.mockImplementation(async () => {
+    steps.push("save");
+    return disk("draft", "rsi.tea").entry;
+  });
+  rpc.workspace.read.query.mockResolvedValue(disk("draft", "rsi.tea"));
+  fireEvent.click(screen.getByRole("button", { name: "Add to chart" }));
+  await waitFor(() =>
+    expect(steps).toEqual([
+      "add wsp_test/rsi.tea",
+      "save",
+      "add wsp_test/rsi.tea",
+    ]),
+  );
+  expect(rpc.workspace.write.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({ text: "draft", expected: "original" }),
+  );
+  cleanup();
+});
+
+test("a failed save rejects prepare(), so the app action stops and the save's toast is the only one", async () => {
+  const steps: string[] = [];
+  function AddAction({ prepare }: { prepare: () => Promise<void> }) {
+    const add = useMutation({
+      meta: { errorTitle: "Couldn’t add indicator" },
+      mutationFn: async () => {
+        await prepare();
+        steps.push("add");
+      },
+      onError: () => steps.push("stopped"),
+    });
+    return (
+      <button type="button" onClick={() => add.mutate()}>
+        Add to chart
+      </button>
+    );
+  }
+  const { cleanup } = setup(disk("original", "rsi.tea"), {
+    extraActions: (_file, prepare) => <AddAction prepare={prepare} />,
+  });
+  const editor = await screen.findByRole("textbox", { name: "Code" });
+  fireEvent.change(editor, { target: { value: "draft" } });
+  rpc.workspace.write.mutate.mockRejectedValue(new Error("conflict"));
+  fireEvent.click(screen.getByRole("button", { name: "Add to chart" }));
+  await waitFor(() => expect(steps).toEqual(["stopped"]));
+  expect(
+    toast
+      .getToasts()
+      .filter(
+        (item) => "description" in item && item.description === "conflict",
+      ),
+  ).toHaveLength(1);
+  expect(editor).toHaveValue("draft");
+  cleanup();
+});
+
+test("a .tea tab opens the view's Tea reference", async () => {
+  const { openReference, cleanup } = setup();
+  fireEvent.click(await screen.findByRole("button", { name: "Tea reference" }));
+  expect(openReference).toHaveBeenCalledExactlyOnceWith();
   cleanup();
 });

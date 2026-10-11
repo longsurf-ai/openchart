@@ -29,9 +29,6 @@ import { prepareOnboardingContent } from "./onboarding/content/content";
 import { BillingLink, isBillingReturn } from "./billing";
 import { cloudEndpoints, developmentTestAccount } from "./cloud";
 
-// The name determines the app's data folder and macOS Keychain entry.
-// Give development runs their own name to keep their data separate.
-// tooling replaces this flag at build time; release bundles cannot enable Vite.
 /** A renderer-supplied absolute local path; URLs, UNC paths and NUL bytes are refused. */
 const LocalPath = z
   .string()
@@ -40,6 +37,9 @@ const LocalPath = z
       isAbsolute(value) && !value.startsWith("//") && !value.includes("\0"),
     "Expected an absolute local path",
   );
+// The name determines the app's data folder and macOS Keychain entry.
+// Give development runs their own name to keep their data separate.
+// tooling replaces this flag at build time; release bundles cannot enable Vite.
 const developmentBuild =
   !app.isPackaged || process.env.OPENCHART_DESKTOP_BUILD === "development";
 /** Report command-line failures directly; packaged launches show an error after ready. */

@@ -33,16 +33,8 @@ vi.mock("dockview-react", async (original) => ({
   }) => {
     const { placementId } = useWidget();
     const [api] = useState(() => ({
-      panels: [
-        {
-          id: "wsp_one/main.tea",
-          params: { dirty: false },
-          api: { onDidParametersChange: () => ({ dispose() {} }) },
-        },
-      ],
-      onDidActivePanelChange: () => ({ dispose() {} }),
-      onDidAddPanel: () => ({ dispose() {} }),
-      onDidRemovePanel: () => ({ dispose() {} }),
+      panels: [{ id: "wsp_one/main.tea", params: { dirty: false } }],
+      onDidLayoutChange: () => ({ dispose() {} }),
     }));
     useEffect(
       () => onReady({ api } as unknown as DockviewReadyEvent),
