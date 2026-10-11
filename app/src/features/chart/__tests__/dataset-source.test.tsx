@@ -106,12 +106,10 @@ it.each(["agent_prompt", "script"] as const)(
         },
         workspace: {
           read: {
-            query: vi
-              .fn()
-              .mockResolvedValue({
-                entry: { hash },
-                base64: btoa("print('approved')"),
-              }),
+            query: vi.fn().mockResolvedValue({
+              entry: { hash },
+              base64: btoa("print('approved')"),
+            }),
           },
         },
         collection: { collect: { mutate: collect } },
