@@ -127,13 +127,16 @@ test("opens requested files in its own placement once, including before mount an
   let router = route();
   let view = mount(router);
   try {
-    await waitFor(() =>
-      expect(dock.addPanel).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          id: "wsp_test/indicators/rsi.tea",
-          params: file,
-        }),
-      ),
+    // The lazily imported view's first load can outlast waitFor's 1s default.
+    await waitFor(
+      () =>
+        expect(dock.addPanel).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            id: "wsp_test/indicators/rsi.tea",
+            params: file,
+          }),
+        ),
+      { timeout: 5000 },
     );
     // Another placement's request never reaches this widget.
     act(() => requestWorkspaceFile("wdg_other", { ...file, path: "a.tea" }));
