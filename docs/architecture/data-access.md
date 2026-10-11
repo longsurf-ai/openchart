@@ -340,9 +340,13 @@ Each Dataset has one collection action per chart cell, shared by its columns.
 `collection` is an Agent prompt target, admitted like a Schedule's, or a Python
 script run with a pinned uv (`uv run --script`, PEP 723 dependencies). Scripts
 write a unique per-run `OPENCHART_OUTPUT`; only a zero exit replaces the data
-file. Execution uses a hidden snapshot of the bytes checked against the
+file. Execution uses an app-owned snapshot of the bytes checked against the
 server-managed `approvedScriptHash`,
 which only the application can set, so an Agent cannot approve its own script.
+Scripts are self-contained with inline PEP 723 dependencies. Their isolated uv
+environment ignores Workspace project configuration and inherited Python paths;
+the Workspace remains the working directory for reading data, not an automatic
+source of Python modules. Approved scripts still have ordinary host access.
 Agent collections always use the Dataset's source Workspace. Serialized
 admission and durable queued/running Run checks prevent overlapping collections
 for one Dataset; exact intent retries still replay and wake the accepted Run.

@@ -140,7 +140,7 @@ export function DatasetSource({
         ...prefs.series[binding.id],
       };
       const axisId = options.ownAxis
-        ? `${datasetId}:axis`
+        ? `${binding.id}:axis`
         : binding.mainPane
           ? "right"
           : `pane:${binding.paneId}`;

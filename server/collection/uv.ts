@@ -56,14 +56,15 @@ export const installUv = Effect.fn("Collection.installUv")(function* (
 });
 
 /**
- * Runs an isolated snapshot of the approved `content` with uv in the Workspace
- * root. The snapshot is a hidden sibling of `script`, preserving local imports;
- * the mutable original is never reopened. After a
- * zero exit, moves the file the script wrote at `OPENCHART_OUTPUT` onto the
- * data file. Each invocation owns a unique staging file. A failed, cancelled or timed-out run removes its staging file and script snapshot
- * and leaves the data file unchanged. uv-managed Python and dependency caches
- * live under `runtimes`, apart from any uv the user has. Interruption kills
- * the process.
+ * Executes approved `content` from an app-owned snapshot directory, with the
+ * Workspace as cwd for data access. Scripts are self-contained with inline
+ * PEP 723 dependencies: Workspace modules, project configuration and inherited
+ * Python paths are excluded from automatic import/environment resolution.
+ * This is not a sandbox for code the user explicitly approved.
+ * Each invocation owns its snapshot and staging file; only a zero exit
+ * publishes the output. Failure, cancellation and timeout remove both and
+ * preserve the data file. Python and caches live under `runtimes`.
+ * Interruption kills the process; setup and execution errors fail ScriptFailed.
  * @example yield* runScript({uv, runtimes, root, script: "cpi.py", content: approvedBytes, args: [], output: "cpi.csv", timeoutSeconds: 600});
  */
 export const runScript = Effect.fn("Collection.runScript")(function* (input: {
@@ -78,11 +79,8 @@ export const runScript = Effect.fn("Collection.runScript")(function* (input: {
 }) {
   const target = path.join(input.root, input.output);
   const id = randomUUID();
-  const snapshot = path.join(
-    input.root,
-    path.dirname(input.script),
-    `.${path.basename(input.script)}.${id}.py`,
-  );
+  const directory = path.join(input.runtimes, "collection-runs", id);
+  const snapshot = path.join(directory, path.basename(input.script));
   // A hidden sibling: the Workspace index ignores it until it replaces the file.
   const temporary = path.join(
     path.dirname(target),
@@ -91,21 +89,44 @@ export const runScript = Effect.fn("Collection.runScript")(function* (input: {
   yield* Effect.tryPromise({
     try: async (signal) => {
       await mkdir(path.dirname(target), { recursive: true });
+      await mkdir(directory, { recursive: true, mode: 0o700 });
       await writeFile(snapshot, input.content, { flag: "wx", mode: 0o400 });
-      await execute(input.uv, ["run", "--script", snapshot, ...input.args], {
-        cwd: input.root,
-        signal,
-        timeout: input.timeoutSeconds * 1000,
-        maxBuffer: 8 * 1024 * 1024,
-        env: {
-          ...process.env,
-          OPENCHART_OUTPUT: temporary,
-          UV_CACHE_DIR: path.join(input.runtimes, "uv-cache"),
-          UV_PYTHON_INSTALL_DIR: path.join(input.runtimes, "uv-python"),
-          UV_PYTHON_PREFERENCE: "only-managed",
-          NO_COLOR: "1",
+      const environment = Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([key]) =>
+            !key.startsWith("PYTHON") &&
+            !key.startsWith("UV_") &&
+            key !== "VIRTUAL_ENV" &&
+            key !== "CONDA_PREFIX",
+        ),
+      );
+      await execute(
+        input.uv,
+        [
+          "run",
+          "--isolated",
+          "--no-project",
+          "--no-config",
+          "--script",
+          snapshot,
+          ...input.args,
+        ],
+        {
+          cwd: input.root,
+          signal,
+          timeout: input.timeoutSeconds * 1000,
+          maxBuffer: 8 * 1024 * 1024,
+          env: {
+            ...environment,
+            PYTHONSAFEPATH: "1",
+            OPENCHART_OUTPUT: temporary,
+            UV_CACHE_DIR: path.join(input.runtimes, "uv-cache"),
+            UV_PYTHON_INSTALL_DIR: path.join(input.runtimes, "uv-python"),
+            UV_PYTHON_PREFERENCE: "only-managed",
+            NO_COLOR: "1",
+          },
         },
-      });
+      );
       if (!(await stat(temporary).catch(() => undefined))?.isFile())
         throw new Error(
           "The script exited without writing the file named by OPENCHART_OUTPUT",
@@ -129,7 +150,7 @@ export const runScript = Effect.fn("Collection.runScript")(function* (input: {
       Effect.promise(async () => {
         await Promise.all([
           rm(temporary, { force: true }),
-          rm(snapshot, { force: true }),
+          rm(directory, { recursive: true, force: true }),
         ]);
       }),
     ),

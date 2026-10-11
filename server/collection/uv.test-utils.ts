@@ -7,7 +7,7 @@ export async function fakeUv(root: string): Promise<string> {
   const uv = path.join(root, ".fake-uv");
   await writeFile(
     uv,
-    `#!${process.execPath}\nconst [, , , , script, ...args] = process.argv;\nrequire("node:child_process").execFileSync(process.execPath, [script, ...args], { stdio: "inherit" });\n`,
+    `#!${process.execPath}\nconst [script, ...args] = process.argv.slice(process.argv.indexOf("--script") + 1);\nrequire("node:child_process").execFileSync(process.execPath, [script, ...args], { stdio: "inherit" });\n`,
   );
   await chmod(uv, 0o755);
   return uv;

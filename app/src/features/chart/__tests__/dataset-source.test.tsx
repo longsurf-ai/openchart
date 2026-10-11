@@ -107,6 +107,14 @@ it("shares the Dataset read and collection action across bound columns", async (
     ],
   } as unknown as CellDefinition;
   const legend = document.createElement("div");
+  const preferences = createChartPreferences("chart");
+  preferences.setState({
+    series: { csr_cpi: { ownAxis: true }, csr_cpi_copy: { ownAxis: true } },
+    axes: {
+      "csr_cpi:axis": { side: "left" },
+      "csr_cpi_copy:axis": { side: "right" },
+    },
+  });
   render(
     <QueryClientProvider
       client={
@@ -135,7 +143,7 @@ it("shares the Dataset read and collection action across bound columns", async (
                   datasetId="wsd_cpi"
                   cell={cell}
                   targets={new Map([["cpn_a", legend]])}
-                  localStore={createChartPreferences("chart")}
+                  localStore={preferences}
                   disabled={false}
                   onRemove={vi.fn()}
                 />
@@ -161,6 +169,19 @@ it("shares the Dataset read and collection action across bound columns", async (
   expect(
     within(legend).getAllByRole("button", { name: "Collect US CPI" }),
   ).toHaveLength(1);
+  for (const [id, side] of [
+    ["csr_cpi", "left"],
+    ["csr_cpi_copy", "right"],
+  ]) {
+    const axisId = `${id}:axis`;
+    expect(
+      v2.ChartStateModel.getSeriesObject(store.getState(), id!)?.axisId,
+    ).toBe(axisId);
+    expect(
+      store.getState().config.yAxis.axes.find((axis) => axis.id === axisId)
+        ?.side,
+    ).toBe(side);
+  }
 });
 
 it("skips the bindings of a deleted Dataset without reading Feed", async () => {

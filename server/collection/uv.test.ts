@@ -36,8 +36,9 @@ const run = (body: string, args: string[] = []) =>
   );
 
 const leftovers = async () =>
-  (await readdir(root)).filter(
+  (await readdir(root, { recursive: true })).filter(
     (name) =>
+      name.includes("collection-runs/") ||
       name.endsWith(".collecting") ||
       (name.startsWith(".") && name.endsWith(".py")),
   );
