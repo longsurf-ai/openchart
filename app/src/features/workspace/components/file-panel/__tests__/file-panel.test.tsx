@@ -1,5 +1,10 @@
-import { renderWithToaster as render } from "@openchart/app/testing/test-utils";
+import {
+  renderWithToaster as render,
+  testAppHost,
+} from "@openchart/app/testing/test-utils";
 import { findErrorToast } from "@openchart/app/testing/test-utils";
+import userEvent from "@testing-library/user-event";
+import { AppHostProvider } from "@openchart/app/lib/host/host";
 import { createQueryClient } from "@openchart/app/lib/react-query/react-query";
 // Purpose: Verify draft preservation, disk-hash saves and the path breadcrumb independently of Monaco's browser runtime.
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -60,6 +65,28 @@ vi.mock(
   () =>
     import("@openchart/app/features/workspace/components/file-panel/code-editor"),
 );
+// jsdom has no WASM or canvas; the stand-in shows what OOXML would receive.
+vi.mock(
+  "@openchart/app/features/workspace/components/file-panel/office-viewer",
+  () => ({
+    default: ({
+      bytes,
+      format,
+      onError,
+    }: {
+      bytes: Uint8Array;
+      format: string;
+      onError: (error: Error) => void;
+    }) => (
+      <div role="document" aria-label={`${format} viewer`}>
+        <output>{new TextDecoder().decode(bytes)}</output>
+        <button type="button" onClick={() => onError(new Error("corrupt"))}>
+          Fail
+        </button>
+      </div>
+    ),
+  }),
+);
 vi.mock(
   "@openchart/app/features/workspace/components/file-panel/pdf-preview",
   () => ({
@@ -95,32 +122,36 @@ function setup(
     params: { workspaceId, path: file.entry.path },
   } as unknown as IDockviewPanelProps<FilePanelParams>;
   const saves = new Map<string, () => Promise<void>>();
+  const openPath = vi.fn(async () => {});
   const view = render(
-    <QueryClientProvider client={client}>
-      <WorkspaceContext.Provider
-        value={{
-          transport,
-          languageError: undefined,
-          onLanguageError: vi.fn(),
-          teaSessions: { current: teaSessions },
-          openReference: vi.fn(),
-          saves: { current: saves },
-          instanceId: "test",
-          collapsible: false,
-          dark: false,
-        }}
-      >
-        <WorkspaceFileMerge.Provider value={submitMerge}>
-          <FilePanel {...props} />
-        </WorkspaceFileMerge.Provider>
-      </WorkspaceContext.Provider>
-    </QueryClientProvider>,
+    <AppHostProvider value={testAppHost({ openPath })}>
+      <QueryClientProvider client={client}>
+        <WorkspaceContext.Provider
+          value={{
+            transport,
+            languageError: undefined,
+            onLanguageError: vi.fn(),
+            teaSessions: { current: teaSessions },
+            openReference: vi.fn(),
+            saves: { current: saves },
+            instanceId: "test",
+            collapsible: false,
+            dark: false,
+          }}
+        >
+          <WorkspaceFileMerge.Provider value={submitMerge}>
+            <FilePanel {...props} />
+          </WorkspaceFileMerge.Provider>
+        </WorkspaceContext.Provider>
+      </QueryClientProvider>
+    </AppHostProvider>,
   );
   return {
     client,
     transport,
     api,
     saves,
+    openPath,
     cleanup: () => {
       view.unmount();
       client.clear();
@@ -183,6 +214,8 @@ test("invalid UTF-8 fails visibly instead of opening lossy editable text", async
 test.each([
   ["chart.PNG", "image/png"],
   ["report.pdf", "application/pdf"],
+  ["fed-presser.mp3", "audio/mpeg"],
+  ["fed-presser.mp4", "video/mp4"],
 ])(
   "previews %s through the shared read API and releases its Blob URL",
   async (path, mediaType) => {
@@ -204,7 +237,13 @@ test.each([
     const preview =
       mediaType === "application/pdf"
         ? await screen.findByTitle("PDF")
-        : await screen.findByRole("img", { name: path });
+        : mediaType.startsWith("image/")
+          ? await screen.findByRole("img", { name: path })
+          : await screen.findByLabelText(path);
+    if (!mediaType.startsWith("image/") && mediaType !== "application/pdf")
+      expect(preview.tagName).toBe(
+        mediaType.startsWith("audio/") ? "AUDIO" : "VIDEO",
+      );
     expect(preview).toHaveAttribute("src", "blob:workspace-preview");
     expect(rpc.workspace.read.query).toHaveBeenCalledWith(
       { workspaceId: "wsp_test", path },
@@ -500,5 +539,51 @@ test("a library tab's breadcrumb shows the library and its file name", async () 
     "soft",
   );
   expect(rpc.workspace.write.mutate).not.toHaveBeenCalled();
+  cleanup();
+});
+
+test("bytes without a viewer offer the default app at the file's absolute path", async () => {
+  const { openPath, cleanup } = setup({
+    entry: { path: "exports/archive.zip", hash: "zip-hash" },
+    mediaType: "application/octet-stream",
+    readOnly: false,
+    base64: "UEsDBAA=",
+  });
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Open in default app" }),
+  );
+  expect(openPath).toHaveBeenCalledWith("/workspace/exports/archive.zip");
+  cleanup();
+});
+
+test("Office files render read-only and fall back to the default app when parsing fails", async () => {
+  const { cleanup } = setup({
+    entry: { path: "positions.xlsx", hash: "xlsx-hash" },
+    mediaType: "application/octet-stream",
+    readOnly: false,
+    base64: Buffer.from("workbook").toString("base64"),
+  });
+  const viewer = await screen.findByRole("document", { name: "xlsx viewer" });
+  expect(within(viewer).getByRole("status")).toHaveTextContent("workbook");
+  await userEvent.click(within(viewer).getByRole("button", { name: "Fail" }));
+  expect(
+    await screen.findByRole("button", { name: "Open in default app" }),
+  ).toBeInTheDocument();
+  cleanup();
+});
+
+test("CSV opens as a table of the draft and edits as source", async () => {
+  const { cleanup } = setup(disk("symbol,close\nAAPL,190", "prices.csv"));
+  const table = await screen.findByRole("document", { name: "csv viewer" });
+  expect(within(table).getByRole("status")).toHaveTextContent(
+    "symbol,close AAPL,190",
+  );
+  await userEvent.click(screen.getByRole("tab", { name: "Source" }));
+  expect(await screen.findByRole("textbox", { name: "Code" })).toHaveValue(
+    "symbol,close\nAAPL,190",
+  );
+  expect(
+    screen.queryByRole("button", { name: "Word wrap" }),
+  ).not.toBeInTheDocument();
   cleanup();
 });

@@ -119,7 +119,7 @@ export function CreateEntryDialog({
             <DialogDescription>
               {kind === "folder"
                 ? "Enter a folder path within this workspace."
-                : "Use a .md, .markdown, .workflow.ts or .tea filename. Include a folder path to create it inside a folder."}
+                : "Enter a file path within this workspace. Include a folder path to create it inside a folder."}
             </DialogDescription>
           </DialogHeader>
           <Input

@@ -319,7 +319,7 @@ test("acquires and runs a read-only workspace without changing its files or depe
       })
       .toMatchObject({
         status: "ready",
-        entries: [{ path: "research.workflow.ts" }],
+        entries: expect.arrayContaining([{ path: "research.workflow.ts" }]),
       });
     const result = await invoke(
       "workspace:research.workflow.ts",

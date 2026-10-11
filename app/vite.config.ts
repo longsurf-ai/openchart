@@ -61,7 +61,8 @@ export default defineConfig({
   optimizeDeps: {
     // EmbedPDF's snippet is self-contained ESM whose default `new URL("pdfium.wasm",
     // import.meta.url)` the plugin below cannot resolve, failing the whole startup batch.
-    exclude: ["fsevents", "@embedpdf/snippet"],
+    // OOXML's parsers use the same pattern (its README requires this exclude on Vite 7).
+    exclude: ["fsevents", "@embedpdf/snippet", "@silurus/ooxml"],
     // VS Code themes and TextMate assets must retain their package URLs after
     // esbuild moves the modules into Vite's development dependency cache.
     esbuildOptions: { plugins: [importMetaUrlPlugin] },

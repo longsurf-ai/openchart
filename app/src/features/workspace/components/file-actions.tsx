@@ -12,7 +12,6 @@ import {
   workspaceQueryKeys,
 } from "@openchart/app/lib/workspace/workspace";
 import {
-  isTextFile,
   openWorkspaceFile,
   type FilePanelParams,
 } from "@openchart/app/features/workspace/components/file-panel/file-panel";
@@ -76,12 +75,10 @@ export function FileActions({
       >
         <CopyIcon />
       </TooltipIconButton>
-      {isTextFile(path) ? (
-        <DuplicateButton
-          file={{ workspaceId, path }}
-          containerApi={containerApi}
-        />
-      ) : null}
+      <DuplicateButton
+        file={{ workspaceId, path }}
+        containerApi={containerApi}
+      />
     </>
   );
 }
@@ -96,9 +93,9 @@ function DuplicateButton({
   const { transport } = useWorkspaceView();
   const queryClient = useQueryClient();
   // Shares the open tab's read, so the label costs no extra request.
-  const readOnly = useQuery({
+  const read = useQuery({
     ...workspaceFileQueryOptions(transport, file.workspaceId, file.path),
-    select: (read) => read.readOnly,
+    select: ({ readOnly, mediaType }) => ({ readOnly, mediaType }),
   }).data;
   const duplicate = useMutation({
     meta: { errorTitle: "Couldn’t duplicate file" },
@@ -111,10 +108,12 @@ function DuplicateButton({
       }),
     retry: false,
   });
+  // Copies are written as text, so only text files can be duplicated.
+  if (read?.mediaType !== "text/plain") return null;
   return (
     <TooltipIconButton
       className="size-8"
-      tooltip={readOnly ? "Duplicate to edit" : "Duplicate"}
+      tooltip={read.readOnly ? "Duplicate to edit" : "Duplicate"}
       disabled={duplicate.isPending}
       onClick={() => duplicate.mutate()}
     >

@@ -1,4 +1,5 @@
 // Purpose: Own on-demand directory/file access, scoped observations and serialized mutations.
+import { isUtf8 } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import path from "node:path";
@@ -43,6 +44,8 @@ import { makeDirectoryObservations } from "./directory-observation";
 
 const hash = (bytes: Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
+// UTF-16 and most binary formats contain NUL bytes even when they decode.
+const isText = (bytes: Uint8Array) => isUtf8(bytes) && !bytes.includes(0);
 
 /**
  * One acquired directory; the registry Scope owns its watcher and lifetime.
@@ -102,8 +105,10 @@ export interface Workspace {
 
   /**
    * Reads fresh Base64 bytes, MIME and hash with the readOnly mutation policy.
-   * Consumers decode text; absent files fail with EntryMissing and media above
-   * 32 MiB fails with WorkspaceMediaTooLarge.
+   * Media MIME follows the extension; other files are `text/plain` when their
+   * bytes are UTF-8 without NUL, else `application/octet-stream`. Consumers
+   * decode text; absent files fail with EntryMissing and files above 32 MiB
+   * fail with WorkspaceMediaTooLarge.
    * @example yield* workspace.read(relative);
    */
   readonly read: (relative: RelPath) => Effect.Effect<
@@ -123,8 +128,9 @@ export interface Workspace {
 
   /**
    * Atomically replaces one file after its content comparison; null requires
-   * an absent target. Built-in originals reject writes. Mismatches fail with
-   * EntryStale; returns committed metadata.
+   * an absent target. Built-in originals reject writes; media paths and
+   * existing binary content fail with WorkspacePathInvalid. Mismatches fail
+   * with EntryStale; returns committed metadata.
    * @example yield* workspace.write(relative, 'close', null);
    */
   readonly write: (
@@ -299,8 +305,6 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
   ) {
     const filename = yield* checkedPath(relative);
     const read = Effect.gen(function* () {
-      if (assetMediaType(relative) === undefined)
-        return yield* fs.readFile(filename);
       const tooLarge = () =>
         new WorkspaceMediaTooLarge({
           workspaceId: id,
@@ -378,8 +382,7 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         } else if (
           stat.isFile() &&
           Schema.is(RelPath)(relative) &&
-          (assetMediaType(relative) === undefined ||
-            stat.size <= WORKSPACE_MEDIA_MAX_BYTES)
+          stat.size <= WORKSPACE_MEDIA_MAX_BYTES
         ) {
           entries.push({ path: relative });
         }
@@ -451,7 +454,12 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         workspaceId: id,
         path: relative,
       });
-    yield* compare(relative, expected);
+    const current = yield* compare(relative, expected);
+    if (current && !isText(current.bytes))
+      return yield* new WorkspacePathInvalid({
+        workspaceId: id,
+        path: relative,
+      });
     const filename = yield* checkedPath(relative);
     const temporary = path.join(
       path.dirname(filename),
@@ -527,7 +535,9 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
             return yield* new EntryMissing({ workspaceId: id, path: relative });
           return {
             entry: item.entry,
-            mediaType: assetMediaType(relative) ?? "text/plain",
+            mediaType:
+              assetMediaType(relative) ??
+              (isText(item.bytes) ? "text/plain" : "application/octet-stream"),
             readOnly: isReadOnly(relative),
             base64: Buffer.from(item.bytes).toString("base64"),
           };

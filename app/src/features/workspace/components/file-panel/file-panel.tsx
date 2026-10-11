@@ -7,15 +7,28 @@ import {
   Suspense,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TriangleAlertIcon, WrapTextIcon } from "lucide-react";
+import {
+  FileQuestionMarkIcon,
+  TriangleAlertIcon,
+  WrapTextIcon,
+} from "lucide-react";
 import type { DockviewApi, IDockviewPanelProps } from "dockview-react";
 import { Button } from "@openchart/app/components/ui/button";
 import { TooltipIconButton } from "@openchart/app/components/ui/tooltip-icon-button/tooltip-icon-button";
 import { StatusBanner } from "@openchart/app/components/ui/status-banner";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@openchart/app/components/ui/empty/empty";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,14 +43,17 @@ import {
   WorkspaceFileMerge,
 } from "@openchart/app/lib/workspace/workspace";
 import { useWorkspaceView } from "@openchart/app/features/workspace/components/context";
+import { useAppHost } from "@openchart/app/lib/host/host";
+import { fileViewer, type FileViewer } from "./viewers";
+import type { OfficeFormat } from "./office-viewer";
 
 const CodeEditor = lazy(() => import("./code-editor"));
 const MarkdownEditor = lazy(() => import("./markdown-editor"));
+const DelimitedEditor = lazy(() => import("./delimited-editor"));
 const PdfPreview = lazy(() => import("./pdf-preview"));
-const isMarkdown = (path: string) => /\.(md|markdown)$/i.test(path);
-/** True for Workspace files edited as UTF-8 text; other files preview as bytes. Library (`tea-lib:`) paths are checked first by callers. @example isTextFile("rsi.tea"); */
-export const isTextFile = (path: string) =>
-  path.endsWith(".tea") || path.endsWith(".workflow.ts") || isMarkdown(path);
+const OfficeViewer = lazy(() => import("./office-viewer"));
+type TextViewer = Extract<FileViewer, "markdown" | "delimited" | "code">;
+type AssetViewer = Exclude<FileViewer, TextViewer>;
 export type FilePanelParams = {
   workspaceId: string;
   path: string;
@@ -81,34 +97,139 @@ function decodeTextFile(file: {
   };
 }
 
-function AssetPanel({ workspaceId, path }: FilePanelParams) {
-  const { transport, dark } = useWorkspaceView();
+function AssetPanel({
+  viewer,
+  ...params
+}: FilePanelParams & { viewer: AssetViewer }) {
+  const { transport } = useWorkspaceView();
   const query = useQuery(
-    workspaceFileQueryOptions(transport, workspaceId, path),
+    workspaceFileQueryOptions(transport, params.workspaceId, params.path),
   );
+  if (query.isError) return <FileError retry={() => void query.refetch()} />;
+  if (!query.data) return <LoadingFile />;
+  if (viewer === "none") return <NoPreview {...params} />;
+  if (viewer === "docx" || viewer === "xlsx" || viewer === "pptx")
+    return (
+      <OfficePreview
+        key={query.data.entry.hash}
+        base64={query.data.base64}
+        format={viewer}
+        {...params}
+      />
+    );
+  return <MediaPreview file={query.data} viewer={viewer} path={params.path} />;
+}
+
+function MediaPreview({
+  file,
+  viewer,
+  path,
+}: {
+  file: { base64: string; mediaType: string };
+  viewer: "pdf" | "image" | "audio" | "video";
+  path: string;
+}) {
+  const { dark } = useWorkspaceView();
   const [url, setUrl] = useState<string>();
   useEffect(() => {
-    if (!query.data) return;
-    const { base64, mediaType } = query.data;
-    const bytes = decodeBytes(base64);
-    const next = URL.createObjectURL(new Blob([bytes], { type: mediaType }));
+    const bytes = decodeBytes(file.base64);
+    const next = URL.createObjectURL(
+      new Blob([bytes], { type: file.mediaType }),
+    );
     setUrl(next);
     return () => URL.revokeObjectURL(next);
-  }, [query.data]);
-  if (query.isError) return <FileError retry={() => void query.refetch()} />;
+  }, [file]);
   if (!url) return <LoadingFile />;
-  return query.data?.mediaType === "application/pdf" ? (
-    <Suspense fallback={<LoadingFile />}>
-      <PdfPreview url={url} dark={dark} />
-    </Suspense>
-  ) : (
+  if (viewer === "pdf")
+    return (
+      <Suspense fallback={<LoadingFile />}>
+        <PdfPreview url={url} dark={dark} />
+      </Suspense>
+    );
+  return (
     <div className="flex size-full items-center justify-center overflow-auto p-4">
-      <img
-        src={url}
-        alt={path}
-        className="max-h-full max-w-full object-contain"
-      />
+      {viewer === "image" ? (
+        <img
+          src={url}
+          alt={path}
+          className="max-h-full max-w-full object-contain"
+        />
+      ) : viewer === "audio" ? (
+        // eslint-disable-next-line jsx-a11y/media-has-caption -- Workspace files carry no timed caption tracks; never fabricate one.
+        <audio
+          controls
+          src={url}
+          aria-label={path}
+          className="w-full max-w-xl"
+        />
+      ) : (
+        // eslint-disable-next-line jsx-a11y/media-has-caption -- Workspace files carry no timed caption tracks; never fabricate one.
+        <video
+          controls
+          src={url}
+          aria-label={path}
+          className="max-h-full max-w-full"
+        />
+      )}
     </div>
+  );
+}
+
+/** A failed parse falls back to the default app; a new disk hash remounts and retries. */
+function OfficePreview({
+  base64,
+  format,
+  ...params
+}: FilePanelParams & { base64: string; format: OfficeFormat }) {
+  const bytes = useMemo(() => decodeBytes(base64), [base64]);
+  const [failed, setFailed] = useState(false);
+  if (failed) return <NoPreview {...params} />;
+  return (
+    <Suspense fallback={<LoadingFile />}>
+      <OfficeViewer
+        bytes={bytes}
+        format={format}
+        onError={() => setFailed(true)}
+      />
+    </Suspense>
+  );
+}
+
+function NoPreview({ workspaceId, path }: FilePanelParams) {
+  const { transport } = useWorkspaceView();
+  const { openPath } = useAppHost();
+  const root = useQuery(workspaceQueryOptions(transport, workspaceId)).data
+    ?.root;
+  const open = useMutation({
+    meta: { errorTitle: "Couldn’t open file" },
+    mutationFn: (root: string) =>
+      openPath(Utils.joinPath(URI.file(root), path).fsPath),
+    retry: false,
+  });
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <FileQuestionMarkIcon aria-hidden="true" />
+        </EmptyMedia>
+        <EmptyTitle>No preview for this file type</EmptyTitle>
+        <EmptyDescription>
+          Open it with its default app instead.
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!root || open.isPending}
+          onClick={() => {
+            if (root) open.mutate(root);
+          }}
+        >
+          Open in default app
+        </Button>
+      </EmptyContent>
+    </Empty>
   );
 }
 function fileMergePrompt(snapshots: {
@@ -129,9 +250,18 @@ function TextPanel({
   api,
   params,
   containerApi,
+  viewer,
   wordWrap,
-}: IDockviewPanelProps<FilePanelParams> & { wordWrap: boolean }) {
-  const Editor = isMarkdown(params.path) ? MarkdownEditor : CodeEditor;
+}: IDockviewPanelProps<FilePanelParams> & {
+  viewer: TextViewer;
+  wordWrap: boolean;
+}) {
+  const Editor =
+    viewer === "markdown"
+      ? MarkdownEditor
+      : viewer === "delimited"
+        ? DelimitedEditor
+        : CodeEditor;
   const { transport, instanceId, saves } = useWorkspaceView();
   const { workspaceId } = params;
   const workspace = useQuery(workspaceQueryOptions(transport, workspaceId));
@@ -395,17 +525,23 @@ function FileBreadcrumb({ workspaceId, path }: FilePanelParams) {
   );
 }
 
-/** Select a text editor or byte-preserving preview for a registered file, under its path breadcrumb. @example components={{ file: FilePanel }} */
+/** Select a text editor or byte-preserving preview for a registered file, under its path breadcrumb; the read's MIME decides which. @example components={{ file: FilePanel }} */
 export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
-  const { path } = props.params;
+  const { workspaceId, path } = props.params;
+  const { transport } = useWorkspaceView();
   const [wordWrap, setWordWrap] = useState(false);
-  const isCode =
-    path.startsWith("tea-lib:") || (isTextFile(path) && !isMarkdown(path));
+  const library = path.startsWith("tea-lib:");
+  const read = useQuery({
+    ...workspaceFileQueryOptions(transport, workspaceId, path),
+    enabled: !library,
+    select: (file) => fileViewer(path, file.mediaType),
+  });
+  const viewer = library ? "code" : read.data;
   return (
     <div className="flex size-full min-h-0 flex-col">
       <div className="flex h-6 shrink-0 items-center gap-1 pr-1">
         <FileBreadcrumb {...props.params} />
-        {isCode ? (
+        {viewer === "code" ? (
           <TooltipIconButton
             tooltip={wordWrap ? "Disable word wrap" : "Enable word wrap"}
             aria-label="Word wrap"
@@ -418,12 +554,18 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
         ) : null}
       </div>
       <div className="min-h-0 flex-1">
-        {path.startsWith("tea-lib:") ? (
+        {library ? (
           <LibraryPanel {...props} wordWrap={wordWrap} />
-        ) : isTextFile(path) ? (
-          <TextPanel {...props} wordWrap={wordWrap} />
+        ) : viewer === "code" ||
+          viewer === "markdown" ||
+          viewer === "delimited" ? (
+          <TextPanel {...props} viewer={viewer} wordWrap={wordWrap} />
+        ) : viewer ? (
+          <AssetPanel {...props.params} viewer={viewer} />
+        ) : read.isError ? (
+          <FileError retry={() => void read.refetch()} />
         ) : (
-          <AssetPanel {...props.params} />
+          <LoadingFile />
         )}
       </div>
     </div>

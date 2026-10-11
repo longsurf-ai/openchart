@@ -45,17 +45,18 @@ test.runIf(process.env.WORKSPACE_BENCHMARK === "1")(
               const fs = yield* FileSystem.FileSystem;
               let reads = 0;
               let bytes = 0;
-              const measured = {
+              const measured: FileSystem.FileSystem = {
                 ...fs,
-                readFile: (path: string) =>
-                  fs.readFile(path).pipe(
-                    Effect.tap((value) =>
+                stream: (path, options) => {
+                  reads++;
+                  return fs.stream(path, options).pipe(
+                    Stream.tap((chunk) =>
                       Effect.sync(() => {
-                        reads++;
-                        bytes += value.byteLength;
+                        bytes += chunk.byteLength;
                       }),
                     ),
-                  ),
+                  );
+                },
               };
               const start = performance.now();
               const workspace = yield* makeWorkspace(

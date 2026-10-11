@@ -11,14 +11,13 @@ scoped observations and file APIs.
 - Effect owns scopes, queues, retries and caches; Chokidar owns watching.
   RcMap shares shallow directory watchers by active consumer; no eager root watch.
   Directory/tree queries read metadata only; never cache text.
-- Index non-hidden directories, including empty ones, separately from `.tea`,
-  `.workflow.ts`, PDF and supported images/audio/video. `mkdir` stays within
-  the registered root; existing directories succeed.
-- Read Base64 bytes, MIME and hash. Media reads
-  cap at 32 MiB, including concurrent growth. Scans omit oversized media;
-  explicit reads fail with `WorkspaceMediaTooLarge`.
-- Text writes reject binary paths. Reads never install dependencies or support
-  files. Workflow owns execution.
+- Index non-hidden directories, even empty ones, and files of any type.
+  `mkdir` stays within the root; existing directories succeed.
+- Reads return Base64, hash and MIME: media by extension, else `text/plain`
+  for UTF-8 without NUL. Reads cap at 32 MiB, even under growth; scans skip
+  larger files.
+- Text writes reject media paths and binary content. Reads install no
+  support files; Workflow owns execution.
 - Hash exact bytes on reads/CAS. Serialize writes, never directory listings;
   external editors share no lock. Committed writes need no scan. Missing and unavailable differ.
 - Errors stay in errors.ts; structured conflicts use the shared boundary.

@@ -110,6 +110,7 @@ test("registration and finite discovery install no watchers and read no file con
   const watch = vi.spyOn(FSWatcher.prototype, "add");
   const fs = await runtime.runPromise(FileSystem.FileSystem);
   const reads = vi.spyOn(fs, "readFile");
+  const streams = vi.spyOn(fs, "stream");
   const record = await ordinary();
   await mkdir(join(record.root, "deep", "child"), { recursive: true });
   await writeFile(
@@ -126,6 +127,7 @@ test("registration and finite discovery install no watchers and read no file con
   });
   expect(watch).not.toHaveBeenCalled();
   expect(reads).not.toHaveBeenCalled();
+  expect(streams).not.toHaveBeenCalled();
 });
 
 test("shallow observations are shared, ignore unopened descendants and release after the last consumer", async () => {
@@ -313,7 +315,6 @@ test("rejects path escapes and symlink traversal at every file access", async ()
     "../outside/secret.tea",
     "/secret.tea",
     ".git/file.tea",
-    "file.txt",
     "nested\\secret.tea",
   ]) {
     await expect(
@@ -337,7 +338,7 @@ test("rejects path escapes and symlink traversal at every file access", async ()
   await expect(readFile(join(outside, "new.tea"))).rejects.toThrow();
 });
 
-test.each(["notes.md", "NOTES.MD", "notes.markdown"])(
+test.each(["notes.md", "NOTES.MD", "notes.markdown", "notes.txt"])(
   "indexes, creates and saves %s with the existing disk conflict protection",
   async (path) => {
     const record = await ordinary();
@@ -555,7 +556,10 @@ test("root replacement at the same path recovers and reads preserve non-UTF-8 by
     .toEqual(["new.tea"]);
   await expect(
     client.workspace.read({ workspaceId: record.id, path: "new.tea" }),
-  ).resolves.toMatchObject({ mediaType: "text/plain", base64: "/w==" });
+  ).resolves.toMatchObject({
+    mediaType: "application/octet-stream",
+    base64: "/w==",
+  });
   await writeFile(join(record.root, "new.tea"), "fixed");
   expect(
     (await client.workspace.read({ workspaceId: record.id, path: "new.tea" }))
@@ -757,11 +761,18 @@ test("creates unnamed home workspaces through the same immutable registry", asyn
   expect(await readFile(join(record.root, entry.path), "utf8")).toBe("close");
 });
 
-test("reads text, PDFs and images through one API without allowing binary writes or symlink escapes", async () => {
+test("reads any file type through one API without allowing binary writes or symlink escapes", async () => {
   const record = await ordinary();
   const files = [
     ["main.tea", Buffer.from("close // clôture 📈"), "text/plain"],
     ["task.workflow.ts", Buffer.from('export default "étude";'), "text/plain"],
+    ["prices.csv", Buffer.from("symbol,close\nAAPL,1"), "text/plain"],
+    ["Makefile", Buffer.from("all:\n\techo ok\n"), "text/plain"],
+    [
+      "book.xlsx",
+      Buffer.from([0x50, 0x4b, 3, 4, 0, 0]),
+      "application/octet-stream",
+    ],
     ["report.pdf", Buffer.from("%PDF-1.7\npreview\n%%EOF"), "application/pdf"],
     [
       "chart.PNG",
@@ -780,7 +791,15 @@ test("reads text, PDFs and images through one API without allowing binary writes
         ? snapshot.entries.map((entry) => entry.path)
         : [];
     })
-    .toEqual(["chart.PNG", "main.tea", "report.pdf", "task.workflow.ts"]);
+    .toEqual([
+      "book.xlsx",
+      "chart.PNG",
+      "main.tea",
+      "Makefile",
+      "prices.csv",
+      "report.pdf",
+      "task.workflow.ts",
+    ]);
   for (const [path, bytes, mediaType] of files) {
     const file = await client.workspace.read({
       workspaceId: record.id,
@@ -807,13 +826,7 @@ test("reads text, PDFs and images through one API without allowing binary writes
   const outside = join(home, "outside.pdf");
   await writeFile(outside, "%PDF-1.7\npreview\n%%EOF");
   await symlink(outside, join(record.root, "linked.pdf"));
-  for (const path of [
-    "linked.pdf",
-    "../outside.pdf",
-    ".hidden/report.pdf",
-    "png",
-    "pdf",
-  ]) {
+  for (const path of ["linked.pdf", "../outside.pdf", ".hidden/report.pdf"]) {
     await expect(
       client.workspace.read({ workspaceId: record.id, path }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -823,9 +836,9 @@ test("reads text, PDFs and images through one API without allowing binary writes
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
 
-test("skips oversized media during scans and bounds direct reads even when the file grows after stat", async () => {
+test("skips oversized files during scans and bounds direct reads even when the file grows after stat", async () => {
   const record = await ordinary();
-  const oversized = join(record.root, "large.mp4");
+  const oversized = join(record.root, "large.csv");
   await writeFile(oversized, "");
   await truncate(oversized, WORKSPACE_MEDIA_MAX_BYTES + 1);
   await writeFile(join(record.root, "chart.png"), "small image");
@@ -844,10 +857,10 @@ test("skips oversized media during scans and bounds direct reads even when the f
     })
     .toEqual(["chart.png", "notes.md"]);
   await expect(
-    client.workspace.read({ workspaceId: record.id, path: "large.mp4" }),
+    client.workspace.read({ workspaceId: record.id, path: "large.csv" }),
   ).rejects.toMatchObject({
     code: "BAD_REQUEST",
-    message: "Workspace media exceeds the 32 MiB limit.",
+    message: "Workspace file exceeds the 32 MiB limit.",
   });
   expect(
     readFileSpy.mock.calls.some(([filename]) => filename === oversized),
@@ -867,10 +880,10 @@ test("skips oversized media during scans and bounds direct reads even when the f
     ),
   );
   await expect(
-    client.workspace.read({ workspaceId: record.id, path: "large.mp4" }),
+    client.workspace.read({ workspaceId: record.id, path: "large.csv" }),
   ).rejects.toMatchObject({
     code: "BAD_REQUEST",
-    message: "Workspace media exceeds the 32 MiB limit.",
+    message: "Workspace file exceeds the 32 MiB limit.",
   });
   expect(streamSpy).toHaveBeenCalledWith(oversized, {
     bytesToRead: WORKSPACE_MEDIA_MAX_BYTES + 1,

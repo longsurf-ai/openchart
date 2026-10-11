@@ -291,7 +291,7 @@ export function failureFor(
     return failure(
       "BAD_REQUEST",
       "workspace.media_too_large",
-      `Workspace media exceeds the ${cause.maxBytes / (1024 * 1024)} MiB limit.`,
+      `Workspace file exceeds the ${cause.maxBytes / (1024 * 1024)} MiB limit.`,
     );
   if (cause instanceof WorkspaceFileProtected)
     return failure(

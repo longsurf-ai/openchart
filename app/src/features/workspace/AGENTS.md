@@ -16,8 +16,8 @@
 - Reads supply `readOnly`: built-ins cannot draft or save. Editable panels own drafts and
   original hashes; refresh preserves dirty text. Hash differences derive the conflict banner;
   AI admission must preserve the draft before clearing it. Saves use CAS; save and refresh failures stay distinct.
-- Markdown uses lazy Crepe with Monaco source fallback; initialization is not editing.
-  Non-Tea buffers use `inmemory:` model URIs; Workspace owns their disk reads/saves.
+- `viewers.ts` maps MIME, then path, to one viewer: text edits; PDF/media/OOXML are
+  read-only; other bytes open externally. Crepe setup isn't editing; non-Tea uses `inmemory:` URIs.
 - Each view owns one lazy Tea session per workspace, disposed on unmount; library tabs are read-only.
 - `UnsavedChangesProvider` shares route/window protection; removal reads live dirty/saving flags.
 - Query/SSE owns metadata; disk owns files. Clean up Blob URLs. App owns routes and placement;

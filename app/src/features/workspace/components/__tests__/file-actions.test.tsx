@@ -58,9 +58,14 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-const disk = (text: string, path: string, readOnly = false) => ({
+const disk = (
+  text: string,
+  path: string,
+  readOnly = false,
+  mediaType = "text/plain",
+) => ({
   entry: { path, hash: text },
-  mediaType: "text/plain",
+  mediaType,
   readOnly,
   base64: Buffer.from(text, "utf8").toString("base64"),
 });
@@ -92,14 +97,18 @@ function setup(
     readOnly = false,
     editor = true,
     extraActions,
+    mediaType,
   }: {
     readOnly?: boolean;
     editor?: boolean;
+    mediaType?: string;
     extraActions?: Parameters<typeof WorkspaceFileActions.Provider>[0]["value"];
   } = {},
 ) {
   rpc.resources.workspace.get.query.mockResolvedValue({ root: "/workspace" });
-  rpc.workspace.read.query.mockResolvedValue(disk("original", path, readOnly));
+  rpc.workspace.read.query.mockResolvedValue(
+    disk("original", path, readOnly, mediaType),
+  );
   const client = createQueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -141,6 +150,7 @@ function setup(
     </QueryClientProvider>,
   );
   return {
+    client,
     containerApi,
     openReference,
     cleanup: () => {
@@ -230,12 +240,19 @@ test("a read-only built-in offers Duplicate to edit", async () => {
 });
 
 test.each([
-  ["notes.md", ["Copy path", "Duplicate"]],
-  ["chart.png", ["Copy path"]],
-  ["tea-lib:/std/ta.tea", []],
-])("%s gets no app-provided action", (path, names) => {
+  ["notes.md", "text/plain", ["Copy path", "Duplicate"]],
+  ["data.bin", "application/octet-stream", ["Copy path"]],
+  ["chart.png", "image/png", ["Copy path"]],
+  ["tea-lib:/std/ta.tea", "text/plain", []],
+])("%s gets no app-provided action", async (path, mediaType, names) => {
   const extraActions = vi.fn(() => <button type="button">Add to chart</button>);
-  const { cleanup } = setup(path, { editor: false, extraActions });
+  const { client, cleanup } = setup(path, {
+    editor: false,
+    extraActions,
+    mediaType,
+  });
+  // Duplicate depends on the read's MIME, so assert once every read settles.
+  await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(
     screen.queryAllByRole("button").map((button) => button.textContent),
   ).toEqual(names);
