@@ -2,6 +2,7 @@ import { useErrorToast } from "@openchart/app/hooks/use-error-toast";
 // Purpose: Render file types inside the same Dockview tabs; retain drafts across background filesystem refreshes.
 import { URI, Utils } from "vscode-uri";
 import {
+  createContext,
   Fragment,
   lazy,
   Suspense,
@@ -10,7 +11,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FileQuestionMarkIcon,
@@ -44,6 +47,7 @@ import {
 } from "@openchart/app/lib/workspace/workspace";
 import { useWorkspaceView } from "@openchart/app/features/workspace/components/context";
 import { useAppHost } from "@openchart/app/lib/host/host";
+import { FileActions } from "@openchart/app/features/workspace/components/file-actions";
 import { fileViewer, type FileViewer } from "./viewers";
 import type { OfficeFormat } from "./office-viewer";
 
@@ -120,7 +124,8 @@ function AssetPanel({
   return <MediaPreview file={query.data} viewer={viewer} path={params.path} />;
 }
 
-function MediaPreview({
+/** Shows PDF, image, audio or video bytes through a Blob URL it revokes on change or unmount. @example <MediaPreview file={read} viewer="image" path="chart.png" /> */
+export function MediaPreview({
   file,
   viewer,
   path,
@@ -175,8 +180,8 @@ function MediaPreview({
   );
 }
 
-/** A failed parse falls back to the default app; a new disk hash remounts and retries. */
-function OfficePreview({
+/** Renders an Office file read-only; a failed parse falls back to the default app, and callers key it by hash to retry. @example <OfficePreview key={hash} base64={read.base64} format="xlsx" workspaceId={id} path="book.xlsx" /> */
+export function OfficePreview({
   base64,
   format,
   ...params
@@ -525,7 +530,15 @@ function FileBreadcrumb({ workspaceId, path }: FilePanelParams) {
   );
 }
 
-/** Select a text editor or byte-preserving preview for a registered file, under its path breadcrumb; the read's MIME decides which. @example components={{ file: FilePanel }} */
+const ToolbarSlot = createContext<HTMLElement | null>(null);
+
+/** Puts a viewer's view switch (Edit / Source, Table / Source) in its panel's breadcrumb row; renders nothing outside a file panel. @example <ToolbarControls><TabsList>…</TabsList></ToolbarControls> */
+export function ToolbarControls({ children }: { children: ReactNode }) {
+  const slot = useContext(ToolbarSlot);
+  return slot ? createPortal(children, slot) : null;
+}
+
+/** Select a text editor or byte-preserving preview for a registered file under one toolbar (breadcrumb, editor controls, file actions); the read's MIME decides which. @example components={{ file: FilePanel }} */
 export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
   const { workspaceId, path } = props.params;
   const { transport } = useWorkspaceView();
@@ -537,10 +550,12 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
     select: (file) => fileViewer(path, file.mediaType),
   });
   const viewer = library ? "code" : read.data;
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   return (
     <div className="flex size-full min-h-0 flex-col">
-      <div className="flex h-6 shrink-0 items-center gap-1 pr-1">
+      <div className="flex h-8 shrink-0 items-center gap-1 border-b pr-1">
         <FileBreadcrumb {...props.params} />
+        <div ref={setSlot} className="flex shrink-0 items-center gap-2" />
         {viewer === "code" ? (
           <TooltipIconButton
             tooltip={wordWrap ? "Disable word wrap" : "Enable word wrap"}
@@ -552,22 +567,33 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
             <WrapTextIcon />
           </TooltipIconButton>
         ) : null}
-      </div>
-      <div className="min-h-0 flex-1">
-        {library ? (
-          <LibraryPanel {...props} wordWrap={wordWrap} />
-        ) : viewer === "code" ||
-          viewer === "markdown" ||
-          viewer === "delimited" ? (
-          <TextPanel {...props} viewer={viewer} wordWrap={wordWrap} />
-        ) : viewer ? (
-          <AssetPanel {...props.params} viewer={viewer} />
-        ) : read.isError ? (
-          <FileError retry={() => void read.refetch()} />
-        ) : (
-          <LoadingFile />
+        {library ? null : (
+          <FileActions
+            api={props.api}
+            params={props.params}
+            onOpen={(path) =>
+              openWorkspaceFile(props.containerApi, workspaceId, path)
+            }
+          />
         )}
       </div>
+      <ToolbarSlot.Provider value={slot}>
+        <div className="min-h-0 flex-1">
+          {library ? (
+            <LibraryPanel {...props} wordWrap={wordWrap} />
+          ) : viewer === "code" ||
+            viewer === "markdown" ||
+            viewer === "delimited" ? (
+            <TextPanel {...props} viewer={viewer} wordWrap={wordWrap} />
+          ) : viewer ? (
+            <AssetPanel {...props.params} viewer={viewer} />
+          ) : read.isError ? (
+            <FileError retry={() => void read.refetch()} />
+          ) : (
+            <LoadingFile />
+          )}
+        </div>
+      </ToolbarSlot.Provider>
     </div>
   );
 }

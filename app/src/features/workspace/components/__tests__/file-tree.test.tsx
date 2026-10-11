@@ -1,7 +1,14 @@
 /// <reference types="vitest/jsdom" />
 // Purpose: Verify the tree's identity, lazy listings, badges and row actions without a view around it.
 import { useState } from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -13,7 +20,7 @@ import { WorkspaceContext } from "@openchart/app/features/workspace/components/c
 import { createTransport } from "@openchart/app/lib/transport/transport";
 
 const rpc = vi.hoisted(() => ({
-  workspace: { listDirectory: { query: vi.fn() } },
+  workspace: { listDirectory: { query: vi.fn() }, read: { query: vi.fn() } },
 }));
 vi.mock("@trpc/client", async (original) => ({
   ...(await original<typeof import("@trpc/client")>()),
@@ -166,4 +173,41 @@ test("folder rows add files without toggling, and menus target their own row", a
     (await screen.findAllByRole("menuitem")).map((item) => item.textContent),
   ).toEqual(["Rename", "Copy path", "Reveal in Finder", "Delete"]);
   expect(open).not.toHaveBeenCalled();
+});
+
+test("Quick Look previews a file beside its row, opens it, and toggles with Space", async () => {
+  const open = vi.fn();
+  const { user } = setup(["notes.md"], [], { onOpen: open });
+  rpc.workspace.read.query.mockResolvedValue({
+    entry: { path: "notes.md", hash: "h" },
+    mediaType: "text/plain",
+    readOnly: false,
+    base64: btoa("# Notes\nline two"),
+  });
+  await row("notes.md");
+  await user.click(screen.getByRole("button", { name: "Quick Look notes.md" }));
+  const card = await screen.findByRole("dialog", {
+    name: "Quick Look notes.md",
+  });
+  expect(await within(card).findByText(/line two/)).toBeVisible();
+  expect(card).toHaveTextContent("MD · 16 B");
+  await user.click(within(card).getByRole("button", { name: "Open" }));
+  expect(open).toHaveBeenCalledExactlyOnceWith("notes.md");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+  const file = await row("notes.md");
+  act(() => file.focus());
+  // user-event's default key map sends no code for Space; Headless Tree reads it.
+  const space = () => {
+    fireEvent.keyDown(file, { key: " ", code: "Space" });
+    fireEvent.keyUp(file, { key: " ", code: "Space" });
+  };
+  space();
+  expect(
+    await screen.findByRole("dialog", { name: "Quick Look notes.md" }),
+  ).toBeVisible();
+  space();
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
 });

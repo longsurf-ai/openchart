@@ -7,7 +7,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@openchart/app/components/ui/tabs";
-import { LoadingFile } from "./file-panel";
+import { LoadingFile, ToolbarControls } from "./file-panel";
 
 const CodeEditor = lazy(() => import("./code-editor"));
 const OfficeViewer = lazy(() => import("./office-viewer"));
@@ -29,6 +29,12 @@ export default function DelimitedEditor(
     title: "Couldn’t show this table",
     retry: () => setMode({ view: "table" }),
   });
+  const controls = (
+    <TabsList aria-label="Table view">
+      <TabsTrigger value="table">Table</TabsTrigger>
+      <TabsTrigger value="source">Source</TabsTrigger>
+    </TabsList>
+  );
   return (
     <Tabs
       className="size-full min-h-0 gap-0"
@@ -37,12 +43,7 @@ export default function DelimitedEditor(
         if (view === "table" || view === "source") setMode({ view });
       }}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
-        <TabsList aria-label="Table view">
-          <TabsTrigger value="table">Table</TabsTrigger>
-          <TabsTrigger value="source">Source</TabsTrigger>
-        </TabsList>
-      </div>
+      <ToolbarControls>{controls}</ToolbarControls>
       <TabsContent value="table" className="min-h-0">
         <Suspense fallback={<LoadingFile />}>
           <OfficeViewer

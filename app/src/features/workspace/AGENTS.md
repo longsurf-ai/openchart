@@ -7,9 +7,9 @@
   badges fill the disclosure slot. Entries under dirty tabs never move.
 - Dockview owns tabs/activation; identity is `{workspaceId, path}` in parameters and IDs,
   never view filters. `openWorkspaceFile` serves tree and language jumps.
-- `file-actions.tsx` renders the active tab's actions from live Dockview params; editors
-  register `save` in the view's `saves` by panel id. `.tea` tabs render lib's `WorkspaceFileActions`.
-  Every panel starts with a path breadcrumb.
+- Each panel's toolbar: breadcrumb, view switches via `ToolbarControls`, then `file-actions.tsx`
+  (Save while dirty, `.tea`'s `WorkspaceFileActions`, one menu). Editors register `save` in
+  `saves` by panel id. Quick Look (eye or Space) reuses the viewers read-only.
 - The view owns one Tea reference dialog (`reference-manual.tsx`, data from `tea.reference`):
   `.tea` tabs' button opens it, ⌘ Click on a name opens its entry (`tea/referenceName`).
 - WorkspaceContents publishes active-file `useAssistantContext` until unmount.

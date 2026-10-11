@@ -8,7 +8,7 @@ import {
   TabsTrigger,
 } from "@openchart/app/components/ui/tabs";
 import CrepeEditor from "./crepe-editor";
-import { LoadingFile } from "./file-panel";
+import { LoadingFile, ToolbarControls } from "./file-panel";
 
 const CodeEditor = lazy(() => import("./code-editor"));
 
@@ -29,6 +29,19 @@ export default function MarkdownEditor(
       retry: () => setMode({ view: "edit" }),
     },
   );
+  const controls = (
+    <>
+      {mode.view === "source" && typeof mode.reason === "string" ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          {mode.reason}
+        </p>
+      ) : null}
+      <TabsList aria-label="Markdown view">
+        <TabsTrigger value="edit">Edit</TabsTrigger>
+        <TabsTrigger value="source">Source</TabsTrigger>
+      </TabsList>
+    </>
+  );
   return (
     <Tabs
       className="size-full min-h-0 gap-0"
@@ -37,17 +50,7 @@ export default function MarkdownEditor(
         if (view === "edit" || view === "source") setMode({ view });
       }}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1">
-        <TabsList aria-label="Markdown view">
-          <TabsTrigger value="edit">Edit</TabsTrigger>
-          <TabsTrigger value="source">Source</TabsTrigger>
-        </TabsList>
-        {mode.view === "source" && typeof mode.reason === "string" ? (
-          <p role="status" className="text-xs text-muted-foreground">
-            {mode.reason}
-          </p>
-        ) : null}
-      </div>
+      <ToolbarControls>{controls}</ToolbarControls>
       <TabsContent value="edit" className="min-h-0">
         <CrepeEditor
           value={props.value}

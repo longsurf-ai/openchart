@@ -1,19 +1,19 @@
-import { renderWithToaster as render } from "@openchart/app/testing/test-utils";
+import {
+  renderWithToaster as render,
+  testAppHost,
+} from "@openchart/app/testing/test-utils";
 import { createQueryClient } from "@openchart/app/lib/react-query/react-query";
-// Purpose: Verify tab-header file actions follow the live tab, save through the editor's registry and contribute app actions only for Tea files.
+// Purpose: Verify each panel's toolbar actions follow its live params, save through the editor's registry and contribute app actions only for Tea files.
+import { useState } from "react";
 import { QueryClientProvider, useMutation } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
-import type {
-  DockviewApi,
-  IDockviewPanel,
-  IDockviewPanelProps,
-} from "dockview-react";
+import type { IDockviewPanelProps } from "dockview-react";
 import { createTransport } from "@openchart/app/lib/transport/transport";
+import { AppHostProvider } from "@openchart/app/lib/host/host";
 import { WorkspaceFileActions } from "@openchart/app/lib/workspace/workspace";
 import { WorkspaceContext } from "@openchart/app/features/workspace/components/context";
-import { FileActions } from "@openchart/app/features/workspace/components/file-actions";
 import {
   FilePanel,
   type FilePanelParams,
@@ -54,8 +54,19 @@ vi.mock(
   () =>
     import("@openchart/app/features/workspace/components/file-panel/code-editor"),
 );
+beforeEach(() => {
+  // Image previews create Blob URLs, which jsdom does not implement.
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static createObjectURL = () => "blob:preview";
+      static revokeObjectURL = () => {};
+    },
+  );
+});
 afterEach(() => {
   vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const disk = (
@@ -69,38 +80,39 @@ const disk = (
   readOnly,
   base64: Buffer.from(text, "utf8").toString("base64"),
 });
-/** A Dockview panel whose params change like Dockview's: merged, then announced. */
-function fakePanel(params: FilePanelParams) {
-  const listeners = new Set<() => void>();
-  const id = `${params.workspaceId}/${params.path}`;
-  const panel = {
-    id,
-    params,
-    api: {
-      id,
-      setTitle: vi.fn(),
-      updateParameters: (next: Partial<FilePanelParams>) => {
-        panel.params = { ...panel.params, ...next };
-        listeners.forEach((listener) => listener());
-      },
-      onDidParametersChange: (listener: () => void) => {
-        listeners.add(listener);
-        return { dispose: () => listeners.delete(listener) };
-      },
-    },
-  };
-  return panel;
+/** Re-renders the panel with merged params on every update, like Dockview. */
+function Panel({
+  initial,
+  containerApi,
+}: {
+  initial: FilePanelParams;
+  containerApi: unknown;
+}) {
+  const [params, setParams] = useState(initial);
+  const [api] = useState(() => ({
+    id: `${initial.workspaceId}/${initial.path}`,
+    setTitle: vi.fn(),
+    updateParameters: (next: Partial<FilePanelParams>) =>
+      setParams((current) => ({ ...current, ...next })),
+  }));
+  return (
+    <FilePanel
+      {...({
+        api,
+        params,
+        containerApi,
+      } as unknown as IDockviewPanelProps<FilePanelParams>)}
+    />
+  );
 }
 function setup(
   path: string,
   {
     readOnly = false,
-    editor = true,
     extraActions,
     mediaType,
   }: {
     readOnly?: boolean;
-    editor?: boolean;
     mediaType?: string;
     extraActions?: Parameters<typeof WorkspaceFileActions.Provider>[0]["value"];
   } = {},
@@ -113,51 +125,57 @@ function setup(
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   const transport = createTransport({ origin: "http://127.0.0.1:41000" });
-  const panel = fakePanel({ workspaceId: "wsp_test", path });
   const containerApi = { getPanel: vi.fn(), addPanel: vi.fn() };
   const openReference = vi.fn();
+  const host = testAppHost({
+    openPath: vi.fn(async () => {}),
+    revealPath: vi.fn(async () => {}),
+  });
   const view = render(
     <QueryClientProvider client={client}>
-      <WorkspaceContext.Provider
-        value={{
-          transport,
-          languageError: undefined,
-          onLanguageError: vi.fn(),
-          teaSessions: { current: new Map() },
-          openReference,
-          saves: { current: new Map() },
-          instanceId: "test",
-          collapsible: false,
-          dark: false,
-        }}
-      >
-        <WorkspaceFileActions.Provider value={extraActions ?? null}>
-          <FileActions
-            panel={panel as unknown as IDockviewPanel}
-            containerApi={containerApi as unknown as DockviewApi}
-          />
-          {editor ? (
-            <FilePanel
-              {...({
-                api: panel.api,
-                params: panel.params,
-                containerApi,
-              } as unknown as IDockviewPanelProps<FilePanelParams>)}
+      <AppHostProvider value={host}>
+        <WorkspaceContext.Provider
+          value={{
+            transport,
+            languageError: undefined,
+            onLanguageError: vi.fn(),
+            teaSessions: { current: new Map() },
+            openReference,
+            saves: { current: new Map() },
+            instanceId: "test",
+            collapsible: false,
+            dark: false,
+          }}
+        >
+          <WorkspaceFileActions.Provider value={extraActions ?? null}>
+            <Panel
+              initial={{ workspaceId: "wsp_test", path }}
+              containerApi={containerApi}
             />
-          ) : null}
-        </WorkspaceFileActions.Provider>
-      </WorkspaceContext.Provider>
+          </WorkspaceFileActions.Provider>
+        </WorkspaceContext.Provider>
+      </AppHostProvider>
     </QueryClientProvider>,
   );
   return {
     client,
     containerApi,
+    host,
     openReference,
+    user: userEvent.setup(),
     cleanup: () => {
       view.unmount();
       client.clear();
     },
   };
+}
+async function menuItems(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole("button", { name: "More file actions" }),
+  );
+  return (await screen.findAllByRole("menuitem")).map((item) =>
+    item.textContent?.trim(),
+  );
 }
 
 test("Save shows only while the tab is dirty and writes the draft with its CAS hash", async () => {
@@ -169,9 +187,6 @@ test("Save shows only while the tab is dirty and writes the draft with its CAS h
   fireEvent.change(editor, { target: { value: "draft" } });
   rpc.workspace.write.mutate.mockResolvedValue(disk("draft", "main.tea").entry);
   rpc.workspace.read.query.mockResolvedValue(disk("draft", "main.tea"));
-  // One size with the tab bar's 32px Toggle files and view actions.
-  for (const name of ["Save", "Copy path", "Duplicate"])
-    expect(await screen.findByRole("button", { name })).toHaveClass("size-8");
   fireEvent.click(await screen.findByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(
@@ -188,12 +203,12 @@ test("Save shows only while the tab is dirty and writes the draft with its CAS h
 });
 
 test("Copy path copies the Workspace-relative path", async () => {
-  const user = userEvent.setup();
-  const { cleanup } = setup("indicators/rsi.tea", { editor: false });
+  const { user, cleanup } = setup("indicators/rsi.tea");
   const copy = vi
     .spyOn(navigator.clipboard, "writeText")
     .mockResolvedValue(undefined);
-  await user.click(screen.getByRole("button", { name: "Copy path" }));
+  await menuItems(user);
+  await user.click(screen.getByRole("menuitem", { name: "Copy path" }));
   expect(copy).toHaveBeenCalledExactlyOnceWith("indicators/rsi.tea");
   cleanup();
 });
@@ -208,10 +223,10 @@ test("Duplicate creates the copy under a free name without overwriting, then ope
     directories: ["indicators/rsi-copy-2.tea"],
   });
   rpc.workspace.write.mutate.mockResolvedValue({});
-  const { containerApi, cleanup } = setup("indicators/rsi.tea", {
-    editor: false,
-  });
-  fireEvent.click(await screen.findByRole("button", { name: "Duplicate" }));
+  const { user, containerApi, cleanup } = setup("indicators/rsi.tea");
+  await screen.findByRole("textbox", { name: "Code" });
+  await menuItems(user);
+  await user.click(screen.getByRole("menuitem", { name: "Duplicate" }));
   await waitFor(() => expect(containerApi.addPanel).toHaveBeenCalledOnce());
   expect(rpc.workspace.write.mutate).toHaveBeenCalledExactlyOnceWith({
     workspaceId: "wsp_test",
@@ -229,34 +244,68 @@ test("Duplicate creates the copy under a free name without overwriting, then ope
 });
 
 test("a read-only built-in offers Duplicate to edit", async () => {
-  const { cleanup } = setup("indicators/builtin/sma.tea", {
+  const { user, cleanup } = setup("indicators/builtin/sma.tea", {
     readOnly: true,
-    editor: false,
   });
-  expect(
-    await screen.findByRole("button", { name: "Duplicate to edit" }),
-  ).toBeInTheDocument();
+  await screen.findByRole("textbox", { name: "Code" });
+  expect(await menuItems(user)).toContain("Duplicate to edit");
   cleanup();
 });
 
 test.each([
-  ["notes.md", "text/plain", ["Copy path", "Duplicate"]],
-  ["data.bin", "application/octet-stream", ["Copy path"]],
-  ["chart.png", "image/png", ["Copy path"]],
-  ["tea-lib:/std/ta.tea", "text/plain", []],
-])("%s gets no app-provided action", async (path, mediaType, names) => {
-  const extraActions = vi.fn(() => <button type="button">Add to chart</button>);
-  const { client, cleanup } = setup(path, {
-    editor: false,
-    extraActions,
-    mediaType,
-  });
-  // Duplicate depends on the read's MIME, so assert once every read settles.
-  await waitFor(() => expect(client.isFetching()).toBe(0));
+  [
+    "notes.md",
+    "text/plain",
+    ["Copy path", "Duplicate", "Reveal in Finder", "Open in default app"],
+  ],
+  [
+    "data.bin",
+    "application/octet-stream",
+    ["Copy path", "Reveal in Finder", "Open in default app"],
+  ],
+  [
+    "chart.png",
+    "image/png",
+    ["Copy path", "Reveal in Finder", "Open in default app"],
+  ],
+])(
+  "%s offers only the menu actions its type supports and no app action",
+  async (path, mediaType, names) => {
+    const extraActions = vi.fn(() => (
+      <button type="button">Add to chart</button>
+    ));
+    const { user, client, cleanup } = setup(path, { extraActions, mediaType });
+    // Duplicate depends on the read's MIME, so assert once every read settles.
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(await menuItems(user)).toEqual(names);
+    expect(extraActions).not.toHaveBeenCalled();
+    cleanup();
+  },
+);
+
+test("library tabs have no file actions", async () => {
+  const { cleanup } = setup("tea-lib:/std/ta.tea");
   expect(
-    screen.queryAllByRole("button").map((button) => button.textContent),
-  ).toEqual(names);
-  expect(extraActions).not.toHaveBeenCalled();
+    screen.queryByRole("button", { name: "More file actions" }),
+  ).not.toBeInTheDocument();
+  cleanup();
+});
+
+test("Finder and default-app actions use the file's absolute path", async () => {
+  const { user, host, cleanup } = setup("indicators/rsi.tea");
+  await screen.findByRole("textbox", { name: "Code" });
+  await menuItems(user);
+  await user.click(screen.getByRole("menuitem", { name: "Reveal in Finder" }));
+  expect(host.revealPath).toHaveBeenCalledExactlyOnceWith(
+    "/workspace/indicators/rsi.tea",
+  );
+  await menuItems(user);
+  await user.click(
+    screen.getByRole("menuitem", { name: "Open in default app" }),
+  );
+  expect(host.openPath).toHaveBeenCalledExactlyOnceWith(
+    "/workspace/indicators/rsi.tea",
+  );
   cleanup();
 });
 
@@ -336,15 +385,15 @@ test("a failed save rejects prepare(), so the app action stops and the save's to
 });
 
 test("a .tea tab opens the view's Tea reference", async () => {
-  const { openReference, cleanup } = setup("main.tea", { editor: false });
+  const { openReference, cleanup } = setup("main.tea");
   fireEvent.click(await screen.findByRole("button", { name: "Tea reference" }));
   expect(openReference).toHaveBeenCalledExactlyOnceWith();
   cleanup();
 });
 
 test("only a .tea tab offers the Tea reference", async () => {
-  const { cleanup } = setup("notes.md", { editor: false });
-  await screen.findByRole("button", { name: "Copy path" });
+  const { cleanup } = setup("notes.md");
+  await screen.findByRole("button", { name: "More file actions" });
   expect(
     screen.queryByRole("button", { name: "Tea reference" }),
   ).not.toBeInTheDocument();

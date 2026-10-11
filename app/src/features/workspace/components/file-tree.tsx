@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Copy,
   Ellipsis,
+  Eye,
   File,
   FilePlus,
   Folder,
@@ -26,8 +27,13 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@openchart/app/components/ui/button";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@openchart/app/components/ui/popover";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -48,6 +54,7 @@ import {
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { cn } from "@openchart/app/utils/cn";
 import { useWorkspaceView } from "./context";
+import { QuickLook } from "./file-panel/quick-look";
 
 export type CreateKind = "file" | "folder";
 /** One row's workspace-relative identity; folders also move and delete whole. */
@@ -280,11 +287,13 @@ function TreeRow({
   active,
   dirty,
   actions,
+  onQuickLook,
 }: {
   item: ItemInstance<Node>;
   active: boolean;
   dirty: boolean;
   actions: FileTreeActions;
+  onQuickLook: () => void;
 }) {
   const entry = item.getItemData();
   const level = item.getItemMeta().level;
@@ -383,7 +392,21 @@ function TreeRow({
                 >
                   <Plus />
                 </Button>
-              ) : null}
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  tabIndex={-1}
+                  className="size-5"
+                  aria-label={`Quick Look ${entry.name}`}
+                  onClick={(event) => {
+                    stop(event);
+                    onQuickLook();
+                  }}
+                >
+                  <Eye />
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -462,6 +485,15 @@ export function FileTree({
 }) {
   const { transport } = useWorkspaceView();
   const searching = search.trim().length > 0;
+  // One Quick Look at a time, positioned against its row.
+  const [quickLook, setQuickLook] = useState<string | null>(null);
+  const anchor = useRef<HTMLElement | null>(null);
+  const toggleQuickLook = (item: ItemInstance<Node>) => {
+    const entry = item.getItemData();
+    if (entry.folder) return;
+    anchor.current = item.getElement() ?? null;
+    setQuickLook((current) => (current === entry.path ? null : entry.path));
+  };
   // Each expanded folder keeps one live listing; collapsing releases it.
   const directories = useMemo(() => ["", ...expanded], [expanded]);
   const listings = useQueries({
@@ -564,6 +596,11 @@ export function FileTree({
     },
     indent: INDENT,
     hotkeys: {
+      customQuickLook: {
+        hotkey: "Space",
+        preventDefault: true,
+        handler: (_, tree) => toggleQuickLook(tree.getFocusedItem()),
+      },
       customOpen: {
         hotkey: "Enter",
         handler: (_, tree) => {
@@ -629,9 +666,37 @@ export function FileTree({
             active={!entry.folder && entry.path === active}
             dirty={!entry.folder && dirty.has(entry.path)}
             actions={actions}
+            onQuickLook={() => toggleQuickLook(item)}
           />
         );
       })}
+      <Popover
+        open={quickLook !== null}
+        onOpenChange={(open) => {
+          if (!open) setQuickLook(null);
+        }}
+      >
+        <PopoverAnchor virtualRef={anchor} />
+        {quickLook !== null ? (
+          <PopoverContent
+            side="right"
+            align="start"
+            className="w-80 p-3"
+            aria-label={`Quick Look ${basename(quickLook)}`}
+            // Keep keyboard focus in the tree so Space closes the preview again.
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <QuickLook
+              workspaceId={workspace.id}
+              path={quickLook}
+              onOpen={() => {
+                setQuickLook(null);
+                actions.onOpen(quickLook);
+              }}
+            />
+          </PopoverContent>
+        ) : null}
+      </Popover>
     </div>
   );
 }

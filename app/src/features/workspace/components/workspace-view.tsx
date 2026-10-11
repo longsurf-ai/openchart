@@ -24,7 +24,6 @@ import {
   themeDark,
   themeLight,
   type DockviewApi,
-  type IDockviewHeaderActionsProps,
   type IDockviewPanel,
   type IDockviewPanelHeaderProps,
 } from "dockview-react";
@@ -70,7 +69,6 @@ import {
   type WorkspaceViewStore,
 } from "../stores/view";
 import { WorkspaceContext, useWorkspaceView } from "./context";
-import { FileActions } from "./file-actions";
 import { ReferenceManual } from "./reference-manual";
 import { FileTree, type CreateKind, type TreeEntry } from "./file-tree";
 import { CreateEntryDialog } from "./create-entry-dialog";
@@ -104,18 +102,12 @@ function EmptyFiles() {
     </div>
   );
 }
-/** Active-file actions, then the file-tree toggle and the view's own actions; the empty state passes no panel. */
-function HeaderActions({
-  activePanel,
-  containerApi,
-}: Partial<IDockviewHeaderActionsProps>) {
+/** The file-tree toggle and the view's own actions; file actions live in each panel's toolbar. */
+function HeaderActions() {
   const { actions, collapsible } = useWorkspaceView();
   const { isMobile } = useSidebar();
   return (
     <div className="flex h-full items-center gap-1 px-1">
-      {activePanel && containerApi ? (
-        <FileActions panel={activePanel} containerApi={containerApi} />
-      ) : null}
       {/* Shown whenever the panel can close: in widgets and the compact overlay. */}
       {collapsible || isMobile ? (
         <SidebarTrigger
