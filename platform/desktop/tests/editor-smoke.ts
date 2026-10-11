@@ -94,9 +94,10 @@ try {
   );
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto(new URL("/app/workspaces", rendererOrigin).href);
-  for (const name of ["default", "indicators", "builtin"])
-    await page.getByRole("button", { name, exact: true }).click();
-  await page.getByRole("button", { name: "sma.tea", exact: true }).click();
+  // The navigator shows the default workspace's contents directly.
+  for (const name of ["indicators", "builtin"])
+    await page.getByRole("treeitem", { name, exact: true }).click();
+  await page.getByRole("treeitem", { name: "sma.tea", exact: true }).click();
   const editor = page.locator(".monaco-editor:visible");
   await expect(editor).toBeVisible({ timeout: 30_000 });
   // Check actual surfaces, including hidden tabs: a stale editor theme affects
@@ -136,7 +137,7 @@ try {
   await page.keyboard.press("ControlOrMeta+S");
   assert.equal(await readFile(builtin, "utf8"), original);
   await expect(page.getByRole("tab", { name: /sma.tea.*•/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "main.tea", exact: true }).click();
+  await page.getByRole("treeitem", { name: "main.tea", exact: true }).click();
   await expect(editor).toBeVisible({ timeout: 30_000 });
   await expect(editor.locator(".squiggly-error")).not.toHaveCount(0, {
     timeout: 15_000,
@@ -289,7 +290,7 @@ try {
     await expectSyntaxColors("Tea", teaTokens);
   }
   await page
-    .getByRole("button", { name: "editor.workflow.ts", exact: true })
+    .getByRole("treeitem", { name: "editor.workflow.ts", exact: true })
     .click();
   await expect(editor.locator(".view-lines")).toContainText("const count");
   for (const dark of [true, false]) {

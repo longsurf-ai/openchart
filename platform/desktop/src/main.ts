@@ -32,6 +32,14 @@ import { cloudEndpoints, developmentTestAccount } from "./cloud";
 // The name determines the app's data folder and macOS Keychain entry.
 // Give development runs their own name to keep their data separate.
 // tooling replaces this flag at build time; release bundles cannot enable Vite.
+/** A renderer-supplied absolute local path; URLs, UNC paths and NUL bytes are refused. */
+const LocalPath = z
+  .string()
+  .refine(
+    (value) =>
+      isAbsolute(value) && !value.startsWith("//") && !value.includes("\0"),
+    "Expected an absolute local path",
+  );
 const developmentBuild =
   !app.isPackaged || process.env.OPENCHART_DESKTOP_BUILD === "development";
 /** Report command-line failures directly; packaged launches show an error after ready. */
@@ -360,18 +368,12 @@ function start(): void {
         });
         ipcMain.handle("desktop.openPath", async (event, input: unknown) => {
           assertTrustedFrame(event);
-          const path = z
-            .string()
-            .refine(
-              (value) =>
-                isAbsolute(value) &&
-                !value.startsWith("//") &&
-                !value.includes("\0"),
-              "Expected an absolute local path",
-            )
-            .parse(input);
-          const error = await shell.openPath(path);
+          const error = await shell.openPath(LocalPath.parse(input));
           if (error) throw new Error(error);
+        });
+        ipcMain.handle("desktop.revealPath", async (event, input: unknown) => {
+          assertTrustedFrame(event);
+          shell.showItemInFolder(LocalPath.parse(input));
         });
         ipcMain.handle("desktop.openBilling", async (event, input: unknown) => {
           assertTrustedFrame(event);

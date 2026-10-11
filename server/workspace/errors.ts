@@ -28,6 +28,11 @@ export class WorkspaceFileProtected extends Schema.TaggedError<WorkspaceFileProt
   "WorkspaceFileProtected",
   { workspaceId: WorkspaceId, path: Schema.String },
 ) {}
+/** A move would replace an existing file or folder; nothing changed. */
+export class EntryExists extends Schema.TaggedError<EntryExists>()(
+  "EntryExists",
+  { workspaceId: WorkspaceId, path: Schema.String },
+) {}
 /** A requested artifact does not exist. */
 export class EntryMissing extends Schema.TaggedError<EntryMissing>()(
   "EntryMissing",

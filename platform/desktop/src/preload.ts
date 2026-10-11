@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("desktop", {
   pickDirectory: () => ipcRenderer.invoke("desktop.pickDirectory"),
   /** Opens a local file with the system's default application. */
   openPath: (path: string) => ipcRenderer.invoke("desktop.openPath", path),
+  revealPath: (path: string) => ipcRenderer.invoke("desktop.revealPath", path),
   /** Opens a validated Stripe Checkout or Portal link. */
   openBilling: (url: string) => ipcRenderer.invoke("desktop.openBilling", url),
   /** Billing returns contain no status or account data; consumers query the backend. */

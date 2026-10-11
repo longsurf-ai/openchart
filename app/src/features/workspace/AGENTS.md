@@ -1,10 +1,10 @@
 # Workspace files
 
-- `workspace-view.tsx` composes the shared Sidebar and one Dockview group; preserve
-  its menu structure, tokens and container sizing. Tree rows are 24px, gapless,
-  left-nested; files reserve the disclosure slot. Only widgets are `collapsible`.
-- `workspace-tree.tsx` lists registered folders through Query; widgets and the page
-  show all of them without selection state. Creation explicitly targets workspace/folder.
+- `workspace-view.tsx` composes the shared Sidebar (switcher and Add above, search
+  below) and one Dockview group. Only widgets are `collapsible`.
+- One Workspace shows at a time; `stores/view.ts` remembers it per placement and
+  requested files select theirs. `file-tree.tsx` (Headless Tree) keeps 24px rows;
+  badges fill the disclosure slot. Entries under dirty tabs never move.
 - Dockview owns tabs/activation; identity is `{workspaceId, path}` in parameters and IDs,
   never view filters. `openWorkspaceFile` serves tree and language jumps.
 - `file-actions.tsx` renders the active tab's actions from live Dockview params; editors

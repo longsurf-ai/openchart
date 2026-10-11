@@ -7,6 +7,7 @@ import { SetupFailed } from "@openchart/server/models/onboarding/errors";
 import { AlertSaveConflict } from "@openchart/server/alert/errors";
 
 import {
+  EntryExists,
   EntryMissing,
   EntryStale,
   WorkspaceClosed,
@@ -257,6 +258,12 @@ export function failureFor(
       "BAD_REQUEST",
       "command.unsupported_part",
       "This Part cannot be restored to a command without losing information.",
+    );
+  if (cause instanceof EntryExists)
+    return failure(
+      "CONFLICT",
+      "workspace.entry_exists",
+      "A file or folder with that name already exists.",
     );
   if (cause instanceof EntryStale)
     return failure(

@@ -125,6 +125,42 @@ export function DeleteFileDialog({
   );
 }
 
+/** Permanently delete a folder and everything in it; built-in originals refuse. Failure keeps the dialog and drafts. @example <DeleteFolderDialog workspaceId={id} path="notes" onDeleted={closeTabs} onClose={closeDialog} /> */
+export function DeleteFolderDialog({
+  workspaceId,
+  path,
+  onDeleted,
+  onClose,
+}: {
+  workspaceId: string;
+  path: string;
+  onDeleted: () => void;
+  onClose: () => void;
+}) {
+  const { transport } = useWorkspaceView();
+  const { removeDirectory } = useWorkspaceFileMutations(
+    transport,
+    workspaceId,
+    onDeleted,
+  );
+  return (
+    <RemovalConfirmation
+      title="Delete folder?"
+      description={
+        <>
+          Permanently delete <span className="break-all">{path}</span> and
+          everything in it? Open tabs inside it and their unsaved changes in
+          this view will be discarded.
+        </>
+      }
+      action="Delete folder"
+      pending={removeDirectory.isPending}
+      onClose={onClose}
+      onConfirm={() => removeDirectory.mutate(path)}
+    />
+  );
+}
+
 /** Forget only the registration, keeping disk files; release matching view tabs on success before refreshing queries. @example <ForgetWorkspaceDialog workspaceId={id} root={root} onForgot={closeTabs} onClose={closeDialog} /> */
 export function ForgetWorkspaceDialog({
   workspaceId,

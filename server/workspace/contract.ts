@@ -129,6 +129,17 @@ export const RemoveInput = Schema.Struct({
   ...ReadInput.fields,
   expected: Hash,
 });
+/** Moves a folder and its contents within one workspace; never overwrites an existing entry. */
+export const RenameDirectoryInput = Schema.Struct({
+  ...ByWorkspace.fields,
+  from: RelativePath,
+  to: RelativePath,
+});
+/** Permanently deletes a folder and its contents. */
+export const RemoveDirectoryInput = Schema.Struct({
+  ...ByWorkspace.fields,
+  path: RelativePath,
+});
 /** Rename stays within the same workspace and never intentionally overwrites a target. */
 export const RenameInput = Schema.Struct({
   ...ByWorkspace.fields,

@@ -10,7 +10,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "zustand";
+import { toast } from "sonner";
+import { URI, Utils } from "vscode-uri";
 import { useAssistantContext } from "@assistant-ui/react";
 import { useUnsavedChanges } from "@openchart/app/lib/unsaved-changes/unsaved-changes";
 import { useDarkTheme } from "@openchart/app/lib/theme/theme";
@@ -22,20 +25,29 @@ import {
   themeLight,
   type DockviewApi,
   type IDockviewHeaderActionsProps,
+  type IDockviewPanel,
   type IDockviewPanelHeaderProps,
 } from "dockview-react";
-import { Files } from "lucide-react";
+import { FilePlus, Files, FolderPlus, Plus, Search, X } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarMenu,
+  SidebarHeader,
+  SidebarInput,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
   useSidebar,
 } from "@openchart/app/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@openchart/app/components/ui/dropdown";
 import { Button } from "@openchart/app/components/ui/button";
 import {
   Dialog,
@@ -47,16 +59,27 @@ import {
 } from "@openchart/app/components/ui/dialog";
 import {
   defaultWorkspaceQueryOptions,
+  useWorkspaceFileMutations,
   workspacesQueryOptions,
 } from "@openchart/app/lib/workspace/workspace";
+import { useAppHost } from "@openchart/app/lib/host/host";
+import { cn } from "@openchart/app/utils/cn";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
+import {
+  createWorkspaceViewStore,
+  type WorkspaceViewStore,
+} from "../stores/view";
 import { WorkspaceContext, useWorkspaceView } from "./context";
-import { CreateWorkspaceButton } from "./create-workspace-button";
 import { FileActions } from "./file-actions";
 import { ReferenceManual } from "./reference-manual";
-import { WorkspaceTree } from "./workspace-tree";
-import { WorkspaceFileSearch } from "./workspace-file-search";
-import { DeleteFileDialog, ForgetWorkspaceDialog } from "./remove-entry-dialog";
+import { FileTree, type CreateKind, type TreeEntry } from "./file-tree";
+import { CreateEntryDialog } from "./create-entry-dialog";
+import { WorkspaceSwitcher, workspaceName } from "./workspace-switcher";
+import {
+  DeleteFileDialog,
+  DeleteFolderDialog,
+  ForgetWorkspaceDialog,
+} from "./remove-entry-dialog";
 import {
   FilePanel,
   openWorkspaceFile,
@@ -144,6 +167,44 @@ function FileTab(props: IDockviewPanelHeaderProps<FilePanelParams>) {
     </>
   );
 }
+/** Open tab IDs (`workspaceId/path`) holding unsaved drafts, following Dockview's live params. */
+function useDirtyFiles(api: DockviewApi | undefined) {
+  const [dirty, setDirty] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    if (!api) return;
+    const update = () =>
+      setDirty(
+        new Set(
+          api.panels
+            .filter((panel) => (panel.params as FilePanelParams).dirty)
+            .map((panel) => panel.id),
+        ),
+      );
+    const listeners = new Map<string, { dispose: () => void }>();
+    const watch = (panel: IDockviewPanel) =>
+      listeners.set(panel.id, panel.api.onDidParametersChange(update));
+    api.panels.forEach(watch);
+    const added = api.onDidAddPanel((panel) => {
+      watch(panel);
+      update();
+    });
+    const removed = api.onDidRemovePanel((panel) => {
+      listeners.get(panel.id)?.dispose();
+      listeners.delete(panel.id);
+      update();
+    });
+    update();
+    return () => {
+      added.dispose();
+      removed.dispose();
+      listeners.forEach((listener) => listener.dispose());
+    };
+  }, [api]);
+  return dirty;
+}
+/** True for the path itself or anything inside it when it is a folder. */
+const within = (path: string, entry: TreeEntry) =>
+  path === entry.path || (entry.folder && path.startsWith(`${entry.path}/`));
 /** True while an open tab owns an unsaved draft or in-flight save. @example if (hasUnsavedFiles(api)) confirmNavigation(); */
 function hasUnsavedFiles(api: DockviewApi | undefined) {
   return (
@@ -192,6 +253,10 @@ export function WorkspaceView({
     };
   }, []);
   const dark = useDarkTheme();
+  // The page shares one remembered Workspace; each widget placement keeps its own.
+  const [view] = useState(() =>
+    createWorkspaceViewStore(scopeId ? `widget:${scopeId}` : "page"),
+  );
   const context = useMemo(
     () => ({
       transport,
@@ -224,6 +289,7 @@ export function WorkspaceView({
         <WorkspaceContents
           transport={transport}
           dark={dark}
+          view={view}
           workspaceId={workspaceId}
           file={file}
           onFileOpen={onFileOpen}
@@ -248,6 +314,7 @@ function WorkspaceContents({
   title,
   transport,
   dark,
+  view,
 }: {
   workspaceId?: string;
   file?: Pick<FilePanelParams, "workspaceId" | "path">;
@@ -256,21 +323,56 @@ function WorkspaceContents({
   title?: string;
   transport: AppTransport;
   dark: boolean;
+  view: WorkspaceViewStore;
 }) {
   const query = useQuery(workspacesQueryOptions(transport));
   const defaultWorkspace = useQuery(defaultWorkspaceQueryOptions(transport));
   const [removing, setRemoving] = useState<
-    | { kind: "file"; workspaceId: string; path: string }
+    | { kind: "file" | "folder"; workspaceId: string; path: string }
     | { kind: "workspace"; workspaceId: string; root: string }
   >();
+  const [creating, setCreating] = useState<{
+    kind: CreateKind;
+    directory: string;
+  }>();
+  const [search, setSearch] = useState("");
+  const [focused, setFocused] = useState<TreeEntry | null>(null);
+  const [expanded, setExpanded] = useState<string[]>([]);
   const { isMobile, setOpenMobile } = useSidebar();
   const { navigation, collapsible } = useWorkspaceView();
+  const { revealPath } = useAppHost();
   const [api, setApi] = useState<DockviewApi>();
+  const dirty = useDirtyFiles(api);
   const fileWorkspaceId = file?.workspaceId;
   const filePath = file?.path;
   const files = useRef<HTMLDivElement>(null);
   const [active, setActive] =
     useState<Pick<FilePanelParams, "workspaceId" | "path">>();
+  // A `workspaceId` prop locks the view; otherwise the remembered choice wins
+  // while it stays registered, then the default, then the first registration.
+  const remembered = useStore(view, (state) => state.workspaceId);
+  const registered = query.data ?? [];
+  const workspace =
+    registered.find(({ id }) => id === workspaceId) ??
+    (workspaceId
+      ? undefined
+      : (registered.find(({ id }) => id === remembered) ??
+        registered.find(({ id }) => id === defaultWorkspace.data) ??
+        registered[0]));
+  const select = (id: string) => {
+    if (workspaceId || id === workspace?.id) return;
+    view.setState({ workspaceId: id });
+    setSearch("");
+    setFocused(null);
+    setExpanded([]);
+  };
+  const mutations = useWorkspaceFileMutations(transport, workspace?.id ?? "");
+  const reveal = useMutation({
+    meta: { errorTitle: "Couldn’t reveal in Finder" },
+    mutationFn: ({ root, path }: { root: string; path: string }) =>
+      revealPath(Utils.joinPath(URI.file(root), path).fsPath),
+    retry: false,
+  });
   useAssistantContext({
     getContext: () =>
       JSON.stringify({
@@ -297,14 +399,46 @@ function WorkspaceContents({
   useEffect(() => {
     if (!api || !fileWorkspaceId || !filePath) return;
     openWorkspaceFile(api, fileWorkspaceId, filePath);
+    // A request for another workspace's file also shows that workspace.
+    if (!workspaceId) view.setState({ workspaceId: fileWorkspaceId });
     // A dashboard widget may sit below the fold; jsdom has no scrollIntoView.
     files.current?.scrollIntoView?.({ block: "nearest" });
     onFileOpen?.();
-  }, [api, fileWorkspaceId, filePath, onFileOpen]);
+  }, [api, fileWorkspaceId, filePath, onFileOpen, workspaceId, view]);
   const openFile = (workspaceId: string, path: string) => {
     if (!api) return;
     openWorkspaceFile(api, workspaceId, path);
     if (isMobile) setOpenMobile(false);
+  };
+  // Tabs inside an entry, excluding other workspaces' files with the same path.
+  const tabsWithin = (owner: string, entry: TreeEntry) =>
+    (api?.panels ?? []).filter((panel) => {
+      const params = panel.params as FilePanelParams;
+      return params.workspaceId === owner && within(params.path, entry);
+    });
+  const canMove = (entry: TreeEntry) =>
+    !!workspace &&
+    tabsWithin(workspace.id, entry).every((panel) => {
+      const params = panel.params as FilePanelParams;
+      return !params.dirty && !params.saving;
+    });
+  const move = (entry: TreeEntry, to: string) => {
+    if (!workspace || !canMove(entry)) return;
+    const owner = workspace.id;
+    mutations.move.mutate(
+      { from: entry.path, to, folder: entry.folder },
+      {
+        // Clean tabs follow their file to its new path.
+        onSuccess: () => {
+          for (const panel of tabsWithin(owner, entry)) {
+            const path = (panel.params as FilePanelParams).path;
+            panel.api.close();
+            if (api)
+              openWorkspaceFile(api, owner, to + path.slice(entry.path.length));
+          }
+        },
+      },
+    );
   };
   const finishRemoval = () => {
     if (!removing) return;
@@ -312,91 +446,186 @@ function WorkspaceContents({
       const params = panel.params as FilePanelParams;
       if (
         params.workspaceId === removing.workspaceId &&
-        (removing.kind === "workspace" || params.path === removing.path)
+        (removing.kind === "workspace" ||
+          within(params.path, {
+            path: removing.path,
+            folder: removing.kind === "folder",
+          }))
       ) {
         panel.api.close();
       }
     }
     setRemoving(undefined);
   };
-  const workspaces =
-    query.data?.filter(
-      (workspace) => !workspaceId || workspace.id === workspaceId,
-    ) ?? [];
+  // New files land in the focused folder, or beside the focused file.
+  const target = focused
+    ? focused.folder
+      ? focused.path
+      : focused.path.split("/").slice(0, -1).join("/")
+    : "";
+  const name = workspace ? workspaceName(workspace.root) : "workspace";
   return (
     <>
       <Sidebar collapsible="offcanvas">
+        <SidebarHeader
+          className={cn(
+            "flex-row items-center gap-1 px-2 pb-0",
+            title ? "h-11 pt-2" : "h-9 pt-1",
+          )}
+        >
+          {navigation}
+          {title ? <h1 className="sr-only">{title}</h1> : null}
+          <WorkspaceSwitcher
+            workspaces={registered}
+            selected={workspace}
+            defaultId={defaultWorkspace.data}
+            locked={!!workspaceId}
+            onSelect={select}
+            onReveal={(selected) =>
+              reveal.mutate({ root: selected.root, path: "" })
+            }
+            onCollapse={() => setExpanded([])}
+            onForget={(selected) =>
+              setRemoving({
+                kind: "workspace",
+                workspaceId: selected.id,
+                root: selected.root,
+              })
+            }
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="ml-auto size-7 shrink-0"
+                aria-label="Add"
+                disabled={!workspace}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <Plus />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() =>
+                  setCreating({ kind: "file", directory: target })
+                }
+              >
+                <FilePlus /> New file
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  setCreating({ kind: "folder", directory: target })
+                }
+              >
+                <FolderPlus /> New folder
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SidebarHeader>
         <SidebarContent>
-          <SidebarGroup>
-            <WorkspaceFileSearch
-              transport={transport}
-              workspaces={workspaces}
-              onOpen={openFile}
-              disabled={!query.data}
-              title={title}
-              navigation={navigation}
-              actions={
-                !workspaceId ? (
-                  <CreateWorkspaceButton transport={transport} />
-                ) : null
-              }
-            >
-              <SidebarGroupContent>
-                {query.isPending ? (
-                  <p
-                    role="status"
-                    className="p-2 text-sm text-muted-foreground"
+          <SidebarGroup className="pt-1">
+            <SidebarGroupContent>
+              {query.isPending ? (
+                <p role="status" className="p-2 text-sm text-muted-foreground">
+                  Loading workspaces…
+                </p>
+              ) : null}
+              {query.isError ? (
+                <div className="p-2 text-sm">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void query.refetch()}
                   >
-                    Loading workspaces…
-                  </p>
-                ) : null}
-                {query.isError ? (
-                  <div className="p-2 text-sm">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void query.refetch()}
-                    >
-                      Try again
-                    </Button>
-                  </div>
-                ) : null}
-                <SidebarMenu>
-                  {workspaces.map((workspace) => (
-                    <WorkspaceTree
-                      key={workspace.id}
-                      workspace={workspace}
-                      active={
-                        active?.workspaceId === workspace.id
-                          ? active.path
-                          : undefined
-                      }
-                      onOpen={openFile}
-                      onDelete={(path) =>
-                        setRemoving({
-                          kind: "file",
-                          workspaceId: workspace.id,
-                          path,
-                        })
-                      }
-                      onForget={
-                        defaultWorkspace.isSuccess &&
-                        defaultWorkspace.data !== workspace.id
-                          ? () =>
-                              setRemoving({
-                                kind: "workspace",
-                                workspaceId: workspace.id,
-                                root: workspace.root,
-                              })
-                          : undefined
-                      }
-                    />
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </WorkspaceFileSearch>
+                    Try again
+                  </Button>
+                </div>
+              ) : null}
+              {workspace ? (
+                <FileTree
+                  key={workspace.id}
+                  workspace={workspace}
+                  active={
+                    active?.workspaceId === workspace.id
+                      ? active.path
+                      : undefined
+                  }
+                  dirty={
+                    new Set(
+                      [...dirty]
+                        .filter((id) => id.startsWith(`${workspace.id}/`))
+                        .map((id) => id.slice(workspace.id.length + 1)),
+                    )
+                  }
+                  search={search}
+                  focused={focused}
+                  onFocus={setFocused}
+                  expanded={expanded}
+                  onExpandedChange={setExpanded}
+                  onOpen={(path) => openFile(workspace.id, path)}
+                  onCreate={(kind, directory) =>
+                    setCreating({ kind, directory })
+                  }
+                  onDelete={(entry) =>
+                    setRemoving({
+                      kind: entry.folder ? "folder" : "file",
+                      workspaceId: workspace.id,
+                      path: entry.path,
+                    })
+                  }
+                  onMove={move}
+                  canMove={canMove}
+                  onReveal={(path) =>
+                    reveal.mutate({ root: workspace.root, path })
+                  }
+                  onCopyPath={(path) =>
+                    void navigator.clipboard
+                      .writeText(path)
+                      .catch(() => toast.error("Couldn’t copy to clipboard"))
+                  }
+                />
+              ) : null}
+            </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter className="p-2 pt-0">
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <SidebarInput
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (search) setSearch("");
+                else event.currentTarget.blur();
+              }}
+              disabled={!workspace}
+              aria-label="Search files"
+              placeholder={`Search ${name}`}
+              autoComplete="off"
+              spellCheck={false}
+              className="h-7 pl-7 pr-7"
+            />
+            {search ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="absolute right-0.5 top-1/2 size-6 -translate-y-1/2"
+                aria-label="Clear file search"
+                onClick={() => setSearch("")}
+              >
+                <X />
+              </Button>
+            ) : null}
+          </div>
+        </SidebarFooter>
         <SidebarRail
           {...(collapsible
             ? {}
@@ -425,8 +654,22 @@ function WorkspaceContents({
           />
         </div>
       </div>
+      {creating && workspace ? (
+        <CreateEntryDialog
+          {...creating}
+          workspaceId={workspace.id}
+          onClose={() => setCreating(undefined)}
+          onCreated={(path) => openFile(workspace.id, path)}
+        />
+      ) : null}
       {removing?.kind === "file" ? (
         <DeleteFileDialog
+          {...removing}
+          onDeleted={finishRemoval}
+          onClose={() => setRemoving(undefined)}
+        />
+      ) : removing?.kind === "folder" ? (
+        <DeleteFolderDialog
           {...removing}
           onDeleted={finishRemoval}
           onClose={() => setRemoving(undefined)}

@@ -301,10 +301,31 @@ export function useWorkspaceFileMutations(
     onSuccess: (_, input) => onRemoved?.(input.path),
     onSettled,
   });
-  const rename = useMutation({
-    mutationFn: (
-      input: Omit<Parameters<FileRpc["rename"]["mutate"]>[0], "workspaceId">,
-    ) => transport.rpc.workspace.rename.mutate({ workspaceId, ...input }),
+  // Files move under compare-and-swap on the hash read just before; folders move whole.
+  const move = useMutation({
+    meta: { errorTitle: "Couldn’t move" },
+    mutationFn: async (input: {
+      from: string;
+      to: string;
+      folder: boolean;
+    }) => {
+      if (input.folder)
+        return transport.rpc.workspace.renameDirectory.mutate({
+          workspaceId,
+          from: input.from,
+          to: input.to,
+        });
+      const file = await transport.rpc.workspace.read.query({
+        workspaceId,
+        path: input.from,
+      });
+      await transport.rpc.workspace.rename.mutate({
+        workspaceId,
+        from: input.from,
+        to: input.to,
+        expected: file.entry.hash,
+      });
+    },
     retry: false,
     onSettled,
   });
@@ -315,7 +336,15 @@ export function useWorkspaceFileMutations(
     retry: false,
     onSettled,
   });
-  return { write, remove, rename, mkdir };
+  const removeDirectory = useMutation({
+    meta: { errorTitle: "Couldn’t delete folder" },
+    mutationFn: (path: string) =>
+      transport.rpc.workspace.removeDirectory.mutate({ workspaceId, path }),
+    retry: false,
+    onSuccess: (_, path) => onRemoved?.(path),
+    onSettled,
+  });
+  return { write, remove, move, mkdir, removeDirectory };
 }
 
 const ResourceChanged = z.object({ resource: z.string() });

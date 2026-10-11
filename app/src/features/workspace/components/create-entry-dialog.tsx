@@ -12,7 +12,7 @@ import {
 } from "@openchart/app/components/ui/dialog";
 import { useWorkspaceFileMutations } from "@openchart/app/lib/workspace/workspace";
 import { useWorkspaceView } from "./context";
-import type { CreateKind } from "./tree-context-menu";
+import type { CreateKind } from "./file-tree";
 
 const defaultWorkflowSource = `import { defineWorkflow, Schema, agent, textPrompt } from "@openchart/workflow";
 

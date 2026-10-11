@@ -134,6 +134,7 @@ async function host(
   const handle = vi.fn();
   const setPermissionRequestHandler = vi.fn();
   const openPath = vi.fn(async () => "");
+  const showItemInFolder = vi.fn();
   const openExternal = vi.fn(async () => {});
   vi.doMock("electron", () => ({
     app,
@@ -155,7 +156,7 @@ async function host(
         setPermissionCheckHandler: vi.fn(),
       },
     },
-    shell: { openPath, openExternal },
+    shell: { openPath, openExternal, showItemInFolder },
     protocol: { registerSchemesAsPrivileged: vi.fn() },
   }));
   vi.doMock("./credentials", () => ({ loadCredentialKey: () => key.promise }));
@@ -189,6 +190,7 @@ async function host(
     handle,
     setPermissionRequestHandler,
     openPath,
+    showItemInFolder,
     openExternal,
     updateElectronApp,
     quitAndInstall,
@@ -402,6 +404,32 @@ test("native file open validates local paths and the calling frame, and propagat
     "untrusted frame",
   );
   expect(runtime.openPath).not.toHaveBeenCalled();
+});
+
+test("revealing a file validates the path and calling frame like opening", async () => {
+  const runtime = await host();
+  runtime.key.resolve(new Uint8Array(32));
+  runtime.ready.resolve(4321);
+  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  const reveal = runtime.handle.mock.calls.find(
+    ([channel]) => channel === "desktop.revealPath",
+  )![1];
+  const window = runtime.windows[0]!;
+  const event = {
+    sender: window.webContents,
+    senderFrame: window.webContents.mainFrame,
+  };
+  await reveal(event, "/other/€ note.pdf");
+  expect(runtime.showItemInFolder).toHaveBeenCalledExactlyOnceWith(
+    "/other/€ note.pdf",
+  );
+  runtime.showItemInFolder.mockClear();
+  for (const path of ["relative.pdf", "file:///other/note.pdf", "//remote/x"])
+    await expect(reveal(event, path)).rejects.toThrow();
+  await expect(
+    reveal({ ...event, senderFrame: null }, "/other/note.pdf"),
+  ).rejects.toThrow("untrusted frame");
+  expect(runtime.showItemInFolder).not.toHaveBeenCalled();
 });
 
 test("pages may write to the clipboard and get no other permission", async () => {

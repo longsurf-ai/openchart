@@ -17,6 +17,7 @@ import { Events } from "@openchart/server/events";
 import { builtinIndicatorPaths } from "@openchart/server/indicators/catalog";
 import type { WorkspaceId } from "@openchart/server/resources/workspace/entity";
 import {
+  EntryExists,
   EntryMissing,
   EntryStale,
   WorkspaceClosed,
@@ -187,6 +188,46 @@ export interface Workspace {
     | WorkspaceMediaTooLarge
     | WorkspaceFileProtected
     | EntryStale
+  >;
+
+  /**
+   * Moves one folder and everything under it; case-only renames are allowed.
+   * An existing target fails with EntryExists, a target inside the source with
+   * WorkspacePathInvalid, and a folder holding built-in originals with
+   * WorkspaceFileProtected.
+   * @example yield* workspace.renameDirectory(from, to);
+   */
+  readonly renameDirectory: (
+    from: RelativePath,
+    to: RelativePath,
+  ) => Effect.Effect<
+    void,
+    | WorkspaceClosed
+    | WorkspaceReadFailed
+    | WorkspacePathInvalid
+    | WorkspaceMissing
+    | WorkspaceWriteFailed
+    | WorkspaceFileProtected
+    | EntryExists
+    | EntryMissing
+  >;
+
+  /**
+   * Permanently deletes one folder and everything under it, without a content
+   * comparison; a missing folder is already removed. A folder holding built-in
+   * originals fails with WorkspaceFileProtected.
+   * @example yield* workspace.removeDirectory(relative);
+   */
+  readonly removeDirectory: (
+    relative: RelativePath,
+  ) => Effect.Effect<
+    void,
+    | WorkspaceClosed
+    | WorkspaceReadFailed
+    | WorkspacePathInvalid
+    | WorkspaceMissing
+    | WorkspaceWriteFailed
+    | WorkspaceFileProtected
   >;
 
   /**
@@ -444,6 +485,15 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
   const committed = notify;
   const isReadOnly = (relative: RelPath) =>
     isDefault && builtinIndicatorPaths.has(relative.toLowerCase());
+  const holdsBuiltin = (directory: RelativePath) => {
+    const prefix = `${directory.toLowerCase()}/`;
+    return (
+      isDefault &&
+      [...builtinIndicatorPaths].some((builtin) =>
+        builtin.toLowerCase().startsWith(prefix),
+      )
+    );
+  };
   const writeText = Effect.fn("Workspace.writeText")(function* (
     relative: RelPath,
     text: string,
@@ -600,6 +650,67 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         }),
         true,
       ).pipe(Effect.asVoid),
+    renameDirectory: (from: RelativePath, to: RelativePath) =>
+      admit(
+        Effect.gen(function* () {
+          if (holdsBuiltin(from) || holdsBuiltin(to))
+            return yield* new WorkspaceFileProtected({
+              workspaceId: id,
+              path: from,
+            });
+          if (to.toLowerCase().startsWith(`${from.toLowerCase()}/`))
+            return yield* new WorkspacePathInvalid({
+              workspaceId: id,
+              path: to,
+            });
+          const source = yield* checkedPath(from, "directory");
+          if (!(yield* info(source)))
+            return yield* new EntryMissing({ workspaceId: id, path: from });
+          const target = yield* checkedPath(to, "directory");
+          // A case-only rename on a case-insensitive disk finds the source itself.
+          if (from.toLowerCase() !== to.toLowerCase() && (yield* info(target)))
+            return yield* new EntryExists({ workspaceId: id, path: to });
+          yield* fs
+            .makeDirectory(path.dirname(target), { recursive: true })
+            .pipe(
+              Effect.andThen(fs.rename(source, target)),
+              Effect.mapError(
+                (cause) =>
+                  new WorkspaceWriteFailed({
+                    workspaceId: id,
+                    path: from,
+                    cause,
+                  }),
+              ),
+            );
+          yield* committed;
+        }),
+        true,
+      ),
+    removeDirectory: (relative: RelativePath) =>
+      admit(
+        Effect.gen(function* () {
+          if (holdsBuiltin(relative))
+            return yield* new WorkspaceFileProtected({
+              workspaceId: id,
+              path: relative,
+            });
+          const directory = yield* checkedPath(relative, "directory");
+          if (!(yield* info(directory))) return;
+          yield* fs.remove(directory, { recursive: true }).pipe(
+            Effect.mapError(
+              (cause) =>
+                new WorkspaceWriteFailed({
+                  workspaceId: id,
+                  path: relative,
+                  cause,
+                }),
+            ),
+          );
+          yield* committed;
+        }),
+        true,
+      ),
     rename: (from: RelPath, to: RelPath, expected: string) =>
       admit(
         Effect.gen(function* () {

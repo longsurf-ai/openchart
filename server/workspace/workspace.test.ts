@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   chmod,
   mkdir,
+  readdir,
   readFile,
   realpath,
   rename,
@@ -892,4 +893,64 @@ test("skips oversized files during scans and bounds direct reads even when the f
     readFileSpy.mock.calls.some(([filename]) => filename === oversized),
   ).toBe(false);
   expect((await stat(oversized)).size).toBe(WORKSPACE_MEDIA_MAX_BYTES + 1);
+});
+
+test("moves and deletes folders without overwriting entries or built-in originals", async () => {
+  const record = await ordinary();
+  const workspaceId = record.id;
+  for (const path of ["a/one.tea", "a/b/two.md"])
+    await client.workspace.write({
+      workspaceId,
+      path,
+      text: path,
+      expected: null,
+    });
+  await client.workspace.renameDirectory({
+    workspaceId,
+    from: "a",
+    to: "c/a2",
+  });
+  expect(await readFile(join(record.root, "c/a2/b/two.md"), "utf8")).toBe(
+    "a/b/two.md",
+  );
+  await expect(stat(join(record.root, "a"))).rejects.toThrow();
+  await client.workspace.mkdir({ workspaceId, path: "d" });
+  await expect(
+    client.workspace.renameDirectory({ workspaceId, from: "c/a2", to: "d" }),
+  ).rejects.toMatchObject({
+    code: "CONFLICT",
+    message: "A file or folder with that name already exists.",
+  });
+  await expect(
+    client.workspace.renameDirectory({ workspaceId, from: "c", to: "c/x" }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  await expect(
+    client.workspace.renameDirectory({ workspaceId, from: "missing", to: "m" }),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  // A case-only rename succeeds on case-insensitive disks too.
+  await client.workspace.renameDirectory({ workspaceId, from: "d", to: "D" });
+  expect((await readdir(record.root)).sort()).toEqual(["D", "c"]);
+  await client.workspace.removeDirectory({ workspaceId, path: "c" });
+  await client.workspace.removeDirectory({ workspaceId, path: "c" });
+  expect(await readdir(record.root)).toEqual(["D"]);
+
+  const defaultId = await client.resources.workspace.getDefault();
+  const builtins = join(home, "workspaces", "default", "indicators", "builtin");
+  await expect
+    .poll(async () => (await readdir(builtins)).length)
+    .toBeGreaterThan(0);
+  const before = (await readdir(builtins)).sort();
+  for (const attempt of [
+    client.workspace.removeDirectory({
+      workspaceId: defaultId,
+      path: "indicators",
+    }),
+    client.workspace.renameDirectory({
+      workspaceId: defaultId,
+      from: "indicators/builtin",
+      to: "moved",
+    }),
+  ])
+    await expect(attempt).rejects.toMatchObject({ code: "FORBIDDEN" });
+  expect((await readdir(builtins)).sort()).toEqual(before);
 });
