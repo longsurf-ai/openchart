@@ -2,7 +2,7 @@
 import { defineDataFrame } from "@openchart/timeseries";
 import { BarColumns } from "@openchart/market";
 import type { BarsRequest } from "@openchart/feed";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { Subject, BehaviorSubject } from "rxjs";
 
@@ -14,6 +14,10 @@ import { createWatchlistViewStore } from "../stores/view";
 
 const { useBars } = vi.hoisted(() => ({ useBars: vi.fn() }));
 vi.mock("@openchart/app/hooks/use-bars", () => ({ useBars }));
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const Bars = defineDataFrame(BarColumns);
 const frame = (rows: Array<{ time: number; close: number; volume: number }>) =>
@@ -27,7 +31,8 @@ const frame = (rows: Array<{ time: number; close: number; volume: number }>) =>
     })),
   });
 
-test("corrects the previous close, rolls to a new day, and keeps other sessions independent", async () => {
+test("corrects the previous close, rolls to a new day, and keeps other sessions independent", () => {
+  vi.useFakeTimers();
   const updates = new Subject<BarsView["data"]>();
   useBars.mockReturnValue({
     status: "ready",
@@ -73,32 +78,34 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
   };
   const first = mount();
   const second = mount();
-  await waitFor(() =>
-    expect(first.result.current.quote).toEqual({
-      price: 110,
-      change: 10,
-      changePercent: 10,
-      volume: 20,
-    }),
-  );
-  await waitFor(() =>
-    expect(first.result.current.sorted.aapl?.price).toBe(110),
-  );
-  act(() => updates.next(frame([{ time: 1, close: 105, volume: 10 }])));
-  await waitFor(() => expect(first.result.current.quote?.change).toBe(5));
-  act(() => updates.next(frame([{ time: 3, close: 121, volume: 30 }])));
-  await waitFor(() =>
-    expect(first.quotes.value.aapl).toEqual({
-      price: 121,
-      change: 11,
-      changePercent: 10,
-      volume: 30,
-    }),
-  );
+  expect(first.result.current.quote).toEqual({
+    price: 110,
+    change: 10,
+    changePercent: 10,
+    volume: 20,
+  });
+  act(() => {
+    vi.advanceTimersByTime(250);
+  });
   expect(first.result.current.sorted.aapl?.price).toBe(110);
-  await waitFor(() =>
-    expect(first.result.current.sorted.aapl?.price).toBe(121),
-  );
+  act(() => updates.next(frame([{ time: 1, close: 105, volume: 10 }])));
+  expect(first.result.current.quote?.change).toBe(5);
+  act(() => updates.next(frame([{ time: 3, close: 121, volume: 30 }])));
+  expect(first.quotes.value.aapl).toEqual({
+    price: 121,
+    change: 11,
+    changePercent: 10,
+    volume: 30,
+  });
+  expect(first.result.current.sorted.aapl?.price).toBe(110);
+  act(() => {
+    vi.advanceTimersByTime(249);
+  });
+  expect(first.result.current.sorted.aapl?.price).toBe(110);
+  act(() => {
+    vi.advanceTimersByTime(1);
+  });
+  expect(first.result.current.sorted.aapl?.price).toBe(121);
   first.unmount();
   expect(first.quotes.value).toEqual({});
   expect(second.quotes.value.aapl?.price).toBe(121);
@@ -109,7 +116,7 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
     error: new Error("offline"),
   });
   second.rerender();
-  await waitFor(() => expect(second.result.current.quote).toBeUndefined());
+  expect(second.result.current.quote).toBeUndefined();
   expect(second.quotes.value.aapl).toEqual({});
   second.unmount();
   expect(updates.observed).toBe(false);

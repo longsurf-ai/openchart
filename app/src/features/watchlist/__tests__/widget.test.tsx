@@ -329,7 +329,7 @@ test("empty unnamed sections still offer the empty-list action", async () => {
   const { client, transport } = setup();
   await screen.findByRole("treeitem", { name: "AAPL" });
   const key = watchlistDetail(transport, "wtl_test").queryKey;
-  act(() =>
+  await act(() =>
     client.setQueryData(key, (current) =>
       current
         ? {
