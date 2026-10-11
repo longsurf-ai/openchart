@@ -57,6 +57,7 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
     const quotes = new BehaviorSubject<Readonly<Record<string, Quote>>>({});
     const value = {
       quotes,
+      crosshair: new BehaviorSubject<number | null>(null),
       save: {} as WatchlistSave,
       view: createWatchlistViewStore(crypto.randomUUID()),
       watchlistId: "wtl_test",
@@ -83,6 +84,7 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
     change: 10,
     changePercent: 10,
     volume: 20,
+    previousClose: 100,
   });
   act(() => {
     vi.advanceTimersByTime(250);
@@ -96,6 +98,7 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
     change: 11,
     changePercent: 10,
     volume: 30,
+    previousClose: 110,
   });
   expect(first.result.current.sorted.aapl?.price).toBe(110);
   act(() => {

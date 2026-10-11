@@ -17,7 +17,7 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useStore } from "zustand";
 
 import {
@@ -39,6 +39,7 @@ import { cn } from "@openchart/app/utils/cn";
 
 import type { Watchlist } from "../api/queries";
 import {
+  quoteAt,
   useDailyRequest,
   useLiveQuote,
   useSortQuotes,
@@ -55,6 +56,7 @@ import {
   type WatchlistNode,
 } from "../utils/tree";
 import { useWatchlistPlacement } from "./context";
+import { Sparkline } from "./sparkline";
 
 type Item = Extract<WatchlistNode, { kind: "item" }>["item"];
 type Sort = NonNullable<WatchlistView["sort"]>;
@@ -68,10 +70,12 @@ function sortRows(
   quotes: Readonly<Record<string, Quote>>,
   sort: Sort,
 ): string[] {
+  // Price History sorts by the move it draws: change since the previous close.
+  const metric = sort.metric === "priceHistory" ? "changePercent" : sort.metric;
   const value = (id: string) => {
     const node = nodes.get(id);
     return node?.kind === "item"
-      ? quotes[providerListingKey(node.item)]?.[sort.metric]
+      ? quotes[providerListingKey(node.item)]?.[metric]
       : undefined;
   };
   return [...ids].sort((left, right) => {
@@ -413,10 +417,11 @@ function QuoteCells({
         retry={retry}
       />
     );
-  if (!request) return <MetricCells metrics={metrics} />;
+  if (!request) return <MetricCells item={item} metrics={metrics} />;
   return (
     <LiveQuoteCells
       key={providerListingKey(item)}
+      item={item}
       request={request}
       quoteKey={providerListingKey(item)}
       metrics={metrics}
@@ -425,10 +430,12 @@ function QuoteCells({
 }
 
 function LiveQuoteCells({
+  item,
   request,
   quoteKey,
   metrics,
 }: {
+  item: Item;
   request: BarsRequest;
   quoteKey: string;
   metrics: readonly Metric[];
@@ -442,7 +449,7 @@ function LiveQuoteCells({
         retry={retry}
       />
     );
-  return <MetricCells metrics={metrics} quote={quote} />;
+  return <MetricCells item={item} metrics={metrics} quote={quote} />;
 }
 
 function QuoteFailure({
@@ -470,21 +477,36 @@ function QuoteFailure({
 }
 
 function MetricCells({
+  item,
   metrics,
   quote,
 }: {
+  item: Item;
   metrics: readonly Metric[];
   quote?: Quote;
 }) {
-  return metrics.map((metric) => (
-    <span
-      key={metric}
-      className={cn(
-        "truncate pr-3 text-right tabular-nums",
-        metricTone(metric, quote),
-      )}
-    >
-      {formatMetric(metric, quote)}
-    </span>
-  ));
+  // The close under the shared Price History crosshair replaces live values.
+  const [hovered, setHovered] = useState<number>();
+  const shown = quoteAt(quote, hovered);
+  return metrics.map((metric) =>
+    metric === "priceHistory" ? (
+      <Sparkline
+        key={metric}
+        provider={item.provider}
+        listing={item.listing}
+        previousClose={quote?.previousClose}
+        onHover={setHovered}
+      />
+    ) : (
+      <span
+        key={metric}
+        className={cn(
+          "truncate pr-3 text-right tabular-nums",
+          metricTone(metric, shown),
+        )}
+      >
+        {formatMetric(metric, shown)}
+      </span>
+    ),
+  );
 }

@@ -35,6 +35,8 @@ export type Quote = {
   readonly change?: number;
   readonly changePercent?: number;
   readonly volume?: number;
+  /** The baseline Price History draws against. */
+  readonly previousClose?: number;
 };
 
 /** One session's transient quotes; Feed owns channel sharing. */
@@ -62,6 +64,27 @@ export function useSortQuotes(enabled: boolean): Quotes {
 
 const DAY = 86_400_000;
 
+/**
+ * The quote as of an earlier `close` this session: price and change follow it
+ * against the previous close; volume stays live. Returns `quote` unchanged
+ * without a close or a previous close.
+ * @example quoteAt({ price: 110, previousClose: 100 }, 105); // change 5, changePercent 5
+ */
+export function quoteAt(
+  quote: Quote | undefined,
+  close: number | undefined,
+): Quote | undefined {
+  const previous = quote?.previousClose;
+  if (close === undefined || !previous) return quote;
+  const change = close - previous;
+  return {
+    ...quote,
+    price: close,
+    change,
+    changePercent: (change / previous) * 100,
+  };
+}
+
 function finite(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value)
     ? value
@@ -81,6 +104,7 @@ function quoteOf(frame: BarsView["data"]): Quote {
     changePercent:
       change !== undefined && close ? (change / close) * 100 : undefined,
     volume: finite(last?.volume),
+    previousClose: close,
   };
 }
 

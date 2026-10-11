@@ -33,7 +33,7 @@ export {
 export const watchlistResource = defineResource({
   name: "watchlist",
   description:
-    "A named watchlist of provider-scoped listings. Columns choose the market metrics shown for every row: price, change, changePercent, or volume. Rows live in ordered sections that nest to any depth; a section without a name has no heading. Each listing appears at most once per watchlist. Market values come from Feed and are never stored.",
+    "A named watchlist of provider-scoped listings. Columns choose the market metrics shown for every row: price, change, changePercent, volume, or priceHistory (an intraday sparkline against the previous close). Rows live in ordered sections that nest to any depth; a section without a name has no heading. Each listing appears at most once per watchlist. Market values come from Feed and are never stored.",
   entity: WatchlistEntity,
   store: watchlistStore,
 });

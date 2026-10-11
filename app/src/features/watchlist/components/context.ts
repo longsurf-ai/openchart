@@ -32,6 +32,8 @@ type WatchlistPlacement = {
   save: WatchlistSave;
   /** Transient quotes for sorting this session; Feed owns channel sharing. */
   quotes: BehaviorSubject<Quotes>;
+  /** The Price History instant under the pointer in Unix ms, shared by every row; null when none. */
+  crosshair: BehaviorSubject<number | null>;
   /** Open symbol search; the pick goes to that section or the first one. */
   addSymbol: (sectionId?: string) => void;
   /** Open a naming or deletion dialog for a section or Watchlist. */
