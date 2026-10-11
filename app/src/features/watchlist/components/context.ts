@@ -1,10 +1,11 @@
 // Purpose: Share one placement's Watchlist identity, view state, and dialogs between its controls and content.
 import type { ProviderListing } from "@openchart/market";
 import { createContext, useContext, type ComponentType } from "react";
-import type { StoreApi } from "zustand/vanilla";
-import type { Quote } from "../hooks/use-quote";
+import type { BehaviorSubject } from "rxjs";
+import type { Quotes } from "../hooks/use-quote";
 
 import type { WatchlistViewStore } from "../stores/view";
+import type { WatchlistSave } from "../api/queries";
 
 /** The symbol search app composition supplies; features never import each other. */
 export type SymbolPickerProps = {
@@ -16,26 +17,27 @@ export type SymbolPickerProps = {
 export const WatchlistSymbolPicker =
   createContext<ComponentType<SymbolPickerProps> | null>(null);
 
-/** What a name dialog edits: a new or existing section, or a new or existing Watchlist. */
-export type NameTarget =
+/** Naming or deletion actions handled by the placement dialog. */
+export type WatchlistAction =
   | { kind: "new-section"; parentId?: string }
   | { kind: "section"; sectionId: string; name?: string }
   | { kind: "new-watchlist" }
-  | { kind: "watchlist"; name: string };
+  | { kind: "watchlist"; name: string }
+  | { kind: "delete-watchlist"; name: string }
+  | { kind: "delete-section"; sectionId: string; name?: string };
 
 type WatchlistPlacement = {
   watchlistId: string | undefined;
   view: WatchlistViewStore;
+  save: WatchlistSave;
   /** Transient quotes for sorting this session; Feed owns channel sharing. */
-  quotes: StoreApi<Readonly<Record<string, Quote>>>;
+  quotes: BehaviorSubject<Quotes>;
   /** Open symbol search; the pick goes to that section or the first one. */
   addSymbol: (sectionId?: string) => void;
-  /** Open the name dialog for a section or a Watchlist. */
-  editName: (target: NameTarget) => void;
+  /** Open a naming or deletion dialog for a section or Watchlist. */
+  openDialog: (target: WatchlistAction) => void;
   /** Show another Watchlist in this placement. */
   switchTo: (watchlistId: string) => void;
-  /** Delete the selected Watchlist; successful deletion selects another or shows an empty view. */
-  deleteWatchlist: () => void;
 };
 
 /** Provided once per placement by the widget's Provider. */

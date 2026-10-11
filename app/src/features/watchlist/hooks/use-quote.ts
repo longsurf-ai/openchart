@@ -3,10 +3,17 @@ import type { BarsRequest } from "@openchart/feed";
 import { barsSeries } from "@openchart/feed";
 import type { ProviderListing } from "@openchart/market";
 import { mergeByTime } from "@openchart/timeseries";
-import { useObservable, useObservableState } from "observable-hooks";
+import {
+  useObservable,
+  useObservableState,
+  useSubscription,
+} from "observable-hooks";
 import { useEffect, useState } from "react";
 import {
   catchError,
+  auditTime,
+  distinctUntilChanged,
+  of,
   EMPTY,
   map,
   scan,
@@ -29,6 +36,29 @@ export type Quote = {
   readonly changePercent?: number;
   readonly volume?: number;
 };
+
+/** One session's transient quotes; Feed owns channel sharing. */
+export type Quotes = Readonly<Record<string, Quote>>;
+const NO_QUOTES: Quotes = {};
+
+/** Sample sorting values at most four times a second; unsorted trees ignore ticks. Subscriptions and timers end on unmount. @example const quotes = useSortQuotes(sort !== null); */
+export function useSortQuotes(enabled: boolean): Quotes {
+  const { quotes } = useWatchlistPlacement();
+  return useObservableState(
+    useObservable(
+      (inputs$) =>
+        inputs$.pipe(
+          switchMap(([enabled, quotes]) =>
+            enabled
+              ? quotes.pipe(auditTime(250), startWith(quotes.value))
+              : of(NO_QUOTES),
+          ),
+        ),
+      [enabled, quotes],
+    ),
+    NO_QUOTES,
+  );
+}
 
 const DAY = 86_400_000;
 
@@ -56,21 +86,20 @@ function quoteOf(frame: BarsView["data"]): Quote {
 
 /**
  * The live daily-bar request for a listing, using the source's first daily
- * session and adjustment. Undefined until capabilities arrive, when the
- * source has no daily bars, or when they fail; failures raise no toast. The window start is fixed per mount so re-renders
- * never reopen the channel.
- * @example const request = useDailyRequest(listing);
+ * session and adjustment. The request is undefined until capabilities arrive
+ * or when daily bars are unavailable. The caller owns the returned error and
+ * retry action. The window start stays fixed per mount.
+ * @example const { request, error, retry } = useDailyRequest(listing);
  */
-export function useDailyRequest(
-  listing: ProviderListing,
-): BarsRequest | undefined {
-  // A row shows its own failure as dashes rather than one toast per row.
+export function useDailyRequest(listing: ProviderListing) {
+  // The row owns its failure and retry action.
   const capabilities = useBarsCapabilities(listing, { silent: true });
   const [from] = useState(() => Date.now() - 14 * DAY);
   const daily = capabilities.data?.find((option) => option.resolution === "1d");
-  return daily
+  const request: BarsRequest | undefined = daily
     ? { ...barsSeries(listing, daily), from, to: "now", countBack: 2 }
     : undefined;
+  return { request, error: capabilities.error, retry: capabilities.refetch };
 }
 
 /** One quote from the snapshot, then one per merged update. */
@@ -87,7 +116,7 @@ function quotesOf(view: BarsView): Observable<Quote> {
 /**
  * Follow one listing's two latest daily bars: price is the last close, change
  * compares it with the previous close, and volume is the last bar's. Feed
- * shares the channel with any other view of the same series. Publishes each
+ * may reuse a covering channel for the same series. Publishes each
  * quote to this placement's transient sorting cache under `key`; unmounting
  * removes it. Feed owns shared subscriptions, not this presentation cache.
  * @example const {quote} = useLiveQuote(request, providerListingKey(listing));
@@ -95,27 +124,44 @@ function quotesOf(view: BarsView): Observable<Quote> {
 export function useLiveQuote(request: BarsRequest, key: string) {
   const { quotes } = useWatchlistPlacement();
   const bars = useBars(request);
+  useSubscription(
+    useObservable(
+      (inputs$) =>
+        inputs$.pipe(
+          switchMap(([current, status]) =>
+            current && status !== "error" ? quotesOf(current) : of(undefined),
+          ),
+        ),
+      [bars.current, bars.status],
+    ),
+    (quote) => quotes.next({ ...quotes.value, [key]: quote ?? {} }),
+  );
   const quote = useObservableState(
     useObservable(
       (inputs$) =>
         inputs$.pipe(
-          switchMap(([current]) => (current ? quotesOf(current) : EMPTY)),
+          switchMap(([quotes, key]) =>
+            quotes.pipe(
+              map((values) => values[key]),
+              distinctUntilChanged(),
+            ),
+          ),
         ),
-      [bars.current],
+      [quotes, key],
     ),
   );
-  useEffect(() => {
-    if (quote) quotes.setState({ [key]: quote });
-  }, [key, quote, quotes]);
   useEffect(
     () => () => {
-      quotes.setState((current) => {
-        const next = { ...current };
-        delete next[key];
-        return next;
-      }, true);
+      const next = { ...quotes.value };
+      delete next[key];
+      quotes.next(next);
     },
     [key, quotes],
   );
-  return { quote, failed: bars.status === "error" };
+  const error = bars.status === "error" ? bars.error : undefined;
+  return {
+    quote: error ? undefined : quote,
+    error,
+    retry: bars.retry,
+  };
 }

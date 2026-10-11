@@ -5,6 +5,7 @@ import {
   queryOptions,
   skipToken,
   type QueryClient,
+  type UseMutationResult,
 } from "@tanstack/react-query";
 
 import { resourceQueryKeys } from "@openchart/app/lib/resource/invalidation";
@@ -23,6 +24,13 @@ export type Watchlist = ResourceOutputs["watchlist"]["get"];
 /** One RFC 6902 operation accepted by `watchlist.patch`. */
 export type WatchlistOperation =
   ResourceInputs["watchlist"]["patch"]["operations"][number];
+
+/** One placement shares a mutation observer; Query's scope also serializes other placements of the same Resource. */
+export type WatchlistSave = UseMutationResult<
+  Watchlist,
+  Error,
+  (watchlist: Watchlist) => readonly WatchlistOperation[]
+>;
 
 /** Read the selected Watchlist; undefined waits for selection, null data means deleted. Query owns cancellation and errors. @example useQuery(watchlistDetail(transport, selectedId)); */
 export function watchlistDetail(
@@ -65,9 +73,11 @@ export function watchlistMutation(
       edit: (watchlist: Watchlist) => readonly WatchlistOperation[],
     ) => {
       if (!id) throw new Error("Choose a watchlist first.");
-      const watchlist =
-        queryClient.getQueryData(detail.queryKey) ??
-        (await queryClient.fetchQuery(detail));
+      // Reuse saved data, but an invalidated cache must finish refreshing.
+      const watchlist = await queryClient.fetchQuery({
+        ...detail,
+        staleTime: Infinity,
+      });
       if (!watchlist) throw new Error("This watchlist no longer exists.");
       const [first, ...rest] = edit(watchlist);
       if (!first) return watchlist;

@@ -7,9 +7,16 @@ import {
   type ItemInstance,
 } from "@headless-tree/core";
 import { useTree } from "@headless-tree/react";
+import type { BarsRequest } from "@openchart/feed";
 import { providerListingKey } from "@openchart/market";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  FolderPlus,
+  Pencil,
+  Plus,
+  Trash2,
+  RefreshCw,
+} from "lucide-react";
 import { useEffect, useMemo, type CSSProperties } from "react";
 import { useStore } from "zustand";
 
@@ -18,6 +25,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@openchart/app/components/ui/avatar/avatar";
+import { Button } from "@openchart/app/components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -25,11 +33,15 @@ import {
   ContextMenuTrigger,
 } from "@openchart/app/components/ui/context-menu";
 import { listingLogoIdentifier, useLogo } from "@openchart/app/hooks/use-logo";
-import { useWidget } from "@openchart/app/hooks/use-widget";
 import { cn } from "@openchart/app/utils/cn";
 
-import { watchlistMutation, type Watchlist } from "../api/queries";
-import { useDailyRequest, useLiveQuote, type Quote } from "../hooks/use-quote";
+import type { Watchlist } from "../api/queries";
+import {
+  useDailyRequest,
+  useLiveQuote,
+  useSortQuotes,
+  type Quote,
+} from "../hooks/use-quote";
 import type { WatchlistView } from "../stores/view";
 import { formatMetric, gridTemplate, metricTone } from "../utils/columns";
 import {
@@ -46,7 +58,6 @@ type Item = Extract<WatchlistNode, { kind: "item" }>["item"];
 type Sort = NonNullable<WatchlistView["sort"]>;
 
 const INDENT = 16;
-const NO_QUOTES: Readonly<Record<string, Quote>> = {};
 
 // Rows sort by value inside each section; missing values stay last.
 function sortRows(
@@ -78,14 +89,11 @@ export function WatchlistTree({
   watchlist: Watchlist;
   metrics: readonly Metric[];
 }) {
-  const { transport } = useWidget();
-  const { watchlistId, view, quotes: quoteStore } = useWatchlistPlacement();
-  const client = useQueryClient();
-  const save = useMutation(watchlistMutation(transport, client, watchlistId));
+  const { save, view, openDialog } = useWatchlistPlacement();
   const collapsed = useStore(view, (state) => state.collapsed);
   const sort = useStore(view, (state) => state.sort);
   // Only a sorted view re-renders when quotes change.
-  const quotes = useStore(quoteStore, (state) => (sort ? state : NO_QUOTES));
+  const quotes = useSortQuotes(sort !== null);
   const nodes = useMemo(() => indexWatchlist(watchlist), [watchlist]);
   const children = useMemo(() => {
     const result = new Map<string, string[]>();
@@ -187,18 +195,35 @@ export function WatchlistTree({
     tree.rebuildTree();
   }, [tree, children, expandedItems]);
   const columns = { gridTemplateColumns: gridTemplate(metrics) };
+  const target = tree.getDragTarget();
+  const parent = target?.item.getItemData();
+  const depth =
+    parent?.kind === "section"
+      ? parent.depth + Number(parent.section.name !== undefined)
+      : 0;
+  // Hidden, unnamed sections do not contribute visible indentation.
+  const lineOffset =
+    target && "dragLineLevel" in target
+      ? (depth - target.dragLineLevel) * INDENT
+      : 0;
   return (
     <div {...tree.getContainerProps("Watchlist")} className="outline-none">
       {tree.getItems().map((item) => {
         const node = item.getItemData();
         if (node.kind === "section")
-          return node.section.name === undefined ? null : (
+          return node.section.name === undefined ? (
+            <div key={item.getKey()} ref={item.getProps().ref} aria-hidden />
+          ) : (
             <SectionRow
               key={item.getKey()}
               item={item}
               node={node}
               onRemove={() =>
-                save.mutate((current) => removeNode(current, node.id))
+                openDialog({
+                  kind: "delete-section",
+                  sectionId: node.id,
+                  name: node.section.name,
+                })
               }
             />
           );
@@ -217,6 +242,11 @@ export function WatchlistTree({
           );
         return null;
       })}
+      <div
+        aria-hidden
+        className="h-0.5 bg-primary"
+        style={tree.getDragLineStyle(-1, lineOffset)}
+      />
     </div>
   );
 }
@@ -224,10 +254,6 @@ export function WatchlistTree({
 function rowState(item: ItemInstance<WatchlistNode>) {
   return cn(
     "relative outline-none hover:bg-accent/50 focus-visible:bg-accent",
-    item.isDragTargetAbove() &&
-      "before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-primary",
-    item.isDragTargetBelow() &&
-      "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary",
     item.isUnorderedDragTarget() && "bg-accent ring-1 ring-inset ring-primary",
   );
 }
@@ -241,7 +267,7 @@ function SectionRow({
   node: Extract<WatchlistNode, { kind: "section" }>;
   onRemove: () => void;
 }) {
-  const { addSymbol, editName } = useWatchlistPlacement();
+  const { addSymbol, openDialog } = useWatchlistPlacement();
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -270,13 +296,13 @@ function SectionRow({
           <Plus /> Add symbol here
         </ContextMenuItem>
         <ContextMenuItem
-          onClick={() => editName({ kind: "new-section", parentId: node.id })}
+          onClick={() => openDialog({ kind: "new-section", parentId: node.id })}
         >
           <FolderPlus /> New section inside
         </ContextMenuItem>
         <ContextMenuItem
           onClick={() =>
-            editName({
+            openDialog({
               kind: "section",
               sectionId: node.id,
               name: node.section.name,
@@ -363,10 +389,18 @@ function QuoteCells({
   metrics: readonly Metric[];
 }) {
   // Feed requests are strict: send the listing identity, never the row's own id.
-  const request = useDailyRequest({
+  const { request, error, retry } = useDailyRequest({
     provider: item.provider,
     listing: item.listing,
   });
+  if (error)
+    return (
+      <QuoteFailure
+        symbol={item.listing.symbol}
+        metrics={metrics}
+        retry={retry}
+      />
+    );
   if (!request) return <MetricCells metrics={metrics} />;
   return (
     <LiveQuoteCells
@@ -383,12 +417,44 @@ function LiveQuoteCells({
   quoteKey,
   metrics,
 }: {
-  request: NonNullable<ReturnType<typeof useDailyRequest>>;
+  request: BarsRequest;
   quoteKey: string;
   metrics: readonly Metric[];
 }) {
-  const { quote } = useLiveQuote(request, quoteKey);
+  const { quote, error, retry } = useLiveQuote(request, quoteKey);
+  if (error)
+    return (
+      <QuoteFailure
+        symbol={request.listing.symbol}
+        metrics={metrics}
+        retry={retry}
+      />
+    );
   return <MetricCells metrics={metrics} quote={quote} />;
+}
+
+function QuoteFailure({
+  symbol,
+  metrics,
+  retry,
+}: {
+  symbol: string;
+  metrics: readonly Metric[];
+  retry: () => void;
+}) {
+  if (!metrics.length) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="justify-self-end text-xs text-muted-foreground"
+      style={{ gridColumn: `span ${metrics.length}` }}
+      aria-label={`Retry quote for ${symbol}`}
+      onClick={() => retry()}
+    >
+      <RefreshCw className="size-3" aria-hidden /> Retry quote
+    </Button>
+  );
 }
 
 function MetricCells({

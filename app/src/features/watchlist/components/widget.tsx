@@ -18,8 +18,8 @@ import {
 
 import { useWidget } from "@openchart/app/hooks/use-widget";
 import { useStore } from "zustand";
-import { createStore } from "zustand/vanilla";
-import type { Quote } from "../hooks/use-quote";
+import { BehaviorSubject } from "rxjs";
+import type { Quotes } from "../hooks/use-quote";
 import type { WidgetDefinition } from "@openchart/app/lib/widget/widget";
 
 import {
@@ -33,13 +33,18 @@ import {
   createWatchlistViewStore,
   type WatchlistViewStore,
 } from "../stores/view";
-import { addListing, addSection, renameSection } from "../utils/tree";
+import {
+  addListing,
+  addSection,
+  renameSection,
+  removeNode,
+} from "../utils/tree";
 import {
   WatchlistPlacementContext,
   WatchlistSymbolPicker,
-  type NameTarget,
+  type WatchlistAction,
 } from "./context";
-import { NameDialog } from "./name-dialog";
+import { WatchlistDialog } from "./watchlist-dialog";
 import { WatchlistView } from "./watchlist-view";
 
 function WatchlistPlacement({ children }: PropsWithChildren) {
@@ -108,26 +113,22 @@ function WatchlistSession({
         .getQueryData(watchlistDetail(transport, watchlistId).queryKey)
         ?.columns.map((column) => column.metric.kind),
     });
-  const { mutate: remove } = useMutation(deleteWatchlist(transport, client));
+  const remove = useMutation(deleteWatchlist(transport, client));
   const Picker = useContext(WatchlistSymbolPicker);
   const [picking, setPicking] = useState<{ sectionId?: string }>();
-  const [naming, setNaming] = useState<NameTarget>();
-  const [quotes] = useState(() =>
-    createStore<Readonly<Record<string, Quote>>>(() => ({})),
-  );
+  const [action, setAction] = useState<WatchlistAction>();
+  const [quotes] = useState(() => new BehaviorSubject<Quotes>({}));
   const value = useMemo(
     () => ({
       watchlistId,
       view,
+      save,
       quotes,
       addSymbol: (sectionId?: string) => setPicking({ sectionId }),
-      editName: setNaming,
+      openDialog: setAction,
       switchTo,
-      deleteWatchlist: () => {
-        if (watchlistId) remove(watchlistId);
-      },
     }),
-    [watchlistId, view, quotes, switchTo, remove],
+    [watchlistId, view, save, quotes, switchTo],
   );
   return (
     <WatchlistPlacementContext.Provider value={value}>
@@ -143,19 +144,25 @@ function WatchlistSession({
           }}
         />
       ) : null}
-      {naming ? (
-        <NameDialog
-          target={naming}
-          pending={save.isPending || create.isPending}
-          onClose={() => setNaming(undefined)}
+      {action ? (
+        <WatchlistDialog
+          target={action}
+          pending={save.isPending || create.isPending || remove.isPending}
+          onClose={() => setAction(undefined)}
           onSubmit={(name) => {
-            if (naming.kind === "new-watchlist") return createNext(name);
+            if (action.kind === "new-watchlist") return createNext(name);
+            if (action.kind === "delete-watchlist" && watchlistId)
+              return remove.mutateAsync(watchlistId);
             return save.mutateAsync((watchlist) => {
-              switch (naming.kind) {
+              switch (action.kind) {
+                case "delete-section":
+                  return removeNode(watchlist, action.sectionId);
+                case "delete-watchlist":
+                  return [];
                 case "new-section":
-                  return addSection(watchlist, name, naming.parentId);
+                  return addSection(watchlist, name, action.parentId);
                 case "section":
-                  return renameSection(watchlist, naming.sectionId, name);
+                  return renameSection(watchlist, action.sectionId, name);
                 case "watchlist":
                   return [{ op: "replace", path: "/name", value: name }];
               }

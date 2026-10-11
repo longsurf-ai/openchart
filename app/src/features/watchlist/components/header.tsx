@@ -1,5 +1,4 @@
 // Purpose: Own the Watchlist's switcher, naming, and add/column actions inside its content, not the card chrome.
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   Columns3,
@@ -27,7 +26,7 @@ import {
 } from "@openchart/app/components/ui/tooltip";
 import { useWidget } from "@openchart/app/hooks/use-widget";
 
-import { watchlistMutation, type Watchlist } from "../api/queries";
+import type { Watchlist } from "../api/queries";
 import { COLUMNS } from "../utils/columns";
 import { METRICS, toggleColumn } from "../utils/tree";
 import { useWatchlistPlacement } from "./context";
@@ -69,10 +68,8 @@ export function WatchlistHeader({
   watchlist: Watchlist | null;
 }) {
   const { transport } = useWidget();
-  const { watchlistId, addSymbol, editName, switchTo, deleteWatchlist } =
+  const { save, watchlistId, addSymbol, openDialog, switchTo } =
     useWatchlistPlacement();
-  const client = useQueryClient();
-  const save = useMutation(watchlistMutation(transport, client, watchlistId));
   return (
     <div className="flex h-9 shrink-0 items-center gap-1 px-1.5">
       <DropdownMenu>
@@ -96,19 +93,23 @@ export function WatchlistHeader({
           {watchlist ? (
             <DropdownMenuItem
               onSelect={() =>
-                editName({ kind: "watchlist", name: watchlist.name })
+                openDialog({ kind: "watchlist", name: watchlist.name })
               }
             >
               <Pencil /> Rename
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem
-            onSelect={() => editName({ kind: "new-watchlist" })}
+            onSelect={() => openDialog({ kind: "new-watchlist" })}
           >
             <Plus /> New watchlist
           </DropdownMenuItem>
           {watchlist ? (
-            <DropdownMenuItem onSelect={deleteWatchlist}>
+            <DropdownMenuItem
+              onSelect={() =>
+                openDialog({ kind: "delete-watchlist", name: watchlist.name })
+              }
+            >
               <Trash2 /> Delete watchlist
             </DropdownMenuItem>
           ) : null}
@@ -128,7 +129,7 @@ export function WatchlistHeader({
           </Action>
           <Action
             label="New section"
-            onClick={() => editName({ kind: "new-section" })}
+            onClick={() => openDialog({ kind: "new-section" })}
           >
             <FolderPlus className="size-4" />
           </Action>

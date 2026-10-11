@@ -1,5 +1,5 @@
 // Purpose: Show one Watchlist's name, shared column header, and tree, with in-card loading and failure states.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { useState } from "react";
 import { useStore } from "zustand";
@@ -8,14 +8,10 @@ import { Button } from "@openchart/app/components/ui/button";
 import { useWidget } from "@openchart/app/hooks/use-widget";
 import { cn } from "@openchart/app/utils/cn";
 
-import {
-  watchlistDetail,
-  watchlistMutation,
-  type Watchlist,
-} from "../api/queries";
+import { watchlistDetail, type Watchlist } from "../api/queries";
 import type { WatchlistView as View } from "../stores/view";
 import { COLUMNS, gridTemplate } from "../utils/columns";
-import { moveColumn, type Metric } from "../utils/tree";
+import { hasVisibleRows, moveColumn, type Metric } from "../utils/tree";
 import { useWatchlistPlacement } from "./context";
 import { WatchlistHeader } from "./header";
 import { WatchlistTree } from "./watchlist-tree";
@@ -66,7 +62,7 @@ export function WatchlistView() {
 function Loaded({ watchlist }: { watchlist: Watchlist }) {
   const { addSymbol } = useWatchlistPlacement();
   const metrics = watchlist.columns.map((column) => column.metric.kind);
-  const empty = watchlist.sections.length === 0;
+  const empty = !hasVisibleRows(watchlist.sections);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <WatchlistHeader watchlist={watchlist} />
@@ -101,10 +97,7 @@ function ColumnHeader({
   watchlist: Watchlist;
   metrics: readonly Metric[];
 }) {
-  const { transport } = useWidget();
-  const { watchlistId, view } = useWatchlistPlacement();
-  const client = useQueryClient();
-  const save = useMutation(watchlistMutation(transport, client, watchlistId));
+  const { save, view } = useWatchlistPlacement();
   const sort = useStore(view, (state) => state.sort);
   const [over, setOver] = useState<number>();
   return (

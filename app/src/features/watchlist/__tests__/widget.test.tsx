@@ -18,7 +18,7 @@ import { TooltipProvider } from "@openchart/app/components/ui/tooltip";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { WidgetContext } from "@openchart/app/lib/widget/widget";
 
-import type { Watchlist } from "../api/queries";
+import { watchlistDetail, type Watchlist } from "../api/queries";
 import { watchlistWidget } from "../components/widget";
 
 const closes: Record<string, [number, number]> = {
@@ -29,6 +29,8 @@ const closes: Record<string, [number, number]> = {
 
 // Query results keep their identity across renders, as the real hooks do.
 const daily = {
+  error: null as Error | null,
+  refetch: vi.fn(),
   data: [
     {
       resolution: "1d",
@@ -221,8 +223,22 @@ const rows = () =>
   screen.getAllByRole("treeitem").map((row) => row.getAttribute("aria-label"));
 
 beforeEach(() => {
-  capabilities.mockClear();
+  capabilities.mockReset().mockReturnValue(daily);
+  daily.refetch.mockClear();
   localStorage.clear();
+});
+
+test("failed quote capabilities show an explicit retry instead of silent missing values", async () => {
+  capabilities.mockImplementation((request) =>
+    request.listing.symbol === "AAPL"
+      ? { ...daily, error: new Error("offline"), data: [] }
+      : daily,
+  );
+  const { user } = setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Retry quote for AAPL" }),
+  );
+  expect(daily.refetch).toHaveBeenCalledTimes(1);
 });
 
 test("shows named sections as headings and rows with live, sign-coloured metrics", async () => {
@@ -277,6 +293,56 @@ test("removes a row from its context menu with one JSON Patch remove", async () 
   );
 });
 
+test("deleting a section requires confirmation and Cancel preserves its rows", async () => {
+  const { patch, user } = setup();
+  const section = await screen.findByRole("treeitem", { name: "Tech" });
+  openContextMenu(section);
+  await user.click(
+    await screen.findByRole("menuitem", {
+      name: "Delete section and its symbols",
+    }),
+  );
+  const dialog = await screen.findByRole("dialog", { name: "Delete section" });
+  expect(dialog).toHaveTextContent("Tech");
+  expect(patch).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByRole("treeitem", { name: "MSFT" })).toBeInTheDocument();
+  openContextMenu(section);
+  await user.click(
+    await screen.findByRole("menuitem", {
+      name: "Delete section and its symbols",
+    }),
+  );
+  await user.click(
+    await screen.findByRole("button", { name: "Delete section" }),
+  );
+  await waitFor(() =>
+    expect(patch).toHaveBeenCalledWith({
+      id: "wtl_test",
+      expectedRevision: 3,
+      operations: [{ op: "remove", path: "/sections/1" }],
+    }),
+  );
+});
+
+test("empty unnamed sections still offer the empty-list action", async () => {
+  const { client, transport } = setup();
+  await screen.findByRole("treeitem", { name: "AAPL" });
+  const key = watchlistDetail(transport, "wtl_test").queryKey;
+  act(() =>
+    client.setQueryData(key, (current) =>
+      current
+        ? {
+            ...current,
+            sections: [{ ...current.sections[0]!, items: [], sections: [] }],
+          }
+        : current,
+    ),
+  );
+  expect(await screen.findByText("No symbols yet.")).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Add symbol" })).toHaveLength(2);
+});
+
 test("switching persists locally across remounts without reading or writing Dashboard", async () => {
   const { user, storageKey, view, mount, dashboardGet, dashboardPatch } =
     setup();
@@ -320,9 +386,16 @@ test("successful deletion selects another list, and deleting the last leaves cre
   await user.click(
     await screen.findByRole("menuitem", { name: "Delete watchlist" }),
   );
+  expect(remove).not.toHaveBeenCalled();
+  await user.click(
+    await screen.findByRole("button", { name: "Delete watchlist" }),
+  );
   await user.click(await screen.findByRole("button", { name: /Crypto/ }));
   await user.click(
     await screen.findByRole("menuitem", { name: "Delete watchlist" }),
+  );
+  await user.click(
+    await screen.findByRole("button", { name: "Delete watchlist" }),
   );
   await screen.findByText("Choose a watchlist or create a new one.");
   expect(remove).toHaveBeenNthCalledWith(1, { id: "wtl_test" });
@@ -336,7 +409,14 @@ test("failed deletion keeps the selected list", async () => {
   await user.click(
     await screen.findByRole("menuitem", { name: "Delete watchlist" }),
   );
+  await user.click(
+    await screen.findByRole("button", { name: "Delete watchlist" }),
+  );
   await waitFor(() => expect(remove).toHaveBeenCalled());
+  const dialog = await screen.findByRole("dialog", {
+    name: "Delete watchlist",
+  });
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
   await screen.findByRole("button", { name: /Markets/ });
 });
 

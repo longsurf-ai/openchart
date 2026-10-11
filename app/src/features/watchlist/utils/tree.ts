@@ -29,6 +29,16 @@ export const watchlistIds = {
 /** The tree's invisible root; its children are the top-level sections. */
 export const ROOT_ID = "root";
 
+/** Whether the tree has a visible heading or row; empty unnamed containers render nothing. */
+export function hasVisibleRows(sections: readonly Section[]): boolean {
+  return sections.some(
+    (section) =>
+      section.name !== undefined ||
+      section.items.length > 0 ||
+      hasVisibleRows(section.sections),
+  );
+}
+
 /**
  * One node of the rendered tree. A section's children are its rows followed by
  * its child sections, matching the entity's two arrays. `path` is the node's

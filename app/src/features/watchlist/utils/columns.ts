@@ -24,33 +24,37 @@ const compact = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
-function price(value: number) {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: Math.abs(value) < 1 ? 6 : 2,
-  });
-}
-
-/** Changes always show two decimals so the column never truncates. */
-function change(value: number) {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+const price = new Intl.NumberFormat(undefined, {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const smallPrice = new Intl.NumberFormat(undefined, {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 6,
+});
+const change = new Intl.NumberFormat(undefined, {
+  signDisplay: "exceptZero",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const percent = new Intl.NumberFormat(undefined, {
+  style: "percent",
+  signDisplay: "exceptZero",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 /** Display text for one metric; missing or non-finite values show a dash. */
 export function formatMetric(metric: Metric, quote: Quote | undefined): string {
   const value = quote?.[metric];
   if (value === undefined || !Number.isFinite(value)) return "—";
-  const sign = value > 0 ? "+" : "";
   switch (metric) {
     case "price":
-      return price(value);
+      return (Math.abs(value) < 1 ? smallPrice : price).format(value);
     case "change":
-      return `${sign}${change(value)}`;
+      return change.format(value);
     case "changePercent":
-      return `${sign}${value.toFixed(2)}%`;
+      return percent.format(value / 100);
     case "volume":
       return compact.format(value);
   }
@@ -60,6 +64,7 @@ export function formatMetric(metric: Metric, quote: Quote | undefined): string {
 export function metricTone(metric: Metric, quote: Quote | undefined): string {
   if (metric !== "change" && metric !== "changePercent") return "";
   const value = quote?.[metric];
-  if (value === undefined || value === 0) return "text-muted-foreground";
+  if (value === undefined || !Number.isFinite(value) || Math.abs(value) < 0.005)
+    return "text-muted-foreground";
   return value > 0 ? "text-up" : "text-down";
 }
