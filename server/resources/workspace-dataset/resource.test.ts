@@ -61,7 +61,7 @@ test("creates a declaration whose script approval only the approve transition wr
     }),
   ).resolves.toMatchObject({ revision: 2 });
 
-  // Client edits keep the approval; a changed script cannot match its hash.
+  // Metadata edits keep approval; execution edits require a fresh review.
   const renamed = await resource.patch({
     id: created.id,
     expectedRevision: approved.revision,
@@ -76,6 +76,50 @@ test("creates a declaration whose script approval only the approve transition wr
     }),
   ).rejects.toThrow();
 });
+
+test.each([
+  {
+    op: "add",
+    path: "/collection/args",
+    value: ["--url", "https://example.com/changed"],
+  },
+  { op: "replace", path: "/collection/path", value: "datasets/other.py" },
+  { op: "replace", path: "/source/path", value: "datasets/other.csv" },
+  { op: "replace", path: "/source/workspaceId", value: "wsp_other" },
+  { op: "replace", path: "/collection", value: null },
+] as const)(
+  "clears approval when $path changes and rejects stale approval",
+  async (operation) => {
+    const resource = caller.resources.workspace_dataset;
+    const created = await resource.create(dataset());
+    const approved = await resource.approveCollection({
+      id: created.id,
+      expectedRevision: created.revision,
+      hash,
+    });
+    const changed = await resource.patch({
+      id: created.id,
+      expectedRevision: approved.revision,
+      operations: [operation],
+    });
+    expect(changed.approvedScriptHash).toBeNull();
+    await expect(
+      resource.approveCollection({
+        id: created.id,
+        expectedRevision: approved.revision,
+        hash,
+      }),
+    ).rejects.toThrow();
+    if (changed.collection?.kind === "script") {
+      const reviewed = await resource.approveCollection({
+        id: created.id,
+        expectedRevision: changed.revision,
+        hash,
+      });
+      expect(reviewed.approvedScriptHash).toBe(hash);
+    }
+  },
+);
 
 test("accepts an agent prompt collection and no collection", async () => {
   const resource = caller.resources.workspace_dataset;

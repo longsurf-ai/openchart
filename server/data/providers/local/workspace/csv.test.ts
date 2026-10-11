@@ -21,6 +21,19 @@ describe("parseCsv", () => {
   test("rejects an unterminated quote", () => {
     expect(() => parseCsv('a\n"open')).toThrow(/quoted field/);
   });
+  test.each(['a,b\n1,"ok"garbage', 'a,b\n1,"ok" ', 'a,b\n1,un"quoted'])(
+    "rejects malformed quoted fields in %j",
+    (text) => {
+      expect(() => parseCsv(text)).toThrow(/Row 2, column 2: unexpected/);
+    },
+  );
+  test("keeps empty quoted fields, escaped quotes and quoted record endings", () => {
+    expect(parseCsv('""')).toEqual([[""]]);
+    expect(parseCsv('"a","b"\r\n"x""y",""')).toEqual([
+      ["a", "b"],
+      ['x"y', ""],
+    ]);
+  });
 });
 
 describe("decodeRows", () => {
@@ -53,6 +66,7 @@ describe("decodeRows", () => {
     ["date,cpi,note\nyesterday,1,a", /Row 2: "date"/],
     ["date,cpi,note\n2024-01-01,1.2.3,a", /Row 2: "cpi" must be a number/],
     ["date,cpi,note\n2024-01-01,1", /Row 2 has 2 fields/],
+    ['date,cpi,note\n2024-01-01,1,"ok"garbage', /after a closing quote/],
     ["date,cpi,cpi,note\n2024-01-01,1,2,a", /header repeats "cpi"/],
     ["date,cpi, cpi ,note\n2024-01-01,1,2,a", /header repeats "cpi"/],
     [

@@ -38,8 +38,7 @@ function toRow(row: typeof workspaceDatasetTable.$inferSelect): Row {
   };
 }
 
-// Client writes omit the managed approval; Drizzle skips absent keys, so saves
-// keep it and inserts store NULL. Only the approve transition supplies it.
+// Client writes omit approval; metadata saves preserve it and inserts store NULL.
 function toColumns({ source, time, ...body }: Body) {
   return {
     ...body,
@@ -49,7 +48,28 @@ function toColumns({ source, time, ...body }: Body) {
   };
 }
 
-/** Transaction-bound CRUD; the Resource framework owns validation, revisions and commit events. */
+function scriptExecution(
+  source: { workspaceId: string; path: string },
+  collection: Body["collection"],
+) {
+  return collection?.kind === "script"
+    ? JSON.stringify([
+        source.workspaceId,
+        source.path,
+        collection.path,
+        collection.args ?? [],
+      ])
+    : null;
+}
+
+/**
+ * Transaction-bound CRUD. Saves clear script approval when its arguments,
+ * script path, output path, Workspace or collection kind changes; metadata
+ * edits preserve approval. The explicit approval transition supplies a hash
+ * only at the reviewed revision. The Resource framework owns validation,
+ * revisions and commit events; database failures propagate to its transaction.
+ * @example yield* workspaceDatasetStore.save(tx, id, write);
+ */
 export const workspaceDatasetStore: Store<
   Body,
   ListFilter<typeof WorkspaceDatasetEntity>
@@ -89,19 +109,33 @@ export const workspaceDatasetStore: Store<
         ),
       ),
   save: (tx, id, input) =>
-    tx
-      .update(workspaceDatasetTable)
-      .set({ revision: input.revision, ...toColumns(input.body) })
-      .where(eq(workspaceDatasetTable.id, id))
-      .returning()
-      .get()
-      .pipe(
-        Effect.flatMap((row) =>
-          row
-            ? Effect.succeed(toRow(row))
-            : Effect.die("Workspace Dataset save returned no row"),
-        ),
-      ),
+    Effect.gen(function* () {
+      const previous = yield* tx
+        .select()
+        .from(workspaceDatasetTable)
+        .where(eq(workspaceDatasetTable.id, id))
+        .get();
+      if (!previous)
+        return yield* Effect.die("Workspace Dataset save found no row");
+      const changed =
+        scriptExecution(
+          { workspaceId: previous.workspaceId, path: previous.path },
+          previous.collection,
+        ) !== scriptExecution(input.body.source, input.body.collection);
+      const row = yield* tx
+        .update(workspaceDatasetTable)
+        .set({
+          revision: input.revision,
+          ...toColumns(input.body),
+          ...(changed ? { approvedScriptHash: null } : {}),
+        })
+        .where(eq(workspaceDatasetTable.id, id))
+        .returning()
+        .get();
+      if (!row)
+        return yield* Effect.die("Workspace Dataset save returned no row");
+      return toRow(row);
+    }),
   remove: (tx, id) =>
     tx
       .delete(workspaceDatasetTable)

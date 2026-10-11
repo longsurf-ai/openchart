@@ -80,8 +80,8 @@ const make = Effect.gen(function* () {
    *   at most one run per Dataset at a time. Its Monitoring check reports
    *   each outcome, so scheduled failures reach the user.
    * Fails `ResourceNotFound` for a missing Dataset, and `ResourceStateInvalid`
-   * when it has no collection, already has active work, or its script changed
-   * since approval. Admission is serialized; durable Agent Run state prevents
+   * when it has no collection, already has active work, or its script or
+   * execution settings need approval. Admission is serialized; durable Agent Run state prevents
    * overlapping prompts even after the Collection service is reconstructed.
    * @example yield* collection.collect(datasetId, `manual:${datasetId}:${Date.now()}`);
    */
@@ -178,10 +178,10 @@ const make = Effect.gen(function* () {
     if (script.entry.hash !== dataset.approvedScriptHash) {
       yield* fail(
         "collection.not_approved",
-        `${collection.path} changed since it was approved; collect ${dataset.name} in OpenChart to review it.`,
+        `${collection.path} needs approval; collect ${dataset.name} in OpenChart to review its code, arguments and output.`,
       );
       return yield* invalid(
-        "its collection script changed since it was approved",
+        "its collection script or execution settings need approval",
       );
     }
     const runtimes = path.join((yield* Home).root, "runtimes");

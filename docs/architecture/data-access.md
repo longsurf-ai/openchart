@@ -344,6 +344,9 @@ write a unique per-run `OPENCHART_OUTPUT`; only a zero exit replaces the data
 file. Execution uses an app-owned snapshot of the bytes checked against the
 server-managed `approvedScriptHash`,
 which only the application can set, so an Agent cannot approve its own script.
+Changing the arguments, script path, output path or Workspace clears approval.
+The review displays these settings and uses the Resource revision to reject
+approval if the execution settings changed while the dialog was open.
 Scripts are self-contained with inline PEP 723 dependencies. Their isolated uv
 environment ignores Workspace project configuration and inherited Python paths;
 the Workspace remains the working directory for reading data, not an automatic

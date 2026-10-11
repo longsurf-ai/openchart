@@ -1,7 +1,8 @@
 // Purpose: A Workspace Dataset draws each bar's latest known observation on the chart's own timeline.
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { render, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EMPTY } from "rxjs";
 import { expect, it, vi } from "vitest";
@@ -33,156 +34,211 @@ function notFound() {
   });
 }
 
-it("shares the Dataset read and collection action across bound columns", async () => {
-  const store = createChartStore(v2.createState({ id: "chart" }));
-  const chart: ChartRuntime = {
-    id: "chart",
-    store,
-    renderer: {} as v2.ChartRenderer,
-    output$: EMPTY,
-    mutate: (recipe) =>
-      store.setState((state) => {
-        recipe(state);
-      }, true),
-  };
-  chart.mutate((state) => {
-    v2.ChartStateUtils.addSeries(state, {
-      id: "price",
-      type: "Candlestick",
-      pane: 0,
-      yAxisId: "right",
+it.each(["agent_prompt", "script"] as const)(
+  "shares the Dataset read and reviews a %s collection across bound columns",
+  async (kind) => {
+    const store = createChartStore(v2.createState({ id: "chart" }));
+    const chart: ChartRuntime = {
+      id: "chart",
+      store,
+      renderer: {} as v2.ChartRenderer,
+      output$: EMPTY,
+      mutate: (recipe) =>
+        store.setState((state) => {
+          recipe(state);
+        }, true),
+    };
+    chart.mutate((state) => {
+      v2.ChartStateUtils.addSeries(state, {
+        id: "price",
+        type: "Candlestick",
+        pane: 0,
+        yAxisId: "right",
+      });
+      v2.ChartStateModel.getSeriesObject(state, "price")!.role = "main";
+      v2.ChartStateUtils.setSeriesData(
+        state,
+        "price",
+        [1, 2, 3, 4].map((index) => ({
+          time: (index * day) / 1000,
+          close: 100,
+        })),
+      );
     });
-    v2.ChartStateModel.getSeriesObject(state, "price")!.role = "main";
-    v2.ChartStateUtils.setSeriesData(
-      state,
-      "price",
-      [1, 2, 3, 4].map((index) => ({
-        time: (index * day) / 1000,
-        close: 100,
-      })),
-    );
-  });
-  // Day 1, then a reading inside day 3's bar; days 2 and 4 hold the last value.
-  const frame = fromPoints({}, [
-    { time: day, cpi: 1 },
-    { time: 3 * day + 3_600_000, cpi: 3 },
-  ]);
-  const select = vi.fn().mockResolvedValue({ data: frame });
-  const transport = {
-    url: "test",
-    rpc: {
-      resources: {
-        workspace_dataset: {
-          get: {
-            query: vi.fn().mockResolvedValue({
-              id: "wsd_cpi",
-              name: "US CPI",
-              source: { workspaceId: "wsp_test", path: "datasets/cpi.csv" },
-              collection: { kind: "agent_prompt" },
-            }),
+    // Day 1, then a reading inside day 3's bar; days 2 and 4 hold the last value.
+    const frame = fromPoints({}, [
+      { time: day, cpi: 1 },
+      { time: 3 * day + 3_600_000, cpi: 3 },
+    ]);
+    const select = vi.fn().mockResolvedValue({ data: frame });
+    const approve = vi.fn().mockResolvedValue({});
+    const collect = vi.fn().mockResolvedValue({ kind: "script" });
+    const hash = "a".repeat(64);
+    const transport = {
+      url: "test",
+      rpc: {
+        resources: {
+          workspace: {
+            get: {
+              query: vi.fn().mockResolvedValue({ root: "/workspace/review" }),
+            },
+          },
+          workspace_dataset: {
+            approveCollection: { mutate: approve },
+            get: {
+              query: vi.fn().mockResolvedValue({
+                id: "wsd_cpi",
+                revision: 1,
+                name: "US CPI",
+                source: { workspaceId: "wsp_test", path: "datasets/cpi.csv" },
+                collection:
+                  kind === "script"
+                    ? {
+                        kind: "script",
+                        path: "collect.py",
+                        args: ["--mode", "refresh"],
+                      }
+                    : { kind: "agent_prompt" },
+                approvedScriptHash: null,
+              }),
+            },
           },
         },
-      },
-    },
-  } as unknown as AppTransport;
-  const cell = {
-    id: "ccl_a",
-    resolution: "1d",
-    panes: [
-      {
-        id: "cpn_a",
-        series: [
-          {
-            id: "csr_cpi",
-            role: "normal",
-            source: { kind: "dataset", datasetId: "wsd_cpi", output: "cpi" },
+        workspace: {
+          read: {
+            query: vi
+              .fn()
+              .mockResolvedValue({
+                entry: { hash },
+                base64: btoa("print('approved')"),
+              }),
           },
-          {
-            id: "csr_cpi_copy",
-            role: "normal",
-            source: { kind: "dataset", datasetId: "wsd_cpi", output: "cpi" },
-          },
-        ],
+        },
+        collection: { collect: { mutate: collect } },
       },
-    ],
-  } as unknown as CellDefinition;
-  const legend = document.createElement("div");
-  const preferences = createChartPreferences("chart");
-  preferences.setState({
-    series: { csr_cpi: { ownAxis: true }, csr_cpi_copy: { ownAxis: true } },
-    axes: {
-      "csr_cpi:axis": { side: "left" },
-      "csr_cpi_copy:axis": { side: "right" },
-    },
-  });
-  render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
-      <FeedReactContext.Provider
-        value={{ series: { select } } as unknown as FeedClient}
+    } as unknown as AppTransport;
+    const cell = {
+      id: "ccl_a",
+      resolution: "1d",
+      panes: [
+        {
+          id: "cpn_a",
+          series: [
+            {
+              id: "csr_cpi",
+              role: "normal",
+              source: { kind: "dataset", datasetId: "wsd_cpi", output: "cpi" },
+            },
+            {
+              id: "csr_cpi_copy",
+              role: "normal",
+              source: { kind: "dataset", datasetId: "wsd_cpi", output: "cpi" },
+            },
+          ],
+        },
+      ],
+    } as unknown as CellDefinition;
+    const legend = document.createElement("div");
+    const preferences = createChartPreferences("chart");
+    preferences.setState({
+      series: { csr_cpi: { ownAxis: true }, csr_cpi_copy: { ownAxis: true } },
+      axes: {
+        "csr_cpi:axis": { side: "left" },
+        "csr_cpi_copy:axis": { side: "right" },
+      },
+    });
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
       >
-        <FeedVersionContext.Provider value={FeedVersion.make("v1")}>
-          <ChartGridContext.Provider
-            value={{
-              chartId: "cht_a",
-              transport,
-              focusedId: cell.id,
-              setFocused: vi.fn(),
-              maximizedId: undefined,
-              toggleMaximized: vi.fn(),
-              mounted: new Map(),
-              register: () => () => {},
-            }}
-          >
-            <ChartContext.Provider value={chart}>
-              <TooltipProvider>
-                <DatasetSource
-                  datasetId="wsd_cpi"
-                  cell={cell}
-                  targets={new Map([["cpn_a", legend]])}
-                  localStore={preferences}
-                  disabled={false}
-                  onRemove={vi.fn()}
-                />
-              </TooltipProvider>
-            </ChartContext.Provider>
-          </ChartGridContext.Provider>
-        </FeedVersionContext.Provider>
-      </FeedReactContext.Provider>
-    </QueryClientProvider>,
-  );
-  await waitFor(() =>
+        <FeedReactContext.Provider
+          value={{ series: { select } } as unknown as FeedClient}
+        >
+          <FeedVersionContext.Provider value={FeedVersion.make("v1")}>
+            <ChartGridContext.Provider
+              value={{
+                chartId: "cht_a",
+                transport,
+                focusedId: cell.id,
+                setFocused: vi.fn(),
+                maximizedId: undefined,
+                toggleMaximized: vi.fn(),
+                mounted: new Map(),
+                register: () => () => {},
+              }}
+            >
+              <ChartContext.Provider value={chart}>
+                <TooltipProvider>
+                  <DatasetSource
+                    datasetId="wsd_cpi"
+                    cell={cell}
+                    targets={new Map([["cpn_a", legend]])}
+                    localStore={preferences}
+                    disabled={false}
+                    onRemove={vi.fn()}
+                  />
+                </TooltipProvider>
+              </ChartContext.Provider>
+            </ChartGridContext.Provider>
+          </FeedVersionContext.Provider>
+        </FeedReactContext.Provider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(
+        v2.ChartStateModel.getSeriesObject(
+          store.getState(),
+          "csr_cpi",
+        )?.series.data.map((row) => (row as { value: number | null }).value),
+      ).toEqual([1, 1, 3, 3]),
+    );
+    expect(select).toHaveBeenCalledExactlyOnceWith(
+      { id: "wsd_cpi" },
+      expect.anything(),
+    );
     expect(
-      v2.ChartStateModel.getSeriesObject(
-        store.getState(),
-        "csr_cpi",
-      )?.series.data.map((row) => (row as { value: number | null }).value),
-    ).toEqual([1, 1, 3, 3]),
-  );
-  expect(select).toHaveBeenCalledExactlyOnceWith(
-    { id: "wsd_cpi" },
-    expect.anything(),
-  );
-  expect(
-    within(legend).getAllByRole("button", { name: "Collect US CPI" }),
-  ).toHaveLength(1);
-  for (const [id, side] of [
-    ["csr_cpi", "left"],
-    ["csr_cpi_copy", "right"],
-  ]) {
-    const axisId = `${id}:axis`;
-    expect(
-      v2.ChartStateModel.getSeriesObject(store.getState(), id!)?.axisId,
-    ).toBe(axisId);
-    expect(
-      store.getState().config.yAxis.axes.find((axis) => axis.id === axisId)
-        ?.side,
-    ).toBe(side);
-  }
-});
+      within(legend).getAllByRole("button", { name: "Collect US CPI" }),
+    ).toHaveLength(1);
+    for (const [id, side] of [
+      ["csr_cpi", "left"],
+      ["csr_cpi_copy", "right"],
+    ]) {
+      const axisId = `${id}:axis`;
+      expect(
+        v2.ChartStateModel.getSeriesObject(store.getState(), id!)?.axisId,
+      ).toBe(axisId);
+      expect(
+        store.getState().config.yAxis.axes.find((axis) => axis.id === axisId)
+          ?.side,
+      ).toBe(side);
+    }
+    if (kind === "script") {
+      const user = userEvent.setup();
+      const button = within(legend).getByRole("button", {
+        name: "Collect US CPI",
+      });
+      await waitFor(() => expect(button).toBeEnabled());
+      await user.click(button);
+      expect(screen.getByText('["--mode","refresh"]')).toBeVisible();
+      expect(screen.getByText("/workspace/review")).toBeVisible();
+      expect(screen.getByText("datasets/cpi.csv")).toBeVisible();
+      expect(approve).not.toHaveBeenCalled();
+      await user.click(
+        screen.getByRole("button", { name: "Approve and collect" }),
+      );
+      await waitFor(() =>
+        expect(approve).toHaveBeenCalledExactlyOnceWith({
+          id: "wsd_cpi",
+          expectedRevision: 1,
+          hash,
+        }),
+      );
+      expect(collect).toHaveBeenCalledExactlyOnceWith({ id: "wsd_cpi" });
+    }
+  },
+);
 
 it("skips the bindings of a deleted Dataset without reading Feed", async () => {
   const store = createChartStore(v2.createState({ id: "chart" }));

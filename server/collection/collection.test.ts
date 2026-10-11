@@ -65,7 +65,9 @@ test("a script runs only after its current content is approved", async () => {
   await expect(
     caller.collection.collect({ id: created.id }),
   ).rejects.toMatchObject({
-    cause: { reason: "its collection script changed since it was approved" },
+    cause: {
+      reason: "its collection script or execution settings need approval",
+    },
   });
   const statuses = await runtime.runPromise(
     Monitoring.Service.use((monitoring) => monitoring.status),

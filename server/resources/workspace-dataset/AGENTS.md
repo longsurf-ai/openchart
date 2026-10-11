@@ -9,8 +9,9 @@ time and observation columns, and how the file is collected.
   A `.workflow.ts` is an Agent prompt holding one WorkflowPart, not a third kind.
   CRUD never runs a collection; Collection and Scheduler do.
 - `approvedScriptHash` is server-managed: client creates and patches cannot
-  write it, and edits preserve it. Only `approveCollection` sets it, from the
-  application, so an Agent cannot approve the script it wrote.
+  write it. Metadata edits preserve it; changing arguments, script path, output
+  path, Workspace or collection kind clears it. Only `approveCollection` sets it
+  at the reviewed revision, so an Agent cannot approve its own execution changes.
 - Column names are distinct and never `time`; the Provider rejects a column
   that repeats the time column when it reads the file.
 - Chart series bind Datasets by value with no FK; charts skip missing ones.

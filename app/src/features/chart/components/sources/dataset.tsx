@@ -38,7 +38,10 @@ import { useErrorToast } from "@openchart/app/hooks/use-error-toast";
 import { mainTimeline } from "@openchart/app/lib/chart/data";
 import { offersRetry } from "@openchart/app/lib/feed/transport";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
-import { workspaceFileQueryOptions } from "@openchart/app/lib/workspace/workspace";
+import {
+  workspaceFileQueryOptions,
+  workspaceQueryOptions,
+} from "@openchart/app/lib/workspace/workspace";
 import { defaultIndicatorOutputSeriesOptions } from "@openchart/app/lib/chart/indicator-output-style";
 import {
   defaultSeriesPreferences,
@@ -237,8 +240,10 @@ export function DatasetSource({
 
 /**
  * Runs the Dataset's collection now. A script whose content differs from the
- * approved hash opens a review of that content first; approving it records
- * exactly the text shown, then collects. Datasets without a collection show nothing.
+ * approved hash opens a review of its content, arguments and execution paths.
+ * Execution edits clear approval on the server. Approval uses the displayed
+ * Resource revision, so a concurrent edit cannot approve a different invocation.
+ * Datasets without a collection show nothing.
  */
 function CollectAction({
   dataset,
@@ -257,6 +262,10 @@ function CollectAction({
       dataset.source.workspaceId,
       script?.path ?? "",
     ),
+    enabled: !!script,
+  });
+  const workspace = useQuery({
+    ...workspaceQueryOptions(transport, dataset.source.workspaceId),
     enabled: !!script,
   });
   const [reviewing, setReviewing] = useState(false);
@@ -287,7 +296,11 @@ function CollectAction({
             variant="ghost"
             size="icon-xs"
             aria-label={label}
-            disabled={disabled || collect.isPending || (!!script && !hash)}
+            disabled={
+              disabled ||
+              collect.isPending ||
+              (!!script && (!hash || !workspace.data))
+            }
             onClick={() =>
               approved ? collect.mutate(undefined) : setReviewing(true)
             }
@@ -303,11 +316,31 @@ function CollectAction({
             <DialogHeader>
               <DialogTitle>Review {script.path}</DialogTitle>
               <DialogDescription>
-                This script runs on this computer with uv to refresh{" "}
-                {dataset.name}. It changed since it was last approved, so
-                scheduled collections wait for your approval.
+                Review this script and its arguments before allowing it to
+                refresh {dataset.name} on this computer. Scheduled collections
+                wait for your approval.
               </DialogDescription>
             </DialogHeader>
+            <dl className="grid gap-2 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Workspace</dt>
+                <dd className="break-all font-mono text-xs">
+                  {workspace.data?.root}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Output file</dt>
+                <dd className="break-all font-mono text-xs">
+                  {dataset.source.path}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Arguments</dt>
+                <dd className="max-h-24 overflow-auto break-all font-mono text-xs">
+                  {JSON.stringify(script.args ?? [])}
+                </dd>
+              </div>
+            </dl>
             <pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">
               {file.data
                 ? new TextDecoder().decode(
@@ -322,7 +355,7 @@ function CollectAction({
                 Cancel
               </Button>
               <Button
-                disabled={!hash || collect.isPending}
+                disabled={!hash || !workspace.data || collect.isPending}
                 onClick={() => collect.mutate(hash)}
               >
                 Approve and collect

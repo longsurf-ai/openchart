@@ -6,7 +6,8 @@ import type { DatasetColumn } from "@openchart/server/resources/workspace-datase
  * Splits RFC 4180 CSV text into records. Commas separate fields; LF or CRLF
  * ends a record; a field that starts with a double quote may hold commas, line
  * breaks and doubled quotes. A byte-order mark and a final line break are ignored.
- * @throws If the text ends inside a quoted field.
+ * @throws For unterminated quotes, quotes inside unquoted fields, or characters
+ * after a closing quote other than a delimiter or record ending.
  * @example parseCsv('a,b\n1,"x,y"\n'); // [["a","b"],["1","x,y"]]
  */
 export function parseCsv(text: string): string[][] {
@@ -14,26 +15,42 @@ export function parseCsv(text: string): string[][] {
   let record: string[] = [];
   let field = "";
   let quoted = false;
+  let closed = false;
   for (let i = text.charCodeAt(0) === 0xfeff ? 1 : 0; i < text.length; i++) {
     const char = text[i]!;
     if (quoted) {
       if (char !== '"') field += char;
       else if (text[i + 1] === '"') field += text[++i];
-      else quoted = false;
-    } else if (char === '"' && field === "") quoted = true;
-    else if (char === ",") {
+      else {
+        quoted = false;
+        closed = true;
+      }
+    } else if (char === ",") {
       record.push(field);
       field = "";
+      closed = false;
     } else if (char === "\n" || char === "\r") {
       if (char === "\r" && text[i + 1] === "\n") i++;
       record.push(field);
       records.push(record);
       record = [];
       field = "";
+      closed = false;
+    } else if (closed) {
+      throw new Error(
+        `Row ${records.length + 1}, column ${record.length + 1}: unexpected character after a closing quote`,
+      );
+    } else if (char === '"') {
+      if (field !== "")
+        throw new Error(
+          `Row ${records.length + 1}, column ${record.length + 1}: unexpected quote in an unquoted field`,
+        );
+      quoted = true;
     } else field += char;
   }
   if (quoted) throw new Error("The file ends inside a quoted field");
-  if (field !== "" || record.length > 0) records.push([...record, field]);
+  if (closed || field !== "" || record.length > 0)
+    records.push([...record, field]);
   return records;
 }
 
