@@ -10,7 +10,9 @@ test.runIf(Boolean(process.env.OPENCHART_UV_LIVE))(
   "runs inline dependencies without importing mutable Workspace modules or configuration",
   async () => {
     const root = await mkdtemp(path.join(tmpdir(), "openchart-uv-live-"));
-    onTestFinished(() => vi.unstubAllEnvs());
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
     vi.stubEnv("PYTHONPATH", root);
     const payload =
       'from pathlib import Path\nPath("unapproved-ran").write_text("executed")\n';
