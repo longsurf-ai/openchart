@@ -23,6 +23,11 @@ test("keeps Occurrences and chart series, then accepts collections without Runs"
     migration.id.endsWith("_workspace-datasets"),
   );
   expect(at).toBeGreaterThan(0);
+  // This upgrade starts after the already-landed Dashboard migration, so an
+  // existing main database keeps its exact migration-ledger prefix.
+  expect(migrations[at - 1]?.id).toBe(
+    "20261010170833_unique-dashboard-widgets",
+  );
   await Effect.runPromise(
     Effect.gen(function* () {
       const db = yield* makeWithDefaults();

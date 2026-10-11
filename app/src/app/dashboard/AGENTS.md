@@ -5,8 +5,8 @@
 - `dashboard-header.tsx` composes PageHeader, the selected Chart symbol and one
   Widgets dropdown from `app/widgets`. The widget catalog and render registry live
   there; feature grid/host components receive the registry through props.
-  `selected-chart.ts` owns the target chart rule (active, else first chart widget;
-  its focused cell), shared with Workspace widgets' Add to chart.
+  `selected-chart.ts` queries the unique Chart by dashboardId while its widget is placed
+  and tracks its focused cell, shared with Workspace widgets' Add to chart.
 - Agent capabilities come from Layout's shared `lib/agent` Provider, without
   per-widget injection or definition overrides.
 - `use-dashboard-actions.ts` owns route/sidebar coordination: New Dashboard saves

@@ -3,7 +3,6 @@ export type {
   FeedClient,
   IBarsFeed,
   ISymbologyFeed,
-  ILogosFeed,
   ICalendarFeed,
   ISeriesFeed,
   RequestOptions,

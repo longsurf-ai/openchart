@@ -230,7 +230,9 @@ export const cachedSelectBars = Effect.fn("YFinance.cachedSelectBars")(
 );
 
 /** Read backwards through actual chart windows until count or available history is exhausted.
- * Yahoo's intraday retention is enforced explicitly; missing OHLCV is never fabricated.
+ * Yahoo's intraday retention is enforced explicitly. Empty price slots without
+ * volume are omitted; partially populated OHLCV fails with Dataset.IncompleteData
+ * so history and polling never accept an incomplete window. No values are fabricated.
  * @example const data = yield* selectBars({}, {symbol: 'VOD.L', interval: '1m', includePrePost: false, time: {}, count: 500});
  */
 export const selectBars = Effect.fn("YFinance.selectBars")(function* (
@@ -380,6 +382,16 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
         const low = quote.low[i]!;
         const close = quote.close[i]!;
         const volume = quote.volume[i]!;
+        // Yahoo uses empty slots for periods without trades. A partly populated
+        // bar is different: dropping it would silently present an older price.
+        if (
+          open === null &&
+          high === null &&
+          low === null &&
+          close === null &&
+          (volume === null || volume === 0)
+        )
+          continue;
         if (
           open === null ||
           high === null ||
@@ -387,7 +399,20 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
           close === null ||
           volume === null
         )
-          continue;
+          return yield* Effect.fail(
+            new DatasetFailure(new DatasetReasons.IncompleteData(), {
+              cause: {
+                symbol: query.symbol,
+                interval: query.interval,
+                time,
+                open,
+                high,
+                low,
+                close,
+                volume,
+              },
+            }),
+          );
         const row = { time, open, high, low, close, volume, asOf };
         if (interval > Day && i === timestamps.length - 1 && i > 0) {
           const previousTime = timestamps[i - 1]! * 1000;

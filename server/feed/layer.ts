@@ -5,7 +5,6 @@ import { FeedVersion } from "@openchart/feed";
 import { Catalog, type Dataset } from "@openchart/server/data";
 import { Events } from "@openchart/server/events";
 import { providerFeeds } from "@openchart/server/data/providers";
-import { logosFeed } from "@openchart/server/feed/logo/logo";
 import { calendarFeed } from "@openchart/server/feed/calendar/calendar";
 import { seriesFeed } from "@openchart/server/feed/series/series";
 import { provisionBars } from "@openchart/server/feed/bar/provisioner";
@@ -16,8 +15,8 @@ import { SymbologyIndex } from "@openchart/server/feed/symbology/symbology";
 
 /** Only declarations with a registered Feed binding can change the Feed version. */
 const boundDefinitions = new Set(
-  providerFeeds.flatMap(({ bars, symbology, logos, calendar }) =>
-    [bars, symbology, logos, calendar].flatMap((adapter) =>
+  providerFeeds.flatMap(({ bars, symbology, calendar }) =>
+    [bars, symbology, calendar].flatMap((adapter) =>
       adapter ? [adapter.definition] : [],
     ),
   ),
@@ -38,7 +37,6 @@ const makeSnapshot = Effect.fn("Feed.makeSnapshot")(function* (
     services: {
       bars,
       symbology,
-      logos: logosFeed(datasets),
       calendar: calendarFeed(datasets),
       series: seriesFeed(datasets),
     },

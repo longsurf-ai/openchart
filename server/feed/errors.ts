@@ -51,6 +51,8 @@ const reasons = {
     new FeedReasons.SourceUnavailable({ provider }),
   "Dataset.InvalidResult": (_, provider) =>
     new FeedReasons.InvalidSourceData({ provider }),
+  "Dataset.IncompleteData": (_, provider) =>
+    new FeedReasons.IncompleteData({ provider }),
   "Dataset.StreamInterrupted": (_, provider) =>
     new FeedReasons.ResyncRequired({ provider }),
   "Dataset.Retired": (_, provider) =>

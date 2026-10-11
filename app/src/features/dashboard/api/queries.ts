@@ -116,7 +116,7 @@ export function deleteDashboardMutationOptions(
   });
 }
 
-/** Commit placements or a new Chart against the captured Dashboard revision; both share pending/recovery state. @example useMutation(dashboardMutationOptions(transport, client, id)); */
+/** Commit placements against the captured Dashboard revision with shared pending/recovery state. @example useMutation(dashboardMutationOptions(transport, client, id)); */
 export function dashboardMutationOptions(
   transport: AppTransport,
   queryClient: QueryClient,
@@ -130,25 +130,15 @@ export function dashboardMutationOptions(
       id,
     ] as const,
     retry: false,
-    mutationFn: (
-      input:
-        | {
-            expectedRevision: number;
-            widgets: Dashboard["widgets"];
-          }
-        | Omit<CreateChartWidgetInput, "dashboardId">,
-    ) =>
-      "layout" in input
-        ? transport.rpc.resources.macro.createChartWidget
-            .mutate({ dashboardId: id, ...input })
-            .then((result) => result.dashboard)
-        : transport.rpc.resources.dashboard.patch.mutate({
-            id,
-            expectedRevision: input.expectedRevision,
-            operations: [
-              { op: "replace", path: "/widgets", value: input.widgets },
-            ],
-          }),
+    mutationFn: (input: {
+      expectedRevision: number;
+      widgets: Dashboard["widgets"];
+    }) =>
+      transport.rpc.resources.dashboard.patch.mutate({
+        id,
+        expectedRevision: input.expectedRevision,
+        operations: [{ op: "replace", path: "/widgets", value: input.widgets }],
+      }),
     onSettled: () => {
       void queryClient.invalidateQueries({
         queryKey: resourceQueryKeys.resource("dashboard"),
@@ -156,8 +146,3 @@ export function dashboardMutationOptions(
     },
   });
 }
-
-/** Input for the atomic Chart-plus-placement command. */
-export type CreateChartWidgetInput = Parameters<
-  AppTransport["rpc"]["resources"]["macro"]["createChartWidget"]["mutate"]
->[0];

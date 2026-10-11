@@ -13,6 +13,7 @@ export const DatasetReason = Schema.Union([
   DatasetReasons.RateLimited,
   DatasetReasons.Unavailable,
   DatasetReasons.InvalidResult,
+  DatasetReasons.IncompleteData,
   DatasetReasons.StreamInterrupted,
   DatasetReasons.Retired,
 ]);

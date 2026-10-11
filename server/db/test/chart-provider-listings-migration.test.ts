@@ -46,7 +46,7 @@ test("retires numeric-listing cells, preserves dashboards and grids, and accepts
         [key: string]: unknown;
       }>(sql`SELECT * FROM dashboard`)).map((row) => ({
         ...row,
-        revision: row.revision + 1,
+        revision: row.revision,
         updated_at: expect.any(Number),
       }));
       const grids = yield* db.all(sql`SELECT * FROM chart`);
@@ -54,7 +54,7 @@ test("retires numeric-listing cells, preserves dashboards and grids, and accepts
         sql`SELECT * FROM app_schema_migrations ORDER BY version`,
       );
 
-      yield* DatabaseMigration.apply(db);
+      yield* DatabaseMigration.applyOnly(db, migrations.slice(0, index + 1));
       expect(yield* db.all(sql`SELECT * FROM dashboard`)).toEqual(dashboards);
       expect(yield* db.all(sql`SELECT * FROM chart`)).toEqual(grids);
       expect(yield* db.all(sql`SELECT * FROM workspace`)).toEqual(workspaces);
@@ -63,7 +63,7 @@ test("retires numeric-listing cells, preserves dashboards and grids, and accepts
         "chart_pane",
         "chart_series",
         "chart_market_source",
-        "indicator",
+        "chart_indicator",
         "chart_link",
       ]) {
         expect(
@@ -74,7 +74,7 @@ test("retires numeric-listing cells, preserves dashboards and grids, and accepts
         sql`SELECT * FROM app_schema_migrations ORDER BY version`,
       );
       expect(migrated.slice(0, ledger.length)).toEqual(ledger);
-      expect(migrated).toHaveLength(migrations.length);
+      expect(migrated).toHaveLength(index + 1);
       expect(
         yield* db.all<{ name: string }>(sql`PRAGMA table_info(chart_link)`),
       ).not.toContainEqual(
@@ -100,7 +100,7 @@ test("retires numeric-listing cells, preserves dashboards and grids, and accepts
           true,
         );
       }
-      yield* DatabaseMigration.apply(db);
+      yield* DatabaseMigration.applyOnly(db, migrations.slice(0, index + 1));
       expect(yield* db.all(sql`SELECT * FROM chart_market_source`)).toEqual(
         saved,
       );

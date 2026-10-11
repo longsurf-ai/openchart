@@ -96,7 +96,7 @@ function mount() {
   };
 }
 
-test("reads all chart pages and prefers the alert's complete market binding in its original Dashboard", async () => {
+test("reads the unique Chart and prefers the cell with the alert's complete market binding", async () => {
   const fixture = mount();
   const daily = createCell(inputs, { ...inputs, resolution: "1d" });
   const otherProvider = createCell(
@@ -108,35 +108,17 @@ test("reads all chart pages and prefers the alert's complete market binding in i
     inputs,
   );
   const match = createCell(inputs, inputs);
-  fixture.list
-    .mockResolvedValueOnce({
-      items: [
-        {
-          id: "cht_daily",
-          dashboardId: original.dashboardId,
-          preset: "1",
-          cells: [daily],
-        },
-        {
-          id: "cht_other",
-          dashboardId: original.dashboardId,
-          preset: "1x2",
-          cells: [otherProvider, otherVenue],
-        },
-      ],
-      nextCursor: "next",
-    })
-    .mockResolvedValueOnce({
-      items: [
-        {
-          id: "cht_original",
-          dashboardId: original.dashboardId,
-          preset: "1x2",
-          cells: [otherProvider, match],
-        },
-      ],
-      nextCursor: null,
-    });
+  fixture.list.mockResolvedValue({
+    items: [
+      {
+        id: "cht_original",
+        dashboardId: original.dashboardId,
+        preset: "2x2",
+        cells: [daily, otherProvider, otherVenue, match],
+      },
+    ],
+    nextCursor: null,
+  });
   fixture.render();
   expect(
     await screen.findByText(
@@ -154,11 +136,10 @@ test("reads all chart pages and prefers the alert's complete market binding in i
     { id: drawing.drawingId },
     expect.anything(),
   );
-  expect(fixture.list).toHaveBeenLastCalledWith(
+  expect(fixture.list).toHaveBeenCalledExactlyOnceWith(
     {
       filter: { dashboardId: original.dashboardId },
-      limit: 100,
-      cursor: "next",
+      limit: 1,
     },
     expect.anything(),
   );

@@ -17,7 +17,6 @@ Owns cross-Resource operations outside individual Resource directories.
 - `follow-indicator.ts` reads what a following rule follows now;
   `ruleRequest` turns any stored rule config into a NodeConfig plus `nodes`
   for Rule save and the Alert runner.
-- `createChartWidget` owns the default Binance BTCUSDT daily starter and saves
-  existing placement geometry plus the new Chart placement in one transaction.
-  `createDashboardWithChart` composes it with Dashboard create without Feed access.
-  Ordinary Dashboard create remains empty.
+- `createDashboardWithChart` creates the default Binance BTCUSDT daily Chart,
+  Dashboard and its single Chart placement atomically without Feed access.
+  Ordinary Dashboard create remains empty; widget additions use Dashboard patch.

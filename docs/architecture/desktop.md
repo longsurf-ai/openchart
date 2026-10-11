@@ -358,9 +358,6 @@ outside ASAR, where native Agent file readers can open them. Main passes the
 actual `process.resourcesPath/docs` through the host protocol to the Agent
 profile prompt, so relocation preserves the link. Tea owns its language docs
 and generated reference; OpenChart owns distribution and integration guidance.
-The bundled logo Dataset's metadata and images are copied into `dist/main/assets`;
-the backend reads them relative to its own module, including after relocation
-and inside ASAR. Images never enter the renderer's JavaScript bundle.
 `just desktop-tea-smoke` relocates the built runtime and compiles Tea through its HTTP API.
 Development and release hand this same layout to the
 same Electron Packager configuration with ASAR enabled, keeping source and

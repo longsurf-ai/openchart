@@ -93,7 +93,7 @@ test("captures only affected Resource roots on cascade, even without a chart Res
         yield* tx.run(insertDashboard("dsh_other"));
         yield* tx.run(sql`
           INSERT INTO chart (id, dashboard_id, revision) VALUES
-            ('cht_a', 'dsh_one', 2), ('cht_b', 'dsh_one', 4),
+            ('cht_a', 'dsh_one', 2),
             ('cht_other', 'dsh_other', 1)
         `);
         yield* tx.run(sql`
@@ -122,7 +122,6 @@ test("captures only affected Resource roots on cascade, even without a chart Res
   await runtime.runPromise(remove);
   expect(changes()).toEqual([
     { table: "chart", id: "cht_a", revision: 2 },
-    { table: "chart", id: "cht_b", revision: 4 },
     { table: "dashboard", id: "dsh_one", revision: 1 },
   ]);
   expect(await runtime.runPromise(db.all(sql`SELECT id FROM chart`))).toEqual([

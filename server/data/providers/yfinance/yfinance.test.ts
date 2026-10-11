@@ -510,6 +510,110 @@ describe("Yahoo Finance Provider", () => {
     expect([...data].map((row) => row.volume)).toEqual([100, 100]);
   });
 
+  it.each(["open", "high", "low", "close", "volume"] as const)(
+    "fails incomplete %s in both history and polling instead of returning an older price",
+    async (column) => {
+      const day = 86_400_000;
+      const today = Math.floor(Date.now() / day) * day;
+      const body = chart(
+        [today - day, today],
+        [254.06, 262.43],
+        "1d",
+        0,
+        "UTC",
+      );
+      const quote = body.chart.result[0]!.indicators.quote[0]!;
+      quote[column] = [...quote[column]];
+      quote[column][1] = null;
+      const options = { fetch: async () => Response.json(body) };
+      const key = {
+        symbol: "VOD.L",
+        interval: "1d" as const,
+        includePrePost: false,
+      };
+      await expect(
+        Effect.runPromise(
+          selectBars(options, { ...key, time: { from: today - day } }),
+        ),
+      ).rejects.toMatchObject({ reason: { _tag: "Dataset.IncompleteData" } });
+      await expect(
+        Effect.runPromise(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const updates = yield* streamBars(
+                options,
+                key,
+                yield* Deferred.make<void>(),
+              );
+              return yield* Stream.runCollect(Stream.take(updates, 1));
+            }),
+          ),
+        ),
+      ).rejects.toMatchObject({ reason: { _tag: "Dataset.IncompleteData" } });
+    },
+  );
+
+  it("does not cache incomplete history and accepts a repaired response", async () => {
+    const from = Date.UTC(2025, 0, 6);
+    const body = chart([from], [12], "1d", 0, "UTC");
+    const quote = body.chart.result[0]!.indicators.quote[0]!;
+    quote.close = [null];
+    let calls = 0;
+    const options = {
+      fetch: async () => {
+        calls++;
+        return Response.json(body);
+      },
+    };
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const { select } = yield* cachedSelectBars(options);
+        const query = {
+          symbol: "VOD.L",
+          interval: "1d" as const,
+          includePrePost: false,
+          time: { from, to: from + 86_400_000 },
+        };
+        const failure = yield* Effect.flip(select(query));
+        expect(failure.reason._tag).toBe("Dataset.IncompleteData");
+        quote.close[0] = 12;
+        expect((yield* select(query)).get(0)?.close).toBe(12);
+        yield* select(query);
+        expect(calls).toBe(2);
+      }),
+    );
+  });
+
+  it("keeps empty price slots as gaps, preserves zero-volume bars and ignores incomplete rows outside the window", async () => {
+    const day = 86_400_000;
+    const from = Date.UTC(2025, 0, 6);
+    const body = chart(
+      [from, from + day, from + 2 * day],
+      [null, 12, 13],
+      "1d",
+      0,
+      "UTC",
+    );
+    const quote = body.chart.result[0]!.indicators.quote[0]!;
+    quote.volume[0] = 0;
+    quote.volume[1] = 0;
+    quote.close = [null, 12, null];
+    const data = await Effect.runPromise(
+      selectBars(
+        { fetch: async () => Response.json(body) },
+        {
+          symbol: "VOD.L",
+          interval: "1d",
+          includePrePost: false,
+          time: { from, to: from + 2 * day },
+        },
+      ),
+    );
+    expect([...data]).toMatchObject([
+      { time: from + day, close: 12, volume: 0 },
+    ]);
+  });
+
   it.each([{ from: 1000, to: 2000 }, { to: 2000 }])(
     "returns empty history for Yahoo's explicit missing range: %j",
     async (time) => {

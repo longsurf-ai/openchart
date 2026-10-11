@@ -24,10 +24,6 @@ export function useBarsFeed() {
 export function useSymbologyFeed() {
   return useDatafeed().symbology;
 }
-/** Current Logos client. @example const logos = useLogosFeed(); */
-export function useLogosFeed() {
-  return useDatafeed().logos;
-}
 /** Current Calendar client. @example const calendar = useCalendarFeed(); */
 export function useCalendarFeed() {
   return useDatafeed().calendar;

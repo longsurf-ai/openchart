@@ -98,11 +98,13 @@ while those changes race it; deletion or recurrence edits can prevent later repa
 of incomplete bookkeeping. This is the intended best-effort contract.
 
 A `data_collection` target names a Workspace Dataset; the Dataset's own
-`collection` says what runs, and Collection runs it with the same intent. An
+`collection` says what runs, and Collection scopes its intent under
+`collection:<datasetId>:`. An
 Agent prompt collection is admitted and recorded like a prompt target. A script
 collection has no Run whose intent could replay a retry, so dispatch first looks
 for this fire's Occurrence and starts nothing when it exists; it records the
-Occurrence with no Run or Session. A missing Dataset, no collection, or a script
+Occurrence with no Run or Session. A missing Dataset, no collection, active
+collection, or a script
 changed since its approval is accepted without work, so the cursor advances
 instead of retrying every scan; Collection's Monitoring check reports script
 problems. Storage failures still leave the fire due.

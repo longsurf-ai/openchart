@@ -33,6 +33,9 @@ test.runIf(Boolean(process.env.OPENCHART_UV_LIVE))(
           runtimes,
           root,
           script: "collect.py",
+          content: yield* Effect.promise(() =>
+            readFile(path.join(root, "collect.py")),
+          ),
           args: [],
           output: "datasets/cpi.csv",
           timeoutSeconds: 600,

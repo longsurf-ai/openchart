@@ -977,7 +977,6 @@ const chartCell = {
 const chartWidget = {
   id: "wdg_first",
   kind: "chart",
-  resourceId: "cht_retained",
   layout: { x: 0, y: 0, w: 6, h: 8 },
 };
 
@@ -1001,12 +1000,11 @@ const writableCases: Array<{
         {
           ...chartWidget,
           id: "wdg_second",
-          resourceId: "wsp_wrong_kind",
           layout: { x: 6, y: 0, w: 6, h: 8 },
         },
       ],
     },
-    issuePath: "/widgets/1/resourceId",
+    issuePath: "/widgets/1/kind",
   },
   {
     resource: "chart",

@@ -48,11 +48,7 @@ export function DashboardGrid({
     snapshot: Dashboard,
     widgets: Dashboard["widgets"],
   ) => Promise<Dashboard>;
-  onPlaceBeside: (
-    anchorId: string,
-    definition: WidgetDefinition,
-    resourceId?: string,
-  ) => string;
+  onPlaceBeside: (anchorId: string, definition: WidgetDefinition) => string;
 }) {
   const { width, mounted, containerRef } = container;
   const narrow = width < 640;

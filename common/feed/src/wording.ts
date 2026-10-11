@@ -38,6 +38,8 @@ const sentences = {
       : `${providerName(failure.provider)} is unavailable right now.`,
   "Feed.InvalidSourceData": (failure) =>
     `${providerName(failure.provider)} returned data that couldn't be read.`,
+  "Feed.IncompleteData": (failure) =>
+    `${providerName(failure.provider)} returned incomplete data.`,
   "Feed.ResyncRequired": (failure) =>
     `The live connection to ${providerName(failure.provider)} needs to restart.`,
   "Feed.Reconfigured": (failure) =>

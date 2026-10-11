@@ -51,9 +51,15 @@ test("upgrades populated JSON rows with the same schema as a fresh database", as
       ('dsh_old', 7, 100, 200, ${value}), ('dsh_empty', 1, 300, 300, ${empty})
     `);
 
-    yield* DatabaseMigration.apply(db);
+    yield* DatabaseMigration.applyOnly(
+      db,
+      migrations.slice(0, upgradeIndex + 1),
+    );
     // A second startup must neither duplicate child rows nor replay the upgrade.
-    yield* DatabaseMigration.apply(db);
+    yield* DatabaseMigration.applyOnly(
+      db,
+      migrations.slice(0, upgradeIndex + 1),
+    );
     return {
       dashboards: yield* db.all(
         sql`SELECT * FROM dashboard ORDER BY created_at`,
@@ -78,9 +84,9 @@ test("upgrades populated JSON rows with the same schema as a fresh database", as
   expect(result.dashboards).toEqual([
     {
       id: "dsh_old",
-      revision: 8,
+      revision: 7,
       created_at: 100,
-      updated_at: expect.any(Number),
+      updated_at: 200,
       name: "Rates",
       favorite: 1,
     },
@@ -100,10 +106,6 @@ test("upgrades populated JSON rows with the same schema as a fresh database", as
       position: 0,
       kind: "watchlist",
       resource_id: "wl_missing",
-      x: 0,
-      y: 0,
-      w: 12,
-      h: 16,
     },
     {
       id: "wdg_a",
@@ -111,20 +113,21 @@ test("upgrades populated JSON rows with the same schema as a fresh database", as
       position: 1,
       kind: "feed",
       resource_id: null,
-      x: 0,
-      y: 16,
-      w: 12,
-      h: 16,
     },
   ]);
   expect(result.foreignKeys).toEqual([{ foreign_keys: 1 }]);
   expect(result.violations).toEqual([]);
-  expect(result.ledger).toEqual(migrations.map(({ id }) => ({ id })));
+  expect(result.ledger).toEqual(
+    migrations.slice(0, upgradeIndex + 1).map(({ id }) => ({ id })),
+  );
 
   const freshSchema = await Effect.runPromise(
     Effect.gen(function* () {
       const db = yield* makeWithDefaults();
-      yield* DatabaseMigration.apply(db);
+      yield* DatabaseMigration.applyOnly(
+        db,
+        migrations.slice(0, upgradeIndex + 1),
+      );
       return yield* db.all(schemaSql);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );

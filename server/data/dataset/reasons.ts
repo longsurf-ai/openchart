@@ -85,6 +85,17 @@ export class InvalidResult extends Schema.TaggedError<InvalidResult>()(
 ) {}
 
 /**
+ * The source supplied an observation with missing required values. A later
+ * read may succeed after the source completes or repairs the observation.
+ *
+ * @example new IncompleteData();
+ */
+export class IncompleteData extends Schema.TaggedError<IncompleteData>()(
+  "Dataset.IncompleteData",
+  {},
+) {}
+
+/**
  * A stream overflowed, disconnected, or the source asked to resynchronize.
  * `resync` is the only kind a provider may resume on its own.
  *

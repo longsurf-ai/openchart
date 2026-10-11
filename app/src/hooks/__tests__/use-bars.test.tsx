@@ -12,7 +12,7 @@ import {
   FeedReasons,
   type BarsMessage,
 } from "@openchart/feed";
-import { BarColumns, ProviderId } from "@openchart/market";
+import { BarColumns } from "@openchart/market";
 import { defineDataFrame } from "@openchart/timeseries";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -39,7 +39,6 @@ import {
 import { useBars, useBarsCapabilities } from "@openchart/app/hooks/use-bars";
 import { useCalendar } from "@openchart/app/hooks/use-calendar";
 import { useDatafeed, useFeedVersion } from "@openchart/app/hooks/use-datafeed";
-import { useLogo } from "@openchart/app/hooks/use-logo";
 import { useSymbology } from "@openchart/app/hooks/use-symbology";
 import { observeBars } from "@openchart/app/lib/feed/bars";
 import { createTransport } from "@openchart/app/lib/transport/transport";
@@ -120,7 +119,6 @@ function setup(automatic = true) {
       indexStatus: vi.fn().mockResolvedValue([]),
       search: vi.fn(),
     },
-    logos: { getLogo: vi.fn() },
     series: { select: vi.fn() },
     calendar: { getCalendar: vi.fn() },
   };
@@ -358,6 +356,189 @@ it("keeps independent subscriptions for two hook consumers", () => {
   for (const call of calls) expect(call.stop).toHaveBeenCalledOnce();
 });
 
+it("retains the error and stopped view throughout backoff, then recovers only on a new snapshot", () => {
+  vi.useFakeTimers();
+  const { calls, wrapper } = setup(false);
+  const view = renderHook(
+    () => useBars(request, { loadingBehavior: "clear" }),
+    { wrapper },
+  );
+  const failure = new FeedError({
+    reason: new FeedReasons.IncompleteData({ provider: request.provider }),
+  });
+  try {
+    act(() => calls[0]!.sink.next(snapshot(request)));
+    const current = view.result.current.current;
+    act(() => calls[0]!.sink.error(failure));
+    expect(view.result.current).toMatchObject({
+      status: "error",
+      error: failure,
+      current,
+    });
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(calls).toHaveLength(1);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(calls).toHaveLength(2);
+    expect(view.result.current).toMatchObject({
+      status: "error",
+      error: failure,
+      current,
+    });
+    act(() => calls[1]!.sink.error(failure));
+    act(() => {
+      vi.advanceTimersByTime(1999);
+    });
+    expect(calls).toHaveLength(2);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(calls).toHaveLength(3);
+    act(() => calls[2]!.sink.next(snapshot(request, 4)));
+    expect(view.result.current.status).toBe("ready");
+    expect(view.result.current.current?.data.get(0)?.close).toBe(4);
+    expect(view.result.current).not.toHaveProperty("error");
+    // A valid snapshot re-earns the initial retry delay.
+    act(() => calls[2]!.sink.error(failure));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(calls).toHaveLength(4);
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
+
+it("caps live failure backoff at thirty seconds and cancels it on unmount", () => {
+  vi.useFakeTimers();
+  const { calls, wrapper } = setup(false);
+  const view = renderHook(() => useBars(request), { wrapper });
+  try {
+    for (const delay of [1000, 2000, 4000, 8000, 16000, 30000, 30000]) {
+      act(() => calls.at(-1)!.sink.error(new ClientFailures.Disconnected()));
+      const count = calls.length;
+      act(() => {
+        vi.advanceTimersByTime(delay - 1);
+      });
+      expect(calls).toHaveLength(count);
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(calls).toHaveLength(count + 1);
+      expect(view.result.current.status).toBe("error");
+    }
+    act(() => calls.at(-1)!.sink.error(new ClientFailures.Disconnected()));
+    const count = calls.length;
+    view.unmount();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(calls).toHaveLength(count);
+    for (const call of calls) expect(call.stop).toHaveBeenCalledOnce();
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
+
+it.each([
+  {
+    name: "historical reads",
+    input: { ...request, to: 1000 },
+    reason: new FeedReasons.IncompleteData({ provider: request.provider }),
+  },
+  {
+    name: "denied access",
+    input: request,
+    reason: new FeedReasons.AccessDenied({ provider: request.provider }),
+  },
+  {
+    name: "invalid source data",
+    input: request,
+    reason: new FeedReasons.InvalidSourceData({ provider: request.provider }),
+  },
+])("does not automatically retry $name", ({ input, reason }) => {
+  vi.useFakeTimers();
+  const { calls, wrapper } = setup(false);
+  const view = renderHook(() => useBars(input), { wrapper });
+  try {
+    act(() => calls[0]!.sink.error(new FeedError({ reason })));
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(calls).toHaveLength(1);
+    expect(view.result.current.status).toBe("error");
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
+
+it("manual retry cancels backoff without clearing the error before a snapshot", () => {
+  vi.useFakeTimers();
+  const { calls, wrapper } = setup(false);
+  const view = renderHook(() => useBars(request), { wrapper });
+  try {
+    act(() => calls[0]!.sink.error(new ClientFailures.Disconnected()));
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    act(() => view.result.current.retry());
+    expect(calls).toHaveLength(2);
+    expect(view.result.current.status).toBe("error");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(calls).toHaveLength(2);
+    act(() => calls[1]!.sink.next(snapshot(request)));
+    expect(view.result.current.status).toBe("ready");
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
+
+it("cancels pending retries when the request or client changes", () => {
+  vi.useFakeTimers();
+  const first = setup(false);
+  const second = setup(false);
+  let client = first.client;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <FeedReactContext.Provider value={client}>
+      {children}
+    </FeedReactContext.Provider>
+  );
+  const view = renderHook(({ input }) => useBars(input), {
+    wrapper,
+    initialProps: { input: request },
+  });
+  try {
+    act(() => first.calls[0]!.sink.error(new ClientFailures.Disconnected()));
+    view.rerender({ input: changes[2].input });
+    expect(first.calls).toHaveLength(2);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(first.calls).toHaveLength(2);
+    act(() => first.calls[1]!.sink.error(new ClientFailures.Disconnected()));
+    client = second.client;
+    view.rerender({ input: changes[2].input });
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(first.calls).toHaveLength(2);
+    expect(second.calls).toHaveLength(1);
+    expect(view.result.current.status).toBe("loading");
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
+
 it("applies loadingBehavior when the injected client changes", () => {
   const first = setup();
   const second = setup(false);
@@ -392,7 +573,6 @@ it("mounts consumers before a version while finite queries wait for readiness an
   const requests = [
     vi.spyOn(client.symbology, "search").mockResolvedValue([]),
     vi.spyOn(client.bars, "getCapabilities").mockResolvedValue([]),
-    vi.spyOn(client.logos, "getLogo").mockResolvedValue(null),
     vi.spyOn(client.calendar, "getCalendar").mockResolvedValue({
       calendar: "24h",
       timezone: "UTC",
@@ -416,7 +596,6 @@ it("mounts consumers before a version while finite queries wait for readiness an
       queries: [
         useSymbology({ query: "BTC", limit: 5, indexed: false }, { enabled }),
         useBarsCapabilities(request, { enabled }),
-        useLogo(request.listing.symbol, { enabled }),
         useCalendar(
           {
             provider: request.provider,
@@ -445,67 +624,6 @@ it("mounts consumers before a version while finite queries wait for readiness an
     for (const call of requests) expect(call).toHaveBeenCalledOnce();
     for (const query of view.result.current.queries)
       expect(query.fetchStatus).toBe("idle");
-  } finally {
-    view.unmount();
-    queries.clear();
-  }
-});
-
-it("useLogo skips empty identifiers, caches matches, and keeps errors separate from absence", async () => {
-  const { client } = setup();
-  const get = vi
-    .spyOn(client.logos, "getLogo")
-    .mockImplementation(async ({ identifier }) => {
-      if (identifier === "broken")
-        throw new FeedError({
-          reason: new FeedReasons.NotFound({
-            provider: ProviderId.make("openchart"),
-          }),
-        });
-      return identifier === "BTC"
-        ? { id: "crypto:btc", url: "data:image/svg+xml;base64,AA==" }
-        : null;
-    });
-  const queries = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queries}>
-      <FeedReactContext.Provider value={client}>
-        <FeedVersionContext.Provider value={FeedVersion.make("logos")}>
-          {children}
-        </FeedVersionContext.Provider>
-      </FeedReactContext.Provider>
-    </QueryClientProvider>
-  );
-  const view = renderHook(
-    ({ identifier }: { identifier: string | undefined }) => useLogo(identifier),
-    {
-      wrapper,
-      initialProps: { identifier: undefined as string | undefined },
-    },
-  );
-  try {
-    expect(get).not.toHaveBeenCalled();
-    view.rerender({ identifier: " " });
-    expect(get).not.toHaveBeenCalled();
-    view.rerender({ identifier: "BTC" });
-    await waitFor(() =>
-      expect(view.result.current.data?.id).toBe("crypto:btc"),
-    );
-    view.rerender({ identifier: "unknown" });
-    expect(view.result.current.data).toBeUndefined();
-    await waitFor(() => expect(view.result.current.data).toBeNull());
-    view.rerender({ identifier: "BTC" });
-    expect(view.result.current.data?.id).toBe("crypto:btc");
-    expect(get).toHaveBeenCalledTimes(2);
-    view.rerender({ identifier: "broken" });
-    await waitFor(() =>
-      expect(view.result.current.error).toMatchObject({
-        reason: { _tag: "Feed.NotFound" },
-      }),
-    );
-    expect(view.result.current.data).toBeUndefined();
   } finally {
     view.unmount();
     queries.clear();

@@ -1533,16 +1533,6 @@
       "table": "dashboard_widget"
     },
     {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "resource_id",
-      "entityType": "columns",
-      "table": "dashboard_widget"
-    },
-    {
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
@@ -3315,10 +3305,10 @@
           "isExpression": false
         }
       ],
-      "isUnique": false,
+      "isUnique": true,
       "where": null,
       "origin": "manual",
-      "name": "chart_dashboard_index",
+      "name": "chart_dashboard_unique",
       "entityType": "indexes",
       "table": "chart"
     },
@@ -3584,6 +3574,13 @@
       "columns": ["dashboard_id", "position"],
       "nameExplicit": true,
       "name": "dashboard_widget_position_unique",
+      "entityType": "uniques",
+      "table": "dashboard_widget"
+    },
+    {
+      "columns": ["dashboard_id", "kind"],
+      "nameExplicit": true,
+      "name": "dashboard_widget_kind_unique",
       "entityType": "uniques",
       "table": "dashboard_widget"
     },
@@ -4019,12 +4016,6 @@
     {
       "value": "length(\"kind\") > 0",
       "name": "dashboard_widget_kind_check",
-      "entityType": "checks",
-      "table": "dashboard_widget"
-    },
-    {
-      "value": "\"resource_id\" IS NULL OR length(\"resource_id\") > 0",
-      "name": "dashboard_widget_resource_id_check",
       "entityType": "checks",
       "table": "dashboard_widget"
     },

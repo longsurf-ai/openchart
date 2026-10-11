@@ -6,7 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { useStore } from "zustand";
 import { v2 } from "@openchart/chart-core";
 import { Color } from "@openchart/chart-core/util";
-import { joinByTime } from "@openchart/timeseries";
+import { alignDatasetToBars } from "@openchart/app/features/chart/utils/dataset";
 import { Button } from "@openchart/app/components/ui/button";
 import {
   Dialog,
@@ -112,11 +112,12 @@ export function DatasetSource({
     const frame = dataset.data;
     if (!frame || !mainData?.length) return [];
     // ponytail: rejoins the whole file on each bar update; window it if files grow large.
-    const rows = [
-      ...joinByTime(mainTimeline(chart.store.getState()), frame, {
-        fill: "last",
-      }),
-    ];
+    const rows = alignDatasetToBars(
+      mainTimeline(chart.store.getState()),
+      frame,
+      cell.resolution,
+      Date.now(),
+    );
     return bindings.map((binding, index) => {
       let held: number | null = null;
       const data = rows.map((row) => {
@@ -163,7 +164,16 @@ export function DatasetSource({
         data,
       };
     });
-  }, [dataset.data, mainData, chart, bindings, name, prefs, datasetId]);
+  }, [
+    dataset.data,
+    mainData,
+    chart,
+    bindings,
+    name,
+    prefs,
+    datasetId,
+    cell.resolution,
+  ]);
   const failure = resource.error ?? dataset.error;
   // A failed Resource read can always be retried; Feed failures say so themselves.
   const retryable = dataset.error
@@ -213,7 +223,7 @@ export function DatasetSource({
                   ) : null
                 }
                 extraActions={
-                  resource.data && !readOnly ? (
+                  resource.data && !readOnly && binding === bindings[0] ? (
                     <CollectAction
                       dataset={resource.data}
                       transport={transport}

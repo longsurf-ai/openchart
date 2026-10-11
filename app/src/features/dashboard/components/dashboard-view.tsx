@@ -19,7 +19,6 @@ import { useUnsavedChanges } from "@openchart/app/lib/unsaved-changes/unsaved-ch
 import {
   appendWidget,
   placeWidgetBeside,
-  prepareWidgetLayout,
 } from "@openchart/app/features/dashboard/utils/layout";
 
 import { DashboardGrid } from "./dashboard-grid";
@@ -42,8 +41,7 @@ export function DashboardView({
   renderHeader: (
     dashboard: Dashboard | undefined,
     disabled: boolean,
-    addWidget: (definition: WidgetDefinition, resourceId?: string) => void,
-    addChart: (definition: WidgetDefinition) => void,
+    addWidget: (definition: WidgetDefinition) => void,
   ) => ReactNode;
 }) {
   const client = useQueryClient();
@@ -58,38 +56,26 @@ export function DashboardView({
     !!dashboard.data &&
     dashboard.data.revision < save.data.revision;
   const disabled = save.isPending || save.isError || waiting || recovering;
-  const addWidget = (definition: WidgetDefinition, resourceId?: string) => {
-    if (disabled || !dashboard.data) return;
+  const addWidget = (definition: WidgetDefinition) => {
+    if (
+      disabled ||
+      !dashboard.data ||
+      dashboard.data.widgets.some((widget) => widget.kind === definition.kind)
+    )
+      return;
     save.mutate({
       expectedRevision: dashboard.data.revision,
-      widgets: appendWidget(dashboard.data.widgets, definition, resourceId),
+      widgets: appendWidget(dashboard.data.widgets, definition),
     });
   };
-  const addChart = (definition: WidgetDefinition) => {
-    if (disabled || !dashboard.data) return;
-    save.mutate({
-      expectedRevision: dashboard.data.revision,
-      ...prepareWidgetLayout(dashboard.data.widgets, definition.defaultSize),
-    });
-  };
-  const placeBeside = (
-    anchorId: string,
-    definition: WidgetDefinition,
-    resourceId?: string,
-  ) => {
+  const placeBeside = (anchorId: string, definition: WidgetDefinition) => {
     // A save still in flight already holds the placements Query will show next.
     const next =
-      (save.isPending || waiting) &&
-      save.variables &&
-      "widgets" in save.variables
+      (save.isPending || waiting) && save.variables
         ? save.variables.widgets
         : dashboard.data?.widgets;
-    // A widget that needs no Resource, such as the one Workspace, matches by kind.
-    const existing = next?.find(
-      (widget) =>
-        widget.kind === definition.kind &&
-        (resourceId === undefined || widget.resourceId === resourceId),
-    );
+    // Each kind has one placement, including a placement still being saved.
+    const existing = next?.find((widget) => widget.kind === definition.kind);
     if (existing) return existing.id;
     if (disabled || !dashboard.data)
       throw new Error("Another dashboard change hasn’t been saved yet.");
@@ -98,7 +84,6 @@ export function DashboardView({
       registry,
       anchorId,
       definition,
-      resourceId,
     );
     // Save failures keep the Dashboard's Retry/Discard, which replays this same placement ID.
     save.mutate({ expectedRevision: dashboard.data.revision, widgets });
@@ -120,7 +105,7 @@ export function DashboardView({
   if (dashboard.data === null)
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-background">
-        {renderHeader(undefined, true, addWidget, addChart)}
+        {renderHeader(undefined, true, addWidget)}
         <Empty>
           <EmptyHeader>
             <EmptyTitle>This dashboard is no longer available</EmptyTitle>
@@ -132,7 +117,7 @@ export function DashboardView({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-background">
-      {renderHeader(dashboard.data, disabled, addWidget, addChart)}
+      {renderHeader(dashboard.data, disabled, addWidget)}
       {dashboard.isPending ? (
         <p role="status" className="p-4 text-sm text-muted-foreground">
           Loading dashboard…

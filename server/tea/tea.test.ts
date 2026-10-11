@@ -36,7 +36,6 @@ import {
 } from "@openchart/timeseries";
 import { Feed } from "@openchart/server/feed/service";
 import type { ISymbologyFeedService } from "@openchart/server/feed/symbology/service";
-import { logosFeed } from "@openchart/server/feed/logo/logo";
 import { calendarFeed } from "@openchart/server/feed/calendar/calendar";
 import { seriesFeed } from "@openchart/server/feed/series/series";
 import { readBarsHistory } from "@openchart/server/feed/bar/history";
@@ -199,7 +198,6 @@ async function fixture(
                     indexStatus: () => Effect.succeed([]),
                     search,
                   },
-                  logos: logosFeed(),
                   calendar: calendarFeed(),
                   series: seriesFeed(),
                 };

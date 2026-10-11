@@ -3,7 +3,7 @@
 export * as AgentRunStore from "./store";
 
 import type { AgentPromptInput as AgentPromptInputType } from "@openchart/server/agent/contracts/agent-prompt-input";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import { Clock, Context, Effect, Layer, Schema } from "effect";
 import type { SqlError } from "effect/unstable/sql/SqlError";
@@ -31,6 +31,31 @@ export const readRun = Effect.fn("AgentRunStore.readRun")(function* (
 ) {
   const { db } = yield* Database.Service;
   return yield* get(db, id);
+});
+
+/**
+ * Reads the oldest queued or running admission under a caller-owned intent
+ * prefix. The prefix is literal, including SQL wildcard characters. Terminal
+ * Runs are ignored; callers serialize the check with their own admission.
+ * This owns no execution or cleanup and propagates database read failures.
+ * @example const active = yield* activeRunByIntentPrefix(`collection:${id}:`);
+ */
+export const activeRunByIntentPrefix = Effect.fn(
+  "AgentRunStore.activeRunByIntentPrefix",
+)(function* (prefix: string) {
+  const { db } = yield* Database.Service;
+  const row = yield* db
+    .select()
+    .from(agentRun)
+    .where(
+      and(
+        sql`substr(${agentRun.sessionIntentId}, 1, length(${prefix})) = ${prefix}`,
+        inArray(agentRun.status, ["queued", "running"]),
+      ),
+    )
+    .orderBy(asc(agentRun.createdAt), asc(agentRun.id))
+    .get();
+  return row ? fromRow(row) : undefined;
 });
 
 /** Reads executions matching a caller-owned intent prefix and any literal suffix, without admitting work.

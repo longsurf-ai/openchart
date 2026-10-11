@@ -29,6 +29,16 @@ test("classifies a FeedError by its reason tag and encodes only the public reaso
   expect(
     failureFor(feedError(new FeedReasons.SourceUnavailable({}))).details.error,
   ).toEqual({ _tag: "FeedError", reason: { _tag: "Feed.SourceUnavailable" } });
+  const incomplete = failureFor(
+    feedError(new FeedReasons.IncompleteData({ provider }), upstream),
+  );
+  expect(incomplete).toMatchObject({
+    status: "BAD_GATEWAY",
+    code: "Feed.IncompleteData",
+    message: "Yahoo Finance returned incomplete data.",
+    details: { error: { reason: { _tag: "Feed.IncompleteData", provider } } },
+  });
+  expect(JSON.stringify(incomplete)).not.toContain(upstream.message);
 });
 
 test("publishes a Tea failure at details.error, with the fallback for an empty cause message", () => {

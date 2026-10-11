@@ -7,7 +7,7 @@ React Grid Layout to place widgets; the Chart widget still uses CSS Grid inside.
 The sidebar owns Dashboard creation and navigation; DashboardPage renders widgets from the Dashboard placements.
 New Dashboard calls `resources.macro.createDashboardWithChart()`. The backend creates the
 Dashboard, a default Binance `BTCUSDT` daily Chart, and the placement in one transaction; on success the app navigates to the new Dashboard.
-The fixed initial config does not read Feed. Adding a Chart from the Widgets dropdown reuses the same BTC daily config; the symbol can be changed later through the chart controls.
+The fixed initial config does not read Feed. Each Dashboard has one Chart configuration and at most one Chart widget. The Widgets dropdown adds its placement; the widget queries configuration by dashboardId or offers symbol selection when none exists.
 Mounting the page does not backfill data and does not inherit previous charts.
 The symbol control in the top-left corner of the page reads and writes Query on its own; its target comes from the Dashboard's single frontend selection state.
 The other Chart controls sit in a floating bar at the top of the widget, and the drawing toolbar always floats. The

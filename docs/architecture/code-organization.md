@@ -44,7 +44,6 @@ openchart/
       bar/                    service, provisioner, Hose handler
       symbology/              service, provisioner, business RPC router
       calendar/               service contract, provider routing and router
-      logo/                   service contract and Provider binding provisioning
       series/                 finite reads of declared timeseries, such as Workspace Datasets
     agent/                    durable run admission and process-local execution orchestration
       contracts/              pure Message/Part and prompt input contracts
@@ -212,9 +211,7 @@ supplies the Clerk provider; sign-in uses Clerk's modal.
 `access/router.ts` aggregates
 child routers, currently exposing `access.integration`. Resource routes derive
 from the shared `resources/catalog.ts`; macros compose Resource transitions.
-`resources/macro-router.ts` exposes `resources.macro.createChartWidget`, which creates a Chart
-and its placement atomically through `resources/macros/create-chart-widget.ts`.
-The same router exposes `resources.macro.createDashboardWithChart`, which
+`resources/macro-router.ts` exposes `resources.macro.createDashboardWithChart`, which
 creates a Dashboard with its initial Binance BTCUSDT Chart and placement, and
 `resources.macro.addIndicator`/`removeIndicator`, which pair an Indicator with
 its Chart bindings the same way.
@@ -468,17 +465,16 @@ Generic Agent mutations expose only create/patch/delete and reject read-only Res
 from the same declared `listKeys` and store methods. Agent and app receive the
 same entity shape, with no separate agent facade. The server does not compose
 user data with world data into read projections: clients read entities and
-query datasets separately. `resources.macro.createChartWidget({dashboardId, expectedRevision,
-widgets, layout, chart?})` is an application RPC over an ordinary macro, not an extension
-to generic Resource CRUD. Its Chart creation and all placement geometry changes share one
-Transactor transaction and return `{dashboard, chart}`. Omitting `chart` creates
-the fixed Binance BTCUSDT daily starter without Feed access.
+query datasets separately. Adding any widget patches Dashboard placements; each
+kind occurs at most once. Chart independently queries its unique configuration
+by dashboardId and creates it only after explicit symbol selection when absent.
+The New Dashboard macro creates the default BTCUSDT Chart and Dashboard together.
 
 The current backend exposes six Resources:
 
 | Resource                    | Owned domain state                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `dashboard`                 | `name`, `favorite`, `widgets[{id, kind, resourceId?, layout: {x,y,w,h}}]`                                                   |
+| `dashboard`                 | `name`, `favorite`, `widgets[{id, kind, layout: {x,y,w,h}}]`                                                                |
 | `chart`                     | `dashboardId`, `preset`, `links[]`, `cells[{id, resolution, session, adjustment, marketSources[], indicators[], panes[]}]`  |
 | `drawing`                   | `dashboardId`, `provider`, `listing`, `data` (core geometry, style, visibility)                                             |
 | `workspace`                 | immutable canonical `root`; artifact bytes stay on disk                                                                     |
@@ -487,16 +483,15 @@ The current backend exposes six Resources:
 
 Resources are addressed by `(resource, id)`, without a Resource Tree or path
 resolver. Chart and drawing each belong to a dashboard through a
-`dashboardId` FK with cascade. References such as `widgets[].resourceId` and
-`indicator.scriptId` are values without FK ownership or cascade; consumers
+`dashboardId` FK with cascade. References such as `indicator.scriptId` are values without FK ownership or cascade; consumers
 handle a missing target. Chart, cells, panes, and indicators share the chart's
 revision, while dashboard and drawing writes have their own revisions. Writes
 that must serialize belong in one Resource; independent, infrequent writes
 may still share one to avoid extra ownership and consistency machinery.
 
-`dashboard.widgets[]` now includes `kind: "chart"` placements whose `resourceId`
-references a Chart. Dashboard owns their required integer geometry in a
-12-column grid and their reading order; its entity rejects duplicate IDs and
+`dashboard.widgets[]` contains at most one placement of each kind. The Chart
+widget queries the Dashboard's unique Chart by `dashboardId`. Dashboard owns their required integer geometry in a
+12-column grid and their reading order; its entity rejects duplicate IDs, duplicate kinds and
 overlapping rectangles. Chart separately owns its inner `preset`, cells, links,
 and revision. Moving a widget patches Dashboard; changing its internal split
 patches Chart. Removing a placement does not delete the Chart. Existing Charts
@@ -575,20 +570,21 @@ app/src/
     agent/                    FullPageAgent and Copilot placement
     dashboard/
       dashboard-page.tsx      route ID/transport, chart selection, registry and header wiring
-      dashboard-header.tsx    PageHeader + Chart symbol + add-chart composition
-      add-chart-button.tsx    Chart picker/body builder -> Dashboard creation control
-      widget-registry.ts      cross-feature definitions assembled only here
+      dashboard-header.tsx    PageHeader + Chart symbol + widget gallery composition
+      selected-chart.ts       Dashboard Chart lookup and focused cell selection
       use-dashboard-actions.ts sidebar/shortcut creation, dialog navigation
+    widgets/
+      widget-registry.ts      cross-feature definitions assembled only here
+      widget-gallery.tsx      one placement per kind through generic addWidget
   features/
     dashboard/
       dashboard-action-dialog.tsx rename/delete forms
       components/dashboard-view.tsx queries, layout save/retry/discard and status UI
-      components/create-chart-widget-button.tsx placement creation lifecycle
-      components/             grid, widget host/card, add-chart and settings forms
+      components/             grid, widget host/card and settings forms
       api/queries.ts          directory reads and mutations
       utils/layout.ts         geometry using RGL's algorithms
     chart/
-      components/widget.tsx   placement adapter and controls/content definition
+      components/widget.tsx   Dashboard Chart lookup, initial symbol selection and controls/content definition
       components/selection-provider.tsx mount-private chart/cell selection
       components/             ChartGrid, ChartCell, legends, menus and symbol picker
       api/queries.ts          Chart Resource queries and mutations

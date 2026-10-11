@@ -4,7 +4,10 @@ import { SymbolControl } from "@openchart/app/features/chart/components/symbol-c
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 
-import { WidgetGallery } from "@openchart/app/app/widgets/widget-gallery";
+import {
+  WidgetGallery,
+  type WidgetKind,
+} from "@openchart/app/app/widgets/widget-gallery";
 import { useSelectedChart } from "./selected-chart";
 
 /** Compose page actions using Dashboard-owned selection and save state. @example <DashboardHeader {...headerProps} /> */
@@ -12,16 +15,14 @@ export function DashboardHeader({
   dashboard,
   transport,
   disabled,
-  onAddWorkspace,
-  onAddChart,
+  onAdd,
 }: {
   dashboard: Dashboard | undefined;
   transport: AppTransport;
   disabled: boolean;
-  onAddWorkspace: () => void;
-  onAddChart: () => void;
+  onAdd: (kind: WidgetKind) => void;
 }) {
-  const selected = useSelectedChart(dashboard);
+  const selected = useSelectedChart(dashboard, transport);
   return (
     <PageHeader>
       <div className="flex min-w-0 items-center gap-2">
@@ -39,8 +40,7 @@ export function DashboardHeader({
             <WidgetGallery
               dashboard={dashboard}
               disabled={disabled}
-              onAddWorkspace={onAddWorkspace}
-              onAddChart={onAddChart}
+              onAdd={onAdd}
             />
           </div>
         ) : null}

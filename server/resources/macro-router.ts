@@ -5,10 +5,6 @@ import {
   Transactor,
 } from "@openchart/server/lib/resource";
 import { trpc } from "@openchart/server/lib/trpc";
-import {
-  createChartWidget,
-  CreateChartWidgetInput,
-} from "@openchart/server/resources/macros/create-chart-widget";
 import { createDashboardWithChart } from "@openchart/server/resources/macros/create-dashboard-with-chart";
 import {
   addIndicator,
@@ -39,15 +35,6 @@ export const macroRouter = trpc.router({
   createDashboardWithChart: trpc.procedure.mutation(({ ctx }) =>
     ctx.runtime.runPromise(Transactor.run(createDashboardWithChart())),
   ),
-  createChartWidget: trpc.procedure
-    .input(
-      Schema.toStandardSchemaV1(CreateChartWidgetInput, {
-        parseOptions: STRICT_PARSE_OPTIONS,
-      }),
-    )
-    .mutation(({ ctx, input }) =>
-      ctx.runtime.runPromise(Transactor.run(createChartWidget(input))),
-    ),
   addIndicator: trpc.procedure
     .input(
       Schema.toStandardSchemaV1(AddIndicatorInput, {

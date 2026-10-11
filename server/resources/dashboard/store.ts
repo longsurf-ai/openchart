@@ -32,9 +32,6 @@ function toRow(dashboard: DashboardRow, widgets: readonly WidgetRow[]): Row {
           id: widget.id,
           kind: widget.kind,
           layout: { x: widget.x, y: widget.y, w: widget.w, h: widget.h },
-          ...(widget.resourceId === null
-            ? {}
-            : { resourceId: widget.resourceId }),
         })),
     },
   };
@@ -54,7 +51,6 @@ function insertWidgets(
         dashboardId,
         position,
         kind: widget.kind,
-        resourceId: widget.resourceId ?? null,
         ...widget.layout,
       })),
     )

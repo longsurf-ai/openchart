@@ -32,13 +32,15 @@ export function DashboardPage() {
             </Link>
           </Button>
         }
-        renderHeader={(dashboard, disabled, addWidget, addChart) => (
+        renderHeader={(dashboard, disabled, addWidget) => (
           <DashboardHeader
             dashboard={dashboard}
             transport={transport}
             disabled={disabled}
-            onAddWorkspace={() => addWidget(widgetCatalog.workspace.definition)}
-            onAddChart={() => addChart(widgetCatalog.chart.definition)}
+            onAdd={(kind) => {
+              const { definition } = widgetCatalog[kind];
+              addWidget(definition);
+            }}
           />
         )}
       />

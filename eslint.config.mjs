@@ -137,13 +137,18 @@ export default defineConfig(
             {
               basePath: app,
               zones: [
-                ...["agent", "chart", "account", "dashboard", "alerts"].map(
-                  (feature) => ({
-                    target: `./src/features/${feature}`,
-                    from: "./src/features",
-                    except: [`./${feature}`],
-                  }),
-                ),
+                ...[
+                  "agent",
+                  "chart",
+                  "account",
+                  "dashboard",
+                  "alerts",
+                  "watchlist",
+                ].map((feature) => ({
+                  target: `./src/features/${feature}`,
+                  from: "./src/features",
+                  except: [`./${feature}`],
+                })),
                 { target: "./src/features", from: "./src/app" },
                 {
                   target: "./src/features",

@@ -2,7 +2,6 @@
 import { Effect } from "effect";
 import { trpc } from "@openchart/server/lib/trpc";
 import { symbologyRouter } from "@openchart/server/feed/symbology/router";
-import { logosRouter } from "@openchart/server/feed/logo/router";
 import { calendarRouter } from "@openchart/server/feed/calendar/router";
 import { seriesRouter } from "@openchart/server/feed/series/router";
 import { Feed } from "./service";
@@ -16,7 +15,6 @@ export const feedRouter = trpc.router({
     ),
   ),
   symbology: symbologyRouter,
-  logos: logosRouter,
   calendar: calendarRouter,
   series: seriesRouter,
 });

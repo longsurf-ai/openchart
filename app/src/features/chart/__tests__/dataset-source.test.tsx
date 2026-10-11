@@ -1,7 +1,7 @@
 // Purpose: A Workspace Dataset draws each bar's latest known observation on the chart's own timeline.
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EMPTY } from "rxjs";
 import { expect, it, vi } from "vitest";
@@ -33,7 +33,7 @@ function notFound() {
   });
 }
 
-it("carries sparse observations forward across the chart's bars", async () => {
+it("shares the Dataset read and collection action across bound columns", async () => {
   const store = createChartStore(v2.createState({ id: "chart" }));
   const chart: ChartRuntime = {
     id: "chart",
@@ -78,7 +78,7 @@ it("carries sparse observations forward across the chart's bars", async () => {
               id: "wsd_cpi",
               name: "US CPI",
               source: { workspaceId: "wsp_test", path: "datasets/cpi.csv" },
-              collection: null,
+              collection: { kind: "agent_prompt" },
             }),
           },
         },
@@ -87,6 +87,7 @@ it("carries sparse observations forward across the chart's bars", async () => {
   } as unknown as AppTransport;
   const cell = {
     id: "ccl_a",
+    resolution: "1d",
     panes: [
       {
         id: "cpn_a",
@@ -96,10 +97,16 @@ it("carries sparse observations forward across the chart's bars", async () => {
             role: "normal",
             source: { kind: "dataset", datasetId: "wsd_cpi", output: "cpi" },
           },
+          {
+            id: "csr_cpi_copy",
+            role: "normal",
+            source: { kind: "dataset", datasetId: "wsd_cpi", output: "cpi" },
+          },
         ],
       },
     ],
   } as unknown as CellDefinition;
+  const legend = document.createElement("div");
   render(
     <QueryClientProvider
       client={
@@ -127,7 +134,7 @@ it("carries sparse observations forward across the chart's bars", async () => {
                 <DatasetSource
                   datasetId="wsd_cpi"
                   cell={cell}
-                  targets={new Map()}
+                  targets={new Map([["cpn_a", legend]])}
                   localStore={createChartPreferences("chart")}
                   disabled={false}
                   onRemove={vi.fn()}
@@ -151,6 +158,9 @@ it("carries sparse observations forward across the chart's bars", async () => {
     { id: "wsd_cpi" },
     expect.anything(),
   );
+  expect(
+    within(legend).getAllByRole("button", { name: "Collect US CPI" }),
+  ).toHaveLength(1);
 });
 
 it("skips the bindings of a deleted Dataset without reading Feed", async () => {

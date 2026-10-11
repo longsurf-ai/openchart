@@ -63,8 +63,7 @@ import {
   AvatarImage,
   AvatarFallback,
 } from "@openchart/app/components/ui/avatar/avatar";
-import { alertLogoIdentifier } from "@openchart/app/features/alerts/lib/alert-logo-identifier";
-import { useLogo } from "@openchart/app/hooks/use-logo";
+import { alertLogoUrl } from "@openchart/app/features/alerts/lib/alert-logo-url";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -563,10 +562,10 @@ function AlertRuleEditor({
       ? suggestedName
       : (rule?.name ?? suggestedName));
   const [repeat, setRepeat] = useState(rule?.repeat ?? false);
-  const logo = useLogo(
-    alertLogoIdentifier(market, drawing ? undefined : (config ?? undefined)),
+  const symbolLogo = alertLogoUrl(
+    market,
+    drawing ? undefined : (config ?? undefined),
   );
-  const symbolLogo = logo.data?.url;
   const [initialActions] = useState<AlertActionDraft[]>(() =>
     rule
       ? snapshot.map(({ id, name, enabled, target }) => ({
@@ -947,11 +946,7 @@ function AlertRuleEditor({
                 className="alert-workflow-icon border bg-background"
               >
                 {symbolLogo ? (
-                  <AvatarImage
-                    src={symbolLogo}
-                    alt={`${symbol} logo`}
-                    className="bg-white p-1"
-                  />
+                  <AvatarImage src={symbolLogo} alt={`${symbol} logo`} />
                 ) : null}
                 <AvatarFallback
                   aria-hidden="true"

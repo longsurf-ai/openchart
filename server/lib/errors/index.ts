@@ -109,6 +109,7 @@ const feedStatus: Record<FeedReason["_tag"], TRPC_ERROR_CODE_KEY> = {
   "Feed.RateLimited": "TOO_MANY_REQUESTS",
   "Feed.SourceUnavailable": "SERVICE_UNAVAILABLE",
   "Feed.InvalidSourceData": "BAD_GATEWAY",
+  "Feed.IncompleteData": "BAD_GATEWAY",
   "Feed.ResyncRequired": "CONFLICT",
   "Feed.Reconfigured": "CONFLICT",
 };

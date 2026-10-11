@@ -86,19 +86,20 @@ vi.mock("@openchart/app/features/chart/components/symbol-control", () => ({
 vi.mock("@openchart/app/app/widgets/widget-gallery", () => ({
   WidgetGallery: ({
     disabled,
-    onAddWorkspace,
-    onAddChart,
+    onAdd,
   }: {
     disabled: boolean;
-    onAddWorkspace: () => void;
-    onAddChart: () => void;
+    onAdd: (kind: string) => void;
   }) => (
     <>
-      <button disabled={disabled} onClick={onAddWorkspace}>
+      <button disabled={disabled} onClick={() => onAdd("workspace")}>
         Widgets
       </button>
-      <button disabled={disabled} onClick={onAddChart}>
+      <button disabled={disabled} onClick={() => onAdd("chart")}>
         Chart fixture
+      </button>
+      <button disabled={disabled} onClick={() => onAdd("watchlist")}>
+        Watchlist fixture
       </button>
     </>
   ),
@@ -119,7 +120,12 @@ vi.mock("@openchart/app/app/widgets/widget-registry", async (original) => {
   };
   return {
     ...actual,
-    widgetRegistry: { chart: fixture, fixture, workspace: fixture },
+    widgetRegistry: {
+      chart: fixture,
+      fixture,
+      second: fixture,
+      workspace: fixture,
+    },
   };
 });
 
@@ -167,7 +173,7 @@ function FixtureControls() {
       <button
         onClick={() => {
           try {
-            setPlaced(placeBeside(besideDefinition, "wsp_research"));
+            setPlaced(placeBeside(besideDefinition));
           } catch (error) {
             setPlaced((error as Error).message);
           }
@@ -242,7 +248,7 @@ function setup(protectDrafts = false) {
       },
       {
         id: placementId.make("wdg_two"),
-        kind: "fixture",
+        kind: "second",
         layout: { x: 6, y: 0, w: 6, h: 8 },
       },
       {
@@ -254,12 +260,11 @@ function setup(protectDrafts = false) {
   };
   const get = vi.fn().mockResolvedValue(resource);
   const patch = vi.fn();
-  const createChart = vi.fn();
+
   const transport = {
     url: "http://dashboard.test",
     rpc: {
       resources: {
-        macro: { createChartWidget: { mutate: createChart } },
         dashboard: { get: { query: get }, patch: { mutate: patch } },
       },
     },
@@ -302,7 +307,6 @@ function setup(protectDrafts = false) {
     resource,
     get,
     patch,
-    createChart,
     client,
     key,
     user: userEvent.setup(),
@@ -637,42 +641,72 @@ it("adds workspace placements through the shared save state until Query confirms
   expect(client.getQueryData(key)).toEqual(saved);
 });
 
-it("shares placement locking and authoritative refresh with chart creation", async () => {
-  const { resource, createChart, get, user } = setup();
-  const response = deferred<{ dashboard: Dashboard; chart: unknown }>();
+it("adds Chart through the same placement save and authoritative refresh", async () => {
+  const { resource, patch, get, user } = setup();
+  const response = deferred<Dashboard>();
   const refresh = deferred<Dashboard>();
-  createChart.mockReturnValue(response.promise);
+  patch.mockReturnValue(response.promise);
   get.mockReturnValue(refresh.promise);
   await user.click(screen.getByRole("button", { name: "Chart fixture" }));
-  expect(createChart).toHaveBeenCalledExactlyOnceWith({
-    dashboardId: resource.id,
+  expect(patch).toHaveBeenCalledExactlyOnceWith({
+    id: resource.id,
     expectedRevision: resource.revision,
-    layout: { x: 0, y: 16, w: 12, h: 12 },
-    widgets: resource.widgets,
+    operations: [
+      {
+        op: "replace",
+        path: "/widgets",
+        value: [
+          ...resource.widgets,
+          {
+            id: expect.stringMatching(/^wdg_/),
+            kind: "chart",
+            layout: { x: 0, y: 16, w: 12, h: 12 },
+          },
+        ],
+      },
+    ],
   });
   expect(harness.grid!.dragConfig?.enabled).toBe(false);
   expect(screen.getByRole("button", { name: "Widgets" })).toBeDisabled();
   const saved = { ...resource, revision: 2 };
-  await act(async () => response.resolve({ dashboard: saved, chart: {} }));
+  await act(async () => response.resolve(saved));
   expect(harness.grid!.dragConfig?.enabled).toBe(false);
   await act(async () => refresh.resolve(saved));
   await waitFor(() => expect(harness.grid!.dragConfig?.enabled).toBe(true));
 });
 
+it("places a Watchlist browser without a Resource reference", async () => {
+  const { resource, patch, get, user } = setup();
+  patch.mockReturnValue(deferred<Dashboard>().promise);
+  get.mockReturnValue(deferred<Dashboard>().promise);
+  await user.click(screen.getByRole("button", { name: "Watchlist fixture" }));
+  await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+  const input = patch.mock.calls[0]![0];
+  expect(input.expectedRevision).toBe(resource.revision);
+  expect(input.operations[0].value).toEqual([
+    ...resource.widgets,
+    {
+      id: expect.stringMatching(/^wdg_/),
+      kind: "watchlist",
+      layout: { x: 0, y: 16, w: 4, h: 12 },
+    },
+  ]);
+  expect(screen.getByRole("button", { name: "Widgets" })).toBeDisabled();
+});
+
 it.each(["Widgets", "Chart fixture"])(
   "fills the viewport when adding the first widget through %s",
   async (button) => {
-    const { resource, patch, createChart, user, client, key } = setup();
+    const { resource, patch, user, client, key } = setup();
     await act(async () => {
       client.setQueryData(key, () => ({ ...resource, widgets: [] }));
     });
-    const mutation = button === "Widgets" ? patch : createChart;
+    const mutation = patch;
     mutation.mockReturnValue(deferred<never>().promise);
     await user.click(screen.getByRole("button", { name: button }));
     expect(mutation).toHaveBeenCalledTimes(1);
     const input = mutation.mock.calls[0]![0];
-    const layout =
-      button === "Widgets" ? input.operations[0].value[0].layout : input.layout;
+    const layout = input.operations[0].value[0].layout;
     expect(input.expectedRevision).toBe(resource.revision);
     expect(layout).toEqual({ x: 0, y: 0, w: 12, h: 24 });
   },
@@ -681,23 +715,22 @@ it.each(["Widgets", "Chart fixture"])(
 it.each(["Widgets", "Chart fixture"])(
   "saves the second widget and the first widget's split geometry together through %s",
   async (button) => {
-    const { resource, patch, createChart, user, client, key } = setup();
+    const { resource, patch, user, client, key } = setup();
     const first = resource.widgets[0]!;
     await act(async () => {
       client.setQueryData(key, () => ({ ...resource, widgets: [first] }));
     });
-    const mutation = button === "Widgets" ? patch : createChart;
+    const mutation = patch;
     mutation.mockReturnValue(deferred<never>().promise);
     await user.click(screen.getByRole("button", { name: button }));
     expect(mutation).toHaveBeenCalledTimes(1);
     const input = mutation.mock.calls[0]![0];
-    const widgets =
-      button === "Widgets" ? input.operations[0].value : input.widgets;
+    const widgets = input.operations[0].value;
     expect(widgets[0]).toEqual({
       ...first,
       layout: { x: 0, y: 0, w: 6, h: 24 },
     });
-    const layout = button === "Widgets" ? widgets[1].layout : input.layout;
+    const layout = widgets[1].layout;
     expect(layout).toEqual({ x: 6, y: 0, w: 6, h: 24 });
     expect(input.expectedRevision).toBe(resource.revision);
   },
@@ -743,7 +776,7 @@ it("docks a new placement beside the calling widget with one save, and repeats r
     {
       id: expect.stringMatching(/^wdg_/),
       kind: "workspace",
-      resourceId: "wsp_research",
+
       layout: { x: 9, y: 0, w: 3, h: 8 },
     },
   ]);
@@ -770,7 +803,7 @@ it("reuses a placement already showing the Resource without saving", async () =>
   const existing = {
     id: placementId.make("wdg_workspace"),
     kind: "workspace",
-    resourceId: "wsp_research",
+
     layout: { x: 6, y: 8, w: 6, h: 8 },
   };
   await act(async () => {

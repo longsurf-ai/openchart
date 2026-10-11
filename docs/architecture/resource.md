@@ -13,7 +13,7 @@
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | `WidgetKind`       | Stable string for a frontend presentation type; not a backend enum.                                                             | `chart`                                         |
 | `WidgetDefinition` | Static definition: Content, optional Controls/Provider, icon, and default/minimum size.                                         | `features/chart/components/widget.tsx`          |
-| `WidgetPlacement`  | One item in `dashboard.widgets[]`: id, kind, optional resourceId, and required layout. Shares the Dashboard revision.           | Chart placement on a Dashboard                  |
+| `WidgetPlacement`  | One item in `dashboard.widgets[]`: id, kind, required layout, and one placement per kind. Shares the Dashboard revision.        | Chart placement on a Dashboard                  |
 | `WidgetViewState`  | Frontend-only preferences that must survive a refresh, owned by the feature's Zustand store.                                    | chart viewport, column widths                   |
 | `WidgetLocalState` | Temporary React state private to a Mount.                                                                                       | hover, uncommitted input                        |
 | `WidgetMount`      | The React subtree currently mounted for a placement.                                                                            | one Chart widget                                |
@@ -208,13 +208,13 @@ Occurrence sets `readOnly: true` on its own Resource definition. All fields rema
 Resources are flat: addressing is always `(resource, id)`, with no path. The tree lives only in database FKs.
 
 ```
-dashboard         name, favorite ──value──> widgets[{id, kind, resourceId?, layout:{x,y,w,h}}]   inline; resourceId is a reference
+dashboard         name, favorite ──value──> widgets[{id, kind, layout:{x,y,w,h}}]   inline; kinds are unique per Dashboard
     ├──owns──> chart (dashboardId ⇒, preset) ──value──> cells[{marketSources[], panes[{series[]}]}]   inline
     │             └──owns──> indicator (chartId ⇒, cellId, source, snapshot)   series reference it by value
     └──owns──> drawing (dashboardId ⇒, listing)
 
 workspace         independent; root is immutable after creation; artifacts are referenced as {workspaceId,path}
-watchlist         independent ──value──> columns[], sections[{items[{provider, listing}], sections[…]}]   inline, recursive; placed by widgets[].resourceId
+watchlist         independent ──value──> columns[], sections[{items[{provider, listing}], sections[…]}]   inline, recursive; selected by local widget view state
 agent_schedule    independent
 agent_schedule_occurrence → agent_schedule; also references agent_run
 alert_rule        independent
@@ -222,19 +222,19 @@ alert_rule        independent
 trigger           independent; event.ruleId is a reference, no FK
 ```
 
-Dashboard stores the name, favorite flag, and all widget placements. A Chart widget references a Chart through `resourceId`;
-its `layout` is the outer position and size on the Dashboard, while the Chart's own `preset` and `cells[]` describe its internal split.
-Chart still belongs to a Dashboard through `dashboardId`; this FK and the placement reference express different relationships.
-Removing a placement only changes the arrangement and does not implicitly delete the Chart; deleting a Dashboard still follows the existing Chart/Drawing cascade contract.
+Dashboard stores the name, favorite flag and placements, with at most one of each
+kind. Placements carry only id, kind and layout. Chart belongs to a Dashboard
+through its unique dashboardId; the widget queries that relationship. Removing
+the widget keeps the Chart configuration for a later re-add.
 
 Four relationships, four representations, and no fifth:
 
-| Relationship                                    | Representation                                                                                                                               | Examples                                                                                                     |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Ownership: the parent defines the child's scope | FK on the child; cascade or RESTRICT chosen by domain; `listKeys` filter on it                                                               | `chart.dashboardId`, `drawing.dashboardId`, `occurrence.scheduleId`, `alert_event.ruleId`                    |
-| Reference: points to but does not own           | an id in the value; durable references that must keep their target use FK + RESTRICT, otherwise the consumer handles "target does not exist" | `occurrence.agentRunId`, `widgets[].resourceId`, `series.source.indicatorId`, `drawing.listing` (world data) |
-| Internal structure: no independent identity     | the entity's value                                                                                                                           | `dashboard.widgets[]`, `chart.cells[].panes[].series[]`, `watchlist.columns[]`, `watchlist.sections[]`       |
-| Derived: computable from other state            | not stored                                                                                                                                   | focused cell goes into ViewState                                                                             |
+| Relationship                                    | Representation                                                                                                                               | Examples                                                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Ownership: the parent defines the child's scope | FK on the child; cascade or RESTRICT chosen by domain; `listKeys` filter on it                                                               | `chart.dashboardId`, `drawing.dashboardId`, `occurrence.scheduleId`, `alert_event.ruleId`              |
+| Reference: points to but does not own           | an id in the value; durable references that must keep their target use FK + RESTRICT, otherwise the consumer handles "target does not exist" | `occurrence.agentRunId`, `series.source.indicatorId`, `drawing.listing` (world data)                   |
+| Internal structure: no independent identity     | the entity's value                                                                                                                           | `dashboard.widgets[]`, `chart.cells[].panes[].series[]`, `watchlist.columns[]`, `watchlist.sections[]` |
+| Derived: computable from other state            | not stored                                                                                                                                   | focused cell goes into ViewState                                                                       |
 
 Nested collections are always arrays: anything ordered or with identity is an array whose elements carry ids, and the server fills in the id on append; addressing uses indexes, and safety comes from revision. Array order is defined by JSON itself, and reordering is RFC 6902 `move`. Do not use records keyed by id: no spec defines record key order, and the stability gained by id addressing would cost three new mechanisms, which is not worth it.
 
@@ -251,7 +251,7 @@ This section records existing backend contracts. Workspace registers disk direct
 The current catalog has ten Resources: dashboard, chart, indicator, drawing, workspace, the agent's schedule and occurrence, plus alert_rule, alert_event, and trigger (see [alert-trigger.md](alert-trigger.md)). The envelope fields `id`, `revision`, `createdAt`, and `updatedAt` are declared once by the framework at the DB schema layer, and the entity derives from the same source. Resource transitions allocate id and revision and enter the transaction through Transactor.run; SQLite generates millisecond timestamps, insert uses DB defaults, update refreshes `updatedAt` in SQL, and the write interface does not accept timestamps. Only domain fields are listed below. `⇒` is cascading ownership. Schedule has no user ownership or soft-delete state; deleting it cascades to Occurrences while keeping Runs, Sessions, and transcripts. The Occurrence-to-Run reference still uses RESTRICT.
 
 ```
-dashboard        name, favorite, widgets[{id, kind, resourceId?, layout:{x,y,w,h}}]
+dashboard        name, favorite, widgets[{id, kind, layout:{x,y,w,h}}]
 chart            dashboardId ⇒ dashboard, preset, links[], cells[{id, resolution, session, adjustment, marketSources[{id, provider, listing}], panes[{id, series[{id, role, source}]}]}]
 indicator        chartId ⇒ chart, cellId, source{workspaceId, path}, snapshot{[path]: text}, parameterOverrides
 drawing          dashboardId ⇒ dashboard, provider, listing, data (geometry, style, visibility)
@@ -269,7 +269,7 @@ trigger          name, enabled, event{kind:"alert",ruleId}, target{kind:"notific
 watchlist        name, columns[{id, metric:{kind:"price" | "change" | "changePercent" | "volume"}}], sections[{id, name?, items[{id, provider, listing}], sections[…]}]
 ```
 
-A watchlist is independent: Dashboards place it through `widgets[].resourceId` and never own it. Columns are an ordered JSON array on the watchlist row; each stores only its stable id and basic scalar metric. `watchlist/column.ts` owns the shared column contract and the metric union discriminated by `kind`; the database schema imports its type and the entity uses its runtime validation. Sections and items are internal child tables sharing the watchlist revision. Every section shares the watchlist's columns; sections never carry their own column layout. Sections nest in the entity to any depth, so the tree is its own source of truth: cycles and missing parents cannot be expressed, and moving a row or a whole subtree is one RFC 6902 `move`. In storage each section row records its `parent_section_id` and its position among siblings; the Store converts between rows and the tree. Inside a section both `items` and `sections` are required, because a decoding default inside the recursion would stop the Agent's JSON Schema export. A listing appears at most once per watchlist across all sections, and each metric appears at most once among its columns. Column values come from Feed; widths, sort, collapsed sections, density, and decimals are frontend view state.
+A watchlist is independent: its widget selects it through local view state; Dashboards never own it. Columns are an ordered JSON array on the watchlist row; each stores only its stable id and basic scalar metric. `watchlist/column.ts` owns the shared column contract and the metric union discriminated by `kind`; the database schema imports its type and the entity uses its runtime validation. Sections and items are internal child tables sharing the watchlist revision. Every section shares the watchlist's columns; sections never carry their own column layout. Sections nest in the entity to any depth, so the tree is its own source of truth: cycles and missing parents cannot be expressed, and moving a row or a whole subtree is one RFC 6902 `move`. In storage each section row records its `parent_section_id` and its position among siblings; the Store converts between rows and the tree. Inside a section both `items` and `sections` are required, because a decoding default inside the recursion would stop the Agent's JSON Schema export. A listing appears at most once per watchlist across all sections, and each metric appears at most once among its columns. Column values come from Feed; widths, sort, collapsed sections, density, and decimals are frontend view state.
 
 `alert_rule`'s Tea config stores normalized JSON: either a NodeConfig whose inputs contain only Bars, or an Indicator-following `{indicatorId,parameters,requests}`; for the latter, inputs, map, and `nodes.indicator` are generated at runtime from the Indicator and the chart cell it lives in.
 
@@ -293,17 +293,14 @@ keeping live/paused Schedules, the remaining Occurrences, and all Agent executio
 
 `workspace` is marked readOnly and registers fixed physical directories; root cannot change after creation. The domain register transition confirms and canonicalizes the directory in the resolve phase, and the Store rejects duplicate/overlapping roots within the transaction; the forget transition only removes the registration, and the default cannot be removed. createLocal and the internal ensureDefault transition prepare the directory in resolve and reuse register in apply; ensureDefault finds or creates the default registration in the same transaction. The framework-generated intrinsics keep their ordinary implementation; the Resource router automatically exposes the register/forget/createLocal mutations and the getDefault query; getDefault only reads the default registration ID and neither prepares a directory nor creates a record. The Agent only reads registration records. File contents and indexes do not enter the Resource; file operations go through the separate Workspace service; see [workspace.md](workspace.md) for details. The old Tea draft/version tables were removed by a forward migration; already-applied migrations stay unchanged.
 
-`widgets[]` already carries the Chart grid. The four integer layout fields of each item are required and have no defaults;
-SQLite checks for non-negative positions, positive sizes, and `x + w <= 12`, and the Dashboard entity checks for unique IDs and non-overlapping rectangles. Chart/Workspace placements must carry a Resource ID of the matching type; Chart references may repeat, and there is at most one Workspace widget. Other widget kinds stay open and may omit a reference; if a referenced object later disappears, the placement stays valid and no cascade is introduced.
-Array order is still stored separately as `position` and cannot be inferred from coordinates. Existing widgets were backfilled vertically in their original order,
-and existing Charts without a placement get one appended by a forward migration; mounting a page never creates user data automatically.
+`widgets[]` describes placements with required integer layout fields. SQLite checks
+bounds and unique kinds/positions; the entity also checks unique IDs and non-overlap.
+Adding any widget patches this array. Each widget obtains its own content; the
+Chart widget resolves the unique Chart by dashboardId. Missing Chart configuration
+offers symbol selection, and mounting creates nothing. Removing/re-adding a Chart
+widget preserves the same saved grid. Array order is stored as position.
 
-Creating a Chart widget uses `resources.macro.createChartWidget({dashboardId, expectedRevision, chart, layout})`,
-where chart is the existing Chart create body without dashboardId. The macro composes public transitions, creates the Chart and placement within one
-Transactor transaction, and returns `{dashboard, chart}`; a revision conflict or failure in any step
-rolls everything back. Dragging/resizing only patches the Dashboard; changing the internal split only patches the Chart.
-
-The application RPC `resources.macro.createDashboardWithChart()` composes Dashboard create with `createChartWidget`
+The application RPC `resources.macro.createDashboardWithChart()` composes Dashboard and Chart create transitions
 to create, in one transaction, a Dashboard named `New dashboard`, a Binance `BTCUSDT` daily Chart, and
 a placement that fills the desktop content area (`x=0,y=0,w=12,h=24`), returning `{dashboard, chart}`. The fixed initial configuration uses the `24h` session, `raw`
 adjustment, and price/volume in the same pane, and needs no Feed access. The New Dashboard frontend entry point calls this RPC,

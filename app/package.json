@@ -28,7 +28,6 @@
     "./tea/context": "./src/lib/tea/context.ts",
     "./hooks/use-datafeed": "./src/hooks/use-datafeed.ts",
     "./hooks/use-symbology": "./src/hooks/use-symbology.ts",
-    "./hooks/use-logo": "./src/hooks/use-logo.ts",
     "./hooks/use-calendar": "./src/hooks/use-calendar.ts",
     "./chart": "./src/lib/chart/core.tsx"
   },
@@ -148,7 +147,10 @@
     "croner": "10.0.1",
     "mdast-util-to-string": "4.0.0",
     "remark-directive": "3.0.1",
-    "unist-util-visit-parents": "6.0.2"
+    "unist-util-visit-parents": "6.0.2",
+    "@headless-tree/core": "1.7.0",
+    "@headless-tree/react": "1.7.0",
+    "fast-json-patch": "^3.1.1"
   },
   "devDependencies": {
     "apache-arrow": "21.2.0",

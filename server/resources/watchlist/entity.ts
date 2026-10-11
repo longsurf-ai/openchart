@@ -125,7 +125,7 @@ function eachSection(
  *     id: "wsc_a",
  *     name: "Crypto",
  *     items: [{ id: "wit_…", provider: "binance", listing: { symbol: "BTCUSDT", currency: "USDT" } }],
- *     sections: [{ id: "wsc_b", name: "Layer 2" }],
+ *     sections: [{ id: "wsc_b", name: "Layer 2", items: [], sections: [] }],
  *   }],
  * });
  * ```

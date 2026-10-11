@@ -454,17 +454,16 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
           \`dashboard_id\` text NOT NULL,
           \`position\` integer NOT NULL,
           \`kind\` text NOT NULL,
-          \`resource_id\` text,
           \`x\` integer NOT NULL,
           \`y\` integer NOT NULL,
           \`w\` integer NOT NULL,
           \`h\` integer NOT NULL,
           CONSTRAINT \`fk_dashboard_widget_dashboard_id_dashboard_id_fk\` FOREIGN KEY (\`dashboard_id\`) REFERENCES \`dashboard\`(\`id\`) ON DELETE CASCADE,
           CONSTRAINT \`dashboard_widget_position_unique\` UNIQUE(\`dashboard_id\`,\`position\`),
+          CONSTRAINT \`dashboard_widget_kind_unique\` UNIQUE(\`dashboard_id\`,\`kind\`),
           CONSTRAINT "dashboard_widget_id_check" CHECK("id" IS NOT NULL),
           CONSTRAINT "dashboard_widget_position_check" CHECK("position" >= 0),
           CONSTRAINT "dashboard_widget_kind_check" CHECK(length("kind") > 0),
-          CONSTRAINT "dashboard_widget_resource_id_check" CHECK("resource_id" IS NULL OR length("resource_id") > 0),
           CONSTRAINT "dashboard_widget_x_check" CHECK(typeof("x") = 'integer' AND "x" >= 0),
           CONSTRAINT "dashboard_widget_y_check" CHECK(typeof("y") = 'integer' AND "y" >= 0),
           CONSTRAINT "dashboard_widget_w_check" CHECK(typeof("w") = 'integer' AND "w" >= 1),
@@ -754,7 +753,7 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         "CREATE INDEX `chart_series_indicator_index` ON `chart_series` (`cell_id`,`indicator_id`);",
       );
       yield* tx.run(
-        "CREATE INDEX `chart_dashboard_index` ON `chart` (`dashboard_id`);",
+        "CREATE UNIQUE INDEX `chart_dashboard_unique` ON `chart` (`dashboard_id`);",
       );
       yield* tx.run(
         "CREATE UNIQUE INDEX `drawing_listing_gesture_unique` ON `drawing` (`dashboard_id`,`provider`,case when json_extract(\"listing\", '$.id') is not null then json_array(json_extract(\"listing\", '$.id')) else json_array(json_extract(\"listing\", '$.symbol'), json_extract(\"listing\", '$.venue')) end,json_extract(\"data\", '$.id'));",

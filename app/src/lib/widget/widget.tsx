@@ -25,11 +25,8 @@ export interface WidgetContextValue {
   readonly dashboardId: string;
   readonly transport: AppTransport;
   readonly holdControls: () => () => void;
-  /** Return the placement of this kind showing this Resource (any placement of the kind when the widget needs no Resource, such as the one Workspace), else dock one on this placement's right and start its Dashboard save; the Dashboard's Retry/Discard own save failures. Throws while another Dashboard change is unsaved. */
-  readonly placeBeside: (
-    definition: WidgetDefinition,
-    resourceId?: string,
-  ) => string;
+  /** Return the existing placement of this kind, else dock one on this placement's right and start its Dashboard save; the Dashboard's Retry/Discard own save failures. Throws while another Dashboard change is unsaved. */
+  readonly placeBeside: (definition: WidgetDefinition) => string;
 }
 
 /** Provided once per placement, outside its optional feature Provider. */

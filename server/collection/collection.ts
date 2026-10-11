@@ -8,6 +8,10 @@ export * as Collection from "./collection";
 
 import { AgentPromptTarget } from "@openchart/server/agent/contracts/agent-prompt-target";
 import { admitPromptTarget } from "@openchart/server/agent/session/admit-prompt-target";
+import {
+  activeRunByIntentPrefix,
+  AgentRunStore,
+} from "@openchart/server/agent/run/store";
 import { Database } from "@openchart/server/db/database";
 import { Home } from "@openchart/server/home";
 import { Transactor } from "@openchart/server/lib/resource";
@@ -19,7 +23,15 @@ import type {
   WorkspaceDatasetId,
 } from "@openchart/server/resources/workspace-dataset/entity";
 import { Workspaces } from "@openchart/server/workspace/workspace";
-import { Context, Effect, FiberMap, Layer, Schema, Scope } from "effect";
+import {
+  Context,
+  Effect,
+  FiberMap,
+  Layer,
+  Schema,
+  Scope,
+  Semaphore,
+} from "effect";
 import path from "node:path";
 import { config } from "./config";
 import { installUv, runScript } from "./uv";
@@ -42,6 +54,7 @@ type Needs =
 const make = Effect.gen(function* () {
   const services = yield* Effect.context<Needs>();
   const fibers = yield* FiberMap.make<WorkspaceDatasetId>();
+  const admission = yield* Semaphore.make(1);
   const scope = yield* Effect.scope;
   // One check per Dataset outlives its runs, so the last outcome stays visible.
   const checks = new Map<WorkspaceDatasetId, Monitoring.CheckHandle>();
@@ -61,14 +74,15 @@ const make = Effect.gen(function* () {
 
   /**
    * Starts one collection and returns without awaiting it.
-   * - An Agent prompt is admitted once per `intent`, with the Dataset attached
-   *   and its file named; the Run reports the outcome.
+   * - An Agent prompt is admitted once per Dataset/`intent`, in the Dataset's
+   *   Workspace with the Dataset attached; the Run reports the outcome.
    * - A script runs only when its current content matches the approved hash,
-   *   at most one run per Dataset at a time; a second request while one runs
-   *   starts nothing. Its Monitoring check `collection/<id>` reports
+   *   at most one run per Dataset at a time. Its Monitoring check reports
    *   each outcome, so scheduled failures reach the user.
    * Fails `ResourceNotFound` for a missing Dataset, and `ResourceStateInvalid`
-   * when it has no collection or its script changed since approval.
+   * when it has no collection, already has active work, or its script changed
+   * since approval. Admission is serialized; durable Agent Run state prevents
+   * overlapping prompts even after the Collection service is reconstructed.
    * @example yield* collection.collect(datasetId, `manual:${datasetId}:${Date.now()}`);
    */
   const run = Effect.fn("Collection.collect")(function* (
@@ -80,17 +94,40 @@ const make = Effect.gen(function* () {
     );
     const collection = dataset.collection;
     if (!collection) return yield* invalid("it has no collection");
+    const prefix = `collection:${id}:`;
+    const runIntent = `${prefix}${intent}`;
+    const accepted = yield* (yield* AgentRunStore.Service).getByIntent(
+      runIntent,
+    );
+    if (accepted) {
+      yield* admitPromptTarget({
+        intent: runIntent,
+        title: `Collect ${dataset.name}`,
+        input: accepted.input,
+      });
+      return {
+        kind: "agent_prompt" as const,
+        runId: accepted.id,
+        sessionId: accepted.sessionID,
+      };
+    }
+    if (
+      (yield* FiberMap.has(fibers, id)) ||
+      (yield* activeRunByIntentPrefix(prefix))
+    )
+      return yield* invalid("its collection is already running");
     if (collection.kind === "agent_prompt") {
       // The Resource types its prompt opaquely; its schema already validated it.
       const target = yield* Schema.decodeUnknownEffect(AgentPromptTarget)(
         collection,
       ).pipe(Effect.orDie);
       const run = yield* admitPromptTarget({
-        intent,
+        intent: runIntent,
         title: `Collect ${dataset.name}`,
         binding: target.binding,
         input: {
           ...target.prompt,
+          workspaceId: dataset.source.workspaceId,
           parts: [
             ...target.prompt.parts,
             {
@@ -118,9 +155,16 @@ const make = Effect.gen(function* () {
     const check = yield* checkFor(dataset);
     const fail = (code: string, message: string) =>
       check.report({ state: "failed", reason: { code, message } });
-    const workspace = yield* (yield* Workspaces).open(
-      dataset.source.workspaceId,
-    );
+    const workspace = yield* (yield* Workspaces)
+      .open(dataset.source.workspaceId)
+      .pipe(
+        Effect.tapError(() =>
+          fail(
+            "collection.workspace_missing",
+            `The Workspace for ${dataset.name} could not be opened.`,
+          ),
+        ),
+      );
     const script = yield* workspace
       .read(collection.path)
       .pipe(
@@ -152,6 +196,7 @@ const make = Effect.gen(function* () {
             runtimes,
             root: workspace.root,
             script: collection.path,
+            content: Buffer.from(script.base64, "base64"),
             args: collection.args ?? [],
             output: dataset.source.path,
             timeoutSeconds: scriptTimeoutSeconds,
@@ -162,7 +207,6 @@ const make = Effect.gen(function* () {
           onSuccess: () => check.report({ state: "healthy" }),
         }),
       ),
-      // A run already in progress keeps going; this request starts nothing.
       { onlyIfMissing: true },
     );
     return { kind: "script" as const };
@@ -170,7 +214,9 @@ const make = Effect.gen(function* () {
 
   return {
     collect: (id: WorkspaceDatasetId, intent: string) =>
-      run(id, intent).pipe(Effect.provideContext(services)),
+      admission
+        .withPermit(run(id, intent))
+        .pipe(Effect.provideContext(services)),
   };
 });
 

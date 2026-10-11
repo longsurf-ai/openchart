@@ -1,6 +1,7 @@
 // Purpose: Install the app-pinned uv on first use and run one collection script with it.
 import { execFile } from "node:child_process";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { promisify } from "node:util";
 import { Effect } from "effect";
@@ -55,51 +56,56 @@ export const installUv = Effect.fn("Collection.installUv")(function* (
 });
 
 /**
- * Runs `<uv> run --script <script> [args]` in the Workspace root and, after a
+ * Runs an isolated snapshot of the approved `content` with uv in the Workspace
+ * root. The snapshot is a hidden sibling of `script`, preserving local imports;
+ * the mutable original is never reopened. After a
  * zero exit, moves the file the script wrote at `OPENCHART_OUTPUT` onto the
- * data file. A failed, cancelled or timed-out run removes that temporary file
+ * data file. Each invocation owns a unique staging file. A failed, cancelled or timed-out run removes its staging file and script snapshot
  * and leaves the data file unchanged. uv-managed Python and dependency caches
  * live under `runtimes`, apart from any uv the user has. Interruption kills
  * the process.
- * @example yield* runScript({uv, runtimes, root, script: "cpi.py", args: [], output: "cpi.csv", timeoutSeconds: 600});
+ * @example yield* runScript({uv, runtimes, root, script: "cpi.py", content: approvedBytes, args: [], output: "cpi.csv", timeoutSeconds: 600});
  */
 export const runScript = Effect.fn("Collection.runScript")(function* (input: {
   readonly uv: string;
   readonly runtimes: string;
   readonly root: string;
   readonly script: string;
+  readonly content: Uint8Array;
   readonly args: readonly string[];
   readonly output: string;
   readonly timeoutSeconds: number;
 }) {
   const target = path.join(input.root, input.output);
+  const id = randomUUID();
+  const snapshot = path.join(
+    input.root,
+    path.dirname(input.script),
+    `.${path.basename(input.script)}.${id}.py`,
+  );
   // A hidden sibling: the Workspace index ignores it until it replaces the file.
   const temporary = path.join(
     path.dirname(target),
-    `.${path.basename(target)}.collecting`,
+    `.${path.basename(target)}.${id}.collecting`,
   );
   yield* Effect.tryPromise({
     try: async (signal) => {
       await mkdir(path.dirname(target), { recursive: true });
-      await rm(temporary, { force: true });
-      await execute(
-        input.uv,
-        ["run", "--script", path.join(input.root, input.script), ...input.args],
-        {
-          cwd: input.root,
-          signal,
-          timeout: input.timeoutSeconds * 1000,
-          maxBuffer: 8 * 1024 * 1024,
-          env: {
-            ...process.env,
-            OPENCHART_OUTPUT: temporary,
-            UV_CACHE_DIR: path.join(input.runtimes, "uv-cache"),
-            UV_PYTHON_INSTALL_DIR: path.join(input.runtimes, "uv-python"),
-            UV_PYTHON_PREFERENCE: "only-managed",
-            NO_COLOR: "1",
-          },
+      await writeFile(snapshot, input.content, { flag: "wx", mode: 0o400 });
+      await execute(input.uv, ["run", "--script", snapshot, ...input.args], {
+        cwd: input.root,
+        signal,
+        timeout: input.timeoutSeconds * 1000,
+        maxBuffer: 8 * 1024 * 1024,
+        env: {
+          ...process.env,
+          OPENCHART_OUTPUT: temporary,
+          UV_CACHE_DIR: path.join(input.runtimes, "uv-cache"),
+          UV_PYTHON_INSTALL_DIR: path.join(input.runtimes, "uv-python"),
+          UV_PYTHON_PREFERENCE: "only-managed",
+          NO_COLOR: "1",
         },
-      );
+      });
       if (!(await stat(temporary).catch(() => undefined))?.isFile())
         throw new Error(
           "The script exited without writing the file named by OPENCHART_OUTPUT",
@@ -119,6 +125,13 @@ export const runScript = Effect.fn("Collection.runScript")(function* (input: {
       });
     },
   }).pipe(
-    Effect.onExit(() => Effect.promise(() => rm(temporary, { force: true }))),
+    Effect.onExit(() =>
+      Effect.promise(async () => {
+        await Promise.all([
+          rm(temporary, { force: true }),
+          rm(snapshot, { force: true }),
+        ]);
+      }),
+    ),
   );
 });

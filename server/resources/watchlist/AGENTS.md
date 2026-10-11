@@ -1,13 +1,14 @@
 # watchlist
 
 Owns independent watchlists: ordered metric columns and a recursive tree of
-sections holding provider-scoped listings. Dashboards reference a watchlist
-through `widgets[].resourceId` and never own it.
+sections holding provider-scoped listings. The Watchlist widget selects a list
+in local view state; Dashboards never own that selection or the list.
 
 - schema.ts owns watchlist/watchlist_section/watchlist_item. Only the root has
   an envelope; sections and items share its revision and cascade with it.
   Sections link through `parent_section_id`; positions are per sibling list.
 - column.ts owns the column and metric contract; columns stay inline JSON.
+  Keep metrics a discriminated union so future variants can own parameters.
 - The entity nests `sections[].sections[]` to any depth through
   `Schema.suspend`. Keep codecs such as decoding defaults out of the recursion;
   Agent JSON Schema export cannot document them. Recursive types are `type`

@@ -97,11 +97,8 @@ async function spyOnPublish() {
 }
 
 test("indicators are independent Resources listed by their chart", async () => {
-  const { dashboard, chart } = await chartWithCell("a");
-  const other = await caller.resources.chart.create({
-    dashboardId: dashboard.id,
-    cells: [cell("b")],
-  });
+  const { chart } = await chartWithCell("a");
+  const { chart: other } = await chartWithCell("b");
   const first = await caller.resources.indicator.create(
     indicator(chart.id, "ccl_a"),
   );
@@ -225,11 +222,8 @@ test("chart saves that reinsert every cell leave the Indicator untouched", async
 });
 
 test("deleting a chart or its dashboard deletes its Indicators and publishes their invalidations", async () => {
-  const { dashboard, chart } = await chartWithCell("a");
-  const sibling = await caller.resources.chart.create({
-    dashboardId: dashboard.id,
-    cells: [cell("b")],
-  });
+  const { chart } = await chartWithCell("a");
+  const { dashboard, chart: sibling } = await chartWithCell("b");
   const owned = await caller.resources.indicator.create(
     indicator(chart.id, "ccl_a"),
   );
@@ -275,10 +269,7 @@ test("series bindings name an Indicator by value, without requiring it to exist"
     output: "value",
   });
 
-  const bound = await caller.resources.chart.create({
-    dashboardId: dashboard.id,
-    cells: [cell("b")],
-  });
+  const { chart: bound } = await chartWithCell("b");
   const created = await caller.resources.indicator.create(
     indicator(bound.id, "ccl_b"),
   );

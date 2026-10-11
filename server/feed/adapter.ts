@@ -6,7 +6,6 @@ import type {
 import type { ProviderId } from "@openchart/market";
 import type { IBarsFeedService } from "@openchart/server/feed/bar/service";
 import type { SymbologySource } from "@openchart/server/feed/symbology/service";
-import type { ILogosFeedService } from "@openchart/server/feed/logo/service";
 import type { ICalendarFeedService } from "@openchart/server/feed/calendar/service";
 import type { SeriesSource } from "@openchart/server/feed/series/service";
 
@@ -57,7 +56,6 @@ export interface ProviderFeeds {
     readonly providerId: ProviderId;
     readonly indexable: boolean;
   };
-  readonly logos?: DatasetAdapter<ILogosFeedService>;
   readonly calendar?: DatasetAdapter<{
     readonly provider: ProviderId;
     readonly feed: ICalendarFeedService;

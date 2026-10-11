@@ -3,7 +3,6 @@
 import { defineId } from "@openchart/identifier";
 import { envelopeFields } from "@openchart/server/lib/resource/envelope";
 import { withInvariants } from "@openchart/server/lib/resource/invariant";
-import { ChartId } from "@openchart/server/resources/chart";
 import { createSelectSchema } from "drizzle-orm/effect-schema";
 import { Effect, Schema } from "effect";
 
@@ -18,7 +17,6 @@ import {
 const dashboardColumns = createSelectSchema(dashboardTable);
 const widgetColumns = createSelectSchema(dashboardWidgetTable, {
   kind: (schema) => schema.check(Schema.isMinLength(1)),
-  resourceId: (schema) => schema.check(Schema.isMinLength(1)),
   x: (schema) => schema.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
   y: (schema) => schema.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
   w: (schema) => schema.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
@@ -58,33 +56,14 @@ export const WidgetLayout = withInvariants(
 /**
  * One widget placed on a dashboard.
  *
- * `kind` names the WidgetDefinition the app renders. `resourceId` is a
- * reference, never ownership: each Resource defines its own lifecycle. Chart
- * placements require the matching identity, even if its target has since
- * disappeared. Workspace shows all registered directories and needs no target.
- * Other widget kinds remain open and may need no target.
+ * `kind` names the WidgetDefinition the app renders. Widgets resolve their own
+ * content; placements describe only identity, kind and outer geometry.
  */
-export const WidgetPlacement = withInvariants(
-  Schema.Struct({
-    id: WidgetPlacementId,
-    kind: widgetColumns.fields.kind,
-    // NULL in storage is represented by an omitted reference in the entity.
-    resourceId: Schema.optionalKey(widgetColumns.fields.resourceId.members[0]),
-    layout: WidgetLayout,
-  }),
-  (invariant) => [
-    invariant(
-      "Chart widgets must reference a Chart ID (cht_)",
-      (widget, { expect }) => {
-        if (widget.kind === "chart")
-          expect(Schema.is(ChartId)(widget.resourceId), {
-            path: ["resourceId"],
-          }).toBe(true);
-      },
-      { code: "dashboard.chart_reference" },
-    ),
-  ],
-);
+export const WidgetPlacement = Schema.Struct({
+  id: WidgetPlacementId,
+  kind: widgetColumns.fields.kind,
+  layout: WidgetLayout,
+});
 
 /** One widget placed on a dashboard. */
 export type WidgetPlacement = typeof WidgetPlacement.Type;
@@ -116,15 +95,17 @@ export const DashboardEntity = withInvariants(
   }),
   (invariant) => [
     invariant(
-      "A dashboard may contain at most one workspace widget",
+      "A dashboard may contain at most one widget of each kind",
       (dashboard, { expect }) => {
-        expect(
-          dashboard.widgets.filter(({ kind }) => kind === "workspace").length <=
-            1,
-          { path: ["widgets"] },
-        ).toBe(true);
+        const kinds = new Set<string>();
+        dashboard.widgets.forEach((widget, index) => {
+          expect(kinds.has(widget.kind), {
+            path: ["widgets", index, "kind"],
+          }).toBe(false);
+          kinds.add(widget.kind);
+        });
       },
-      { code: "dashboard.one_workspace" },
+      { code: "dashboard.unique_widget_kinds" },
     ),
     invariant(
       "Widget placement ids must be unique",

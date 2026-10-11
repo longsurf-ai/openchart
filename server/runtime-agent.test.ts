@@ -138,7 +138,7 @@ test("publishes a committed cascade batch through the shared Events service", as
       db.transaction((tx) =>
         tx.run(sql`
       INSERT INTO chart (id, dashboard_id, revision)
-      VALUES ('cht_one', ${dashboard.id}, 3), ('cht_two', ${dashboard.id}, 5)
+      VALUES ('cht_one', ${dashboard.id}, 3)
     `),
       ),
     );
@@ -154,7 +154,6 @@ test("publishes a committed cascade batch through the shared Events service", as
       }),
     ).toEqual([
       { resource: "chart", id: "cht_one", revision: 3 },
-      { resource: "chart", id: "cht_two", revision: 5 },
       { resource: "dashboard", id: dashboard.id, revision: 1 },
     ]);
   } finally {

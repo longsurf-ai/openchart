@@ -12,8 +12,7 @@ Dataset or Feed.
 - `feed/`: consumer adapters; `feed/feed.ts`: exact-Definition bindings.
 - `client.ts`, `config.ts`, `errors.ts`: transport, configuration, failures.
 
-`local/logos/` and `local/market/calendar/` own bundled declarations and
-implementations; logos also owns its Feed adapter.
+`local/market/calendar/` owns its bundled declaration and implementation.
 
 Provider-specific intervals, identities, capabilities, pagination, polling,
 liveness, finality, stitching, and renewal stay in its directory.
@@ -28,8 +27,8 @@ owns routing, search policy, and history-window/countBack composition.
 - Fail with `DatasetFailure(reason, { cause })`; upstream text belongs in
   `cause`. Wiring errors are defects.
 - Requests own resources; streams use caller Scope. Cancellation aborts I/O.
-- Report Monitoring health; never judge freshness against local `asOf`.
+- Report Monitoring health; never infer freshness from `asOf`.
 - Subscribe before snapshots; bound buffers; gaps require resynchronization.
 - `http.ts` owns cancellation, concurrency, Retry-After; quotas survive
   reactivation. Parse responses once; paginate to exhaustion.
-- Quotes cannot manufacture OHLCV; omit Yahoo null bars.
+- Never fabricate OHLCV; omit empty slots, reject partial bars.

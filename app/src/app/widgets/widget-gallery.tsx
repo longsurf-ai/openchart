@@ -1,4 +1,4 @@
-// Purpose: Add widgets directly from a compact menu; Dashboard owns every write.
+// Purpose: Add widgets from a compact menu; Dashboard owns every placement write.
 import { ChevronDown, LayoutGrid } from "lucide-react";
 import { Button } from "@openchart/app/components/ui/button";
 import {
@@ -10,27 +10,25 @@ import {
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
 import { widgetCatalog } from "./widget-registry";
 
-/** Add the selected widget without a configuration step. Dashboard owns pending and recovery state.
- * @example <WidgetGallery dashboard={dashboard} disabled={saving} onAddWorkspace={addWorkspace} onAddChart={addChart} />
+/** A widget the gallery can add. */
+export type WidgetKind = keyof typeof widgetCatalog;
+
+/** Add a widget with one selection. Dashboard owns pending and recovery state;
+ * each widget owns its content selection.
+ * @example <WidgetGallery dashboard={dashboard} disabled={saving} onAdd={add} />
  */
 export function WidgetGallery({
   dashboard,
   disabled,
-  onAddWorkspace,
-  onAddChart,
+  onAdd,
 }: {
   dashboard: Dashboard;
   disabled: boolean;
-  onAddWorkspace: () => void;
-  onAddChart: () => void;
+  onAdd: (kind: WidgetKind) => void;
 }) {
-  const hasWorkspace = dashboard.widgets.some(
-    (widget) => widget.kind === "workspace",
-  );
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
-        {/* Same outline menu trigger as New alert and Create schedule. */}
         <Button type="button" variant="outline" size="sm">
           <LayoutGrid aria-hidden />
           Widgets
@@ -38,16 +36,22 @@ export function WidgetGallery({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {Object.entries(widgetCatalog).map(([kind, { definition }]) => (
-          <DropdownMenuItem
-            key={kind}
-            disabled={disabled || (kind === "workspace" && hasWorkspace)}
-            onSelect={() => (kind === "chart" ? onAddChart : onAddWorkspace)()}
-          >
-            <definition.Icon />
-            {definition.title}
-          </DropdownMenuItem>
-        ))}
+        {(Object.keys(widgetCatalog) as WidgetKind[]).map((kind) => {
+          const { definition } = widgetCatalog[kind];
+          return (
+            <DropdownMenuItem
+              key={kind}
+              disabled={
+                disabled ||
+                dashboard.widgets.some((widget) => widget.kind === kind)
+              }
+              onSelect={() => onAdd(kind)}
+            >
+              <definition.Icon />
+              {definition.title}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

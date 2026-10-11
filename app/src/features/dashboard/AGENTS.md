@@ -1,6 +1,6 @@
 # Dashboard
 
-- `components/dashboard-view.tsx` owns reads, layout and shared placement/Chart
+- `components/dashboard-view.tsx` owns reads, layout and shared placement
   save/retry/discard state. App injects identity, transport, header and registry.
   Mount creates nothing; widths never persist/remount widgets. Grid resets must
   confirm discarding affected editor drafts.
@@ -9,7 +9,7 @@
 - `widget-host.tsx` owns Context, Card, error boundary and toolbar leases.
   Widgets own Resource queries and runtime effects.
 - First widget fills the viewport; second splits it equally; later additions
-  preserve existing geometry. `placeBeside` reuses a matching Resource placement,
+  preserve existing geometry. Each kind occurs once. `placeBeside` reuses the kind's placement,
   including pending saves, otherwise docks right. `placeWidgetBeside` chooses
   free right, slide left, split, then push down; saves match displayed geometry.
 - `api/queries.ts` owns mutations/directories; `lib/resource/dashboard.ts` shares

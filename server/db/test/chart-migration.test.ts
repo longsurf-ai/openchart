@@ -32,15 +32,21 @@ test("upgrades populated dashboards and enforces chart ownership and deletion", 
         sql`SELECT * FROM dashboard`,
       )).map((row) => ({
         ...row,
-        revision: 8,
-        updated_at: expect.any(Number),
+        revision: 7,
+        updated_at: 200,
       }));
-      const widgets = (yield* db.all<Record<string, unknown>>(
+      const widgets = yield* db.all<Record<string, unknown>>(
         sql`SELECT * FROM dashboard_widget`,
-      )).map((row) => ({ ...row, x: 0, y: 0, w: 12, h: 16 }));
+      );
 
-      yield* DatabaseMigration.apply(db);
-      yield* DatabaseMigration.apply(db);
+      yield* DatabaseMigration.applyOnly(
+        db,
+        migrations.slice(0, upgradeIndex + 1),
+      );
+      yield* DatabaseMigration.applyOnly(
+        db,
+        migrations.slice(0, upgradeIndex + 1),
+      );
       expect(yield* db.all(sql`SELECT * FROM dashboard`)).toEqual(dashboards);
       expect(yield* db.all(sql`SELECT * FROM dashboard_widget`)).toEqual(
         widgets,
@@ -49,7 +55,9 @@ test("upgrades populated dashboards and enforces chart ownership and deletion", 
         yield* db.all(
           sql`SELECT id FROM app_schema_migrations ORDER BY version`,
         ),
-      ).toEqual(migrations.map(({ id }) => ({ id })));
+      ).toEqual(
+        migrations.slice(0, upgradeIndex + 1).map(({ id }) => ({ id })),
+      );
 
       yield* db.run(sql`
         INSERT INTO chart (id, dashboard_id)
@@ -64,17 +72,16 @@ test("upgrades populated dashboards and enforces chart ownership and deletion", 
         VALUES ('pane_a', 'cell_a', 0), ('pane_b', 'cell_b', 0)
       `);
       yield* db.run(sql`
-        INSERT INTO chart_market_source (id, cell_id, position, provider, listing)
-        VALUES ('source_a', 'cell_a', 0, 'yfinance', '{"symbol":"AAPL","currency":"USD"}'),
-               ('source_b', 'cell_b', 0, 'yfinance', '{"symbol":"MSFT","currency":"USD"}')
+        INSERT INTO chart_market_source (id, cell_id, position, listing)
+        VALUES ('source_a', 'cell_a', 0, 101), ('source_b', 'cell_b', 0, 102)
       `);
       yield* db.run(sql`
-        INSERT INTO indicator (id, chart_id, cell_id, workspace_id, script_path, snapshot, parameter_overrides)
-        VALUES ('indicator_a', 'chart_a', 'cell_a', 'wsp_test', 'test.tea', '{"test.tea":"plot(close)"}', '{}')
+        INSERT INTO chart_indicator (id, cell_id, position)
+        VALUES ('indicator_a', 'cell_a', 0)
       `);
       yield* db.run(sql`
-        INSERT INTO chart_series (id, cell_id, pane_id, position, role, market_source_id, output)
-        VALUES ('series_main', 'cell_a', 'pane_a', 0, 'main', 'source_a', 'price')
+        INSERT INTO chart_series (id, cell_id, pane_id, position, role, market_source_id)
+        VALUES ('series_main', 'cell_a', 'pane_a', 0, 'main', 'source_a')
       `);
       yield* db.run(sql`
         INSERT INTO chart_series (id, cell_id, pane_id, position, indicator_id, output)
@@ -106,12 +113,9 @@ test("upgrades populated dashboards and enforces chart ownership and deletion", 
       }
 
       // Deleting the owner must remove its whole graph, including links to surviving cells.
-      // Indicators belong to the chart, so they survive the cell reinserts of a chart save.
       yield* db.run(sql`DELETE FROM chart_cell WHERE id = 'cell_a'`);
       expect(yield* db.all(sql`SELECT * FROM chart_series`)).toEqual([]);
-      expect(yield* db.all(sql`SELECT id FROM indicator`)).toEqual([
-        { id: "indicator_a" },
-      ]);
+      expect(yield* db.all(sql`SELECT id FROM chart_indicator`)).toEqual([]);
       expect(yield* db.all(sql`SELECT * FROM chart_link`)).toEqual([]);
       expect(yield* db.all(sql`SELECT id FROM chart_pane`)).toEqual([
         { id: "pane_b" },
@@ -126,7 +130,7 @@ test("upgrades populated dashboards and enforces chart ownership and deletion", 
       ]);
       expect(yield* db.all(sql`SELECT * FROM chart_pane`)).toEqual([]);
       expect(yield* db.all(sql`SELECT * FROM chart_market_source`)).toEqual([]);
-      expect(yield* db.all(sql`SELECT * FROM indicator`)).toEqual([]);
+      expect(yield* db.all(sql`SELECT * FROM chart_indicator`)).toEqual([]);
       expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([]);
       expect(yield* db.all(sql`SELECT * FROM dashboard`)).toEqual(dashboards);
       expect(yield* db.all(sql`SELECT * FROM dashboard_widget`)).toEqual(

@@ -2,7 +2,10 @@
 import { createElement, type PropsWithChildren } from "react";
 
 import { ChartAlertsProvider } from "@openchart/app/app/alerts/chart-alerts";
+import { SymbolPicker } from "@openchart/app/features/chart/components/symbol-picker";
 import { chartWidget } from "@openchart/app/features/chart/components/widget";
+import { WatchlistSymbolPicker } from "@openchart/app/features/watchlist/components/context";
+import { watchlistWidget } from "@openchart/app/features/watchlist/components/widget";
 import { workspaceWidget } from "@openchart/app/features/workspace/components/widget";
 import type { WidgetDefinition } from "@openchart/app/lib/widget/widget";
 
@@ -18,6 +21,17 @@ function ChartProvider({ children }: PropsWithChildren) {
   );
 }
 
+const WatchlistPlacement = watchlistWidget.Provider!;
+
+/** Watchlists add rows through the chart feature's symbol search. */
+function WatchlistProvider({ children }: PropsWithChildren) {
+  return createElement(
+    WatchlistSymbolPicker.Provider,
+    { value: SymbolPicker },
+    createElement(WatchlistPlacement, null, children),
+  );
+}
+
 /** One inventory supplies both the widget gallery and mounted dashboard content. */
 export const widgetCatalog = {
   chart: {
@@ -27,6 +41,10 @@ export const widgetCatalog = {
   workspace: {
     definition: { ...workspaceWidget, Provider: WorkspaceChartActions },
     description: "Read and edit files alongside your charts.",
+  },
+  watchlist: {
+    definition: { ...watchlistWidget, Provider: WatchlistProvider },
+    description: "Track live prices in collapsible sections.",
   },
 };
 

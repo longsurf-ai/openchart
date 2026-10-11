@@ -54,7 +54,7 @@ Feed-selection API and demo toggles have been removed.
   and bindings once.
 - `server/feed/bar` owns Bars service, shared history reads, provisioning and hose-handler.
   `symbology` owns its service, merged-search provisioner and router;
-  its RPC path is `feed.symbology.search`. `logo` provisions Provider bindings;
+  its RPC path is `feed.symbology.search`.
   `calendar` owns its service contract, provider routing and `feed.calendar.get`.
 - The Feed root owns whole-Feed service/layer/router composition, version
   coordination and shared events/errors. It contains no business implementation
@@ -154,7 +154,12 @@ consumers must not label it as the pending target's data.
 A valid new snapshot replaces current. Errors are caught inside each request so
 retry and later requests remain usable. If a stream fails after its snapshot,
 its accepted view is preserved with error status. Normal completion retains ready
-data. There is one active window observation per hook, no two-session handoff,
+data. Retryable live failures automatically reopen with exponential backoff from
+1 to 30 seconds; historical reads and non-retryable failures require user action.
+The error stays visible during retries until a valid snapshot resets the backoff.
+Manual Retry bypasses the delay. Request/client changes and unmount cancel it.
+Chart legends retain the failure wording beside previously loaded bars, even
+after the error toast disappears. There is one active window observation per hook, no two-session handoff,
 Promise session, manual Registry or multi-window history cache in the browser;
 browser reuse is limited to the shared live views above. Historical spans are
 reused by the backend Dataset cache independently of consumer observations.
@@ -266,23 +271,10 @@ The UI labels delayed polling and displays the source bar time, not a fabricated
 uniform delay. [Yahoo exchange delays](https://help.yahoo.com/kb/finance/article-exchanges-data-delays-sln2310.html).
 
 Capabilities report only the supported resolution/session/adjustment combinations.
-Logos resolve through the bundled `openchart.logos` Dataset. Its Provider owns
-canonical IDs, names, explicit aliases, verified listing evidence and image bytes.
-Canonical IDs cannot be shadowed by aliases; otherwise exact normalized aliases
-take precedence. Crypto pairs and stock/exchange-qualified identifiers live in
-the catalog. Alert inputs qualify known stock/crypto classes to avoid ticker
-collisions. Fuzzy
-name matching accepts prefixes or one edit from five characters onward, retaining
-all candidates so the Feed returns a logo only for a unique match. Unknown,
-weak or ambiguous identifiers return null; unavailable sources and read errors
-remain Feed failures. Logo Dataset changes participate in Feed versioning.
-
-`useLogo(identifier)` uses React Query and `feed.logos.get` to resolve a symbol,
-company name or domain. Results cache by identifier and Feed version. Missing
-identifiers disable the query; the alert feature still suppresses logos for
-multi-market rules. The frontend contains no alias or image-path logic. The
-Provider reads individual bundled images as data URLs, with no external requests.
-The asset catalog's README records its scope and coverage.
+Logos are not a Feed service. The app's `lib/logo` maps a listing to an
+[Elbstream](https://elbstream.com/logos) URL (crypto base asset, else ISIN or
+native symbol) that the renderer loads directly; unknown logos fall back to
+initials. Settings › Data Providers carries Elbstream's required attribution.
 
 Calendar requests carry the same `{provider, listing}` pair as Bars and route to
 that provider only; a provider without a calendar is `Feed.SourceUnavailable`.
@@ -323,6 +315,13 @@ trail the local clock by over 10 seconds. Yahoo is degraded when
 `regularMarketTime` has not advanced for 60 seconds inside Yahoo's reported
 regular trading period; delayed exchanges still advance. Local `asOf` never
 proves freshness.
+
+Yahoo empty price slots with null or zero volume remain gaps. Partially populated
+OHLCV inside a requested window fails with `Dataset.IncompleteData`, mapped to
+the retryable `Feed.IncompleteData`. History and polling use the same validation;
+failed reads do not commit cache coverage. Quotes never fill missing bar fields.
+This detects incomplete observations actually returned by the source; it does
+not infer missing sessions or prove that an entirely omitted bar is current.
 
 ## Verification
 

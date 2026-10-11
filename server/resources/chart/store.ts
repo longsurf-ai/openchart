@@ -1,5 +1,6 @@
 // Purpose: Persists and assembles complete chart grids within the Resource transaction.
 
+import { ResourceStateInvalid } from "@openchart/server/lib/resource/errors";
 import type { ListFilter } from "@openchart/server/lib/resource/list-schema";
 import type {
   Row,
@@ -209,6 +210,30 @@ function readWritten(tx: Tx, root: ChartRow) {
   );
 }
 
+const requireUniqueDashboard = Effect.fn("Chart.requireUniqueDashboard")(
+  function* (tx: Tx, dashboardId: string, chartId: string) {
+    const existing = yield* tx
+      .select({ id: chartTable.id })
+      .from(chartTable)
+      .where(eq(chartTable.dashboardId, dashboardId))
+      .get();
+    if (existing && existing.id !== chartId) {
+      const reason = "A dashboard may contain only one Chart.";
+      return yield* new ResourceStateInvalid({
+        resource: "chart",
+        reason,
+        issues: [
+          {
+            code: "chart.unique_dashboard",
+            path: "/dashboardId",
+            message: reason,
+          },
+        ],
+      });
+    }
+  },
+);
+
 /**
  * Maps six tables to one chart Resource. Indicators are their own Resource. List filters roots in SQL before
  * batching child reads. Save replaces owned children with their supplied ids
@@ -245,6 +270,7 @@ export const chartStore: Store<ChartWrite, ListFilter<typeof ChartEntity>> = {
     }),
   insert: (tx, input) =>
     Effect.gen(function* () {
+      yield* requireUniqueDashboard(tx, input.body.dashboardId, input.id);
       const root = yield* tx
         .insert(chartTable)
         .values({
@@ -261,6 +287,7 @@ export const chartStore: Store<ChartWrite, ListFilter<typeof ChartEntity>> = {
     }),
   save: (tx, id, input) =>
     Effect.gen(function* () {
+      yield* requireUniqueDashboard(tx, input.body.dashboardId, id);
       const root = yield* tx
         .update(chartTable)
         .set({

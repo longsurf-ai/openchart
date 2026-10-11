@@ -24,7 +24,6 @@ import {
 } from "@openchart/server/data";
 import type { DatasetDefinition } from "@openchart/server/data/dataset";
 import { binanceSymbology } from "@openchart/server/data/providers/binance/datasets/definitions";
-import { logos } from "@openchart/server/data/providers/local";
 import { ResourceChanged } from "@openchart/server/lib/resource/events";
 import { sql } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
@@ -137,31 +136,24 @@ test("Provider-owned settings disable and restore datasets without rebuilding th
   try {
     const feed = await runtime.runPromise(Feed);
     const catalog = await runtime.runPromise(Catalog);
-    await vi.waitFor(async () => {
-      const services = await runtime.runPromise(feed.get());
-      expect(
-        await runtime.runPromise(services.logos.getLogo({ identifier: "BTC" })),
-      ).toMatchObject({ id: "crypto:btc" });
-    });
     const ready = async <D extends DatasetDefinition>(definition: D) =>
       (await runtime.runPromise(catalog.list())).find(
         (dataset) => dataset.definition === definition,
       ) as Dataset<D>;
-    const bundledLogos = await ready(logos);
     const before = await runtime.runPromise(feed.getVersion());
-    expect(await runtime.runPromise(catalog.list())).toEqual([bundledLogos]);
+    expect(await runtime.runPromise(catalog.list())).toEqual([]);
     const staging = join(directory, "replacement.json");
     await writeFile(staging, settings(true));
     await rename(staging, filename);
     await vi.waitFor(async () => {
-      expect(await runtime.runPromise(catalog.list())).toHaveLength(3);
+      expect(await runtime.runPromise(catalog.list())).toHaveLength(2);
       expect(await runtime.runPromise(feed.getVersion())).not.toBe(before);
     });
     const active = await ready(binanceSymbology);
     const previous = await runtime.runPromise(feed.getVersion());
     await writeFile(filename, settings("invalid"));
     await vi.waitFor(async () => {
-      expect(await runtime.runPromise(catalog.list())).toEqual([bundledLogos]);
+      expect(await runtime.runPromise(catalog.list())).toEqual([]);
       expect(await runtime.runPromise(feed.getVersion())).not.toBe(previous);
     });
     await expect(
@@ -173,7 +165,7 @@ test("Provider-owned settings disable and restore datasets without rebuilding th
     });
     await writeFile(filename, settings(true));
     await vi.waitFor(async () =>
-      expect(await runtime.runPromise(catalog.list())).toHaveLength(3),
+      expect(await runtime.runPromise(catalog.list())).toHaveLength(2),
     );
     expect(await ready(binanceSymbology)).not.toBe(active);
     expect(await runtime.runPromise(Config.string("probe"))).toBe(
@@ -201,7 +193,7 @@ test("publishes a committed cascade batch through the shared Events service", as
       db.transaction((tx) =>
         tx.run(sql`
       INSERT INTO chart (id, dashboard_id, revision)
-      VALUES ('cht_one', ${dashboard.id}, 3), ('cht_two', ${dashboard.id}, 5)
+      VALUES ('cht_one', ${dashboard.id}, 3)
     `),
       ),
     );
@@ -217,7 +209,6 @@ test("publishes a committed cascade batch through the shared Events service", as
       }),
     ).toEqual([
       { resource: "chart", id: "cht_one", revision: 3 },
-      { resource: "chart", id: "cht_two", revision: 5 },
       { resource: "dashboard", id: dashboard.id, revision: 1 },
     ]);
   } finally {

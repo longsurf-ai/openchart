@@ -3,13 +3,11 @@ import { Effect, Layer, Schema, Struct } from "effect";
 import { BinanceProvider } from "@openchart/server/data/providers/binance/binance";
 import { YFinanceProvider } from "@openchart/server/data/providers/yfinance/yfinance";
 import { OpenChartProvider } from "@openchart/server/data/providers/openchart/openchart";
-import { LogosProvider } from "@openchart/server/data/providers/local/logos/logos";
 import { WorkspaceDatasetsProvider } from "@openchart/server/data/providers/local/workspace/workspace";
 export {
   BinanceProvider,
   YFinanceProvider,
   OpenChartProvider,
-  LogosProvider,
   WorkspaceDatasetsProvider,
 };
 
@@ -17,7 +15,6 @@ const providers = [
   BinanceProvider,
   YFinanceProvider,
   OpenChartProvider,
-  LogosProvider,
   WorkspaceDatasetsProvider,
 ] as const;
 

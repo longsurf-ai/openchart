@@ -91,11 +91,10 @@ export function editWidgetLayout(
   );
 }
 
-/** Append a placement using the shared layout rule, referencing a Resource when the widget has one; creates only a placement ID. @example const widgets = appendWidget(dashboard.widgets, definition, resourceId); */
+/** Append a placement using the shared layout rule; creates only a placement ID. @example const widgets = appendWidget(dashboard.widgets, definition); */
 export function appendWidget(
   widgets: Dashboard["widgets"],
   definition: Pick<WidgetDefinition, "kind" | "defaultSize">,
-  resourceId?: string,
 ): Dashboard["widgets"] {
   const prepared = prepareWidgetLayout(widgets, definition.defaultSize);
   return [
@@ -103,7 +102,6 @@ export function appendWidget(
     {
       id: defineId("wdg", "WidgetPlacement.ID").create(),
       kind: definition.kind,
-      ...(resourceId === undefined ? {} : { resourceId }),
       layout: prepared.layout,
     },
   ];
@@ -126,14 +124,13 @@ export function appendWidget(
  * compacts. Each half rises to the placements above its own columns and both end on the pair's
  * bottom. Cases 1-3 move nothing but the anchor unless that height pushes; the saved layout is
  * exactly what the compacting grid shows.
- * @example const { id, widgets } = placeWidgetBeside(dashboard.widgets, registry, anchorId, definition, resourceId);
+ * @example const { id, widgets } = placeWidgetBeside(dashboard.widgets, registry, anchorId, definition);
  */
 export function placeWidgetBeside(
   widgets: Dashboard["widgets"],
   registry: Readonly<Record<string, WidgetDefinition | undefined>>,
   anchorId: string,
   definition: Pick<WidgetDefinition, "kind" | "minSize">,
-  resourceId?: string,
 ): { id: string; widgets: Dashboard["widgets"] } {
   const shown = verticalCompactor.compact(widgetLayout(widgets, registry), 12);
   const anchor = getLayoutItem(shown, anchorId);
@@ -188,7 +185,6 @@ export function placeWidgetBeside(
         {
           id,
           kind: definition.kind,
-          ...(resourceId === undefined ? {} : { resourceId }),
           layout: docked,
         },
       ],

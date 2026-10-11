@@ -332,13 +332,20 @@ recognizes the Provider's own declarations by identity, and serves
 `useDataset` keys its read by Feed version and by the Workspace file, so a
 re-declaration or a rewritten file refetches. Charts bind columns by value as
 `{kind: "dataset", datasetId, output}` series and show each bar's latest
-observation known by its close.
+observation known by its bounded interval end. Alignment carries pre-window
+observations, caps intervals by resolution and the next bar open, and excludes
+observations beyond the current clock. Months use the UTC calendar boundary.
+Each Dataset has one collection action per chart cell, shared by its columns.
 
 `collection` is an Agent prompt target, admitted like a Schedule's, or a Python
 script run with a pinned uv (`uv run --script`, PEP 723 dependencies). Scripts
-write `OPENCHART_OUTPUT`; only a zero exit replaces the data file. A script runs
-only while its content hash equals the server-managed `approvedScriptHash`,
+write a unique per-run `OPENCHART_OUTPUT`; only a zero exit replaces the data
+file. Execution uses a hidden snapshot of the bytes checked against the
+server-managed `approvedScriptHash`,
 which only the application can set, so an Agent cannot approve its own script.
+Agent collections always use the Dataset's source Workspace. Serialized
+admission and durable queued/running Run checks prevent overlapping collections
+for one Dataset; exact intent retries still replay and wake the accepted Run.
 Schedules re-collect through a `data_collection` target; see
 [Scheduler](scheduler.md).
 
