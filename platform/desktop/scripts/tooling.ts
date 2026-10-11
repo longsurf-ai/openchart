@@ -210,14 +210,6 @@ async function buildBackend() {
       },
     },
   });
-  // Logo metadata and images stay out of JavaScript and are read beside the backend.
-  await cp(
-    join(serverDirectory, "data/providers/local/logos/assets"),
-    join(staging, "main/assets"),
-    {
-      recursive: true,
-    },
-  );
   // Tea is bundled with the server; its loader still reads ../tea-lib at runtime.
   await cp(join(dirname(teaCompiler), "tea-lib"), join(staging, "tea-lib"), {
     recursive: true,

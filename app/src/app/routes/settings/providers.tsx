@@ -180,6 +180,18 @@ export default function ProviderSettings() {
           })}
         </Card>
       ) : null}
+      {/* Elbstream's free logo terms require a visible link of at least 12pt (16px). */}
+      <p className="text-base text-muted-foreground">
+        Logos by{" "}
+        <a
+          href="https://elbstream.com"
+          target="_blank"
+          rel="noreferrer"
+          className="text-foreground underline"
+        >
+          Elbstream
+        </a>
+      </p>
     </SettingsPage>
   );
 }

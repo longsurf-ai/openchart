@@ -12,8 +12,7 @@ Dataset or Feed.
 - `feed/`: consumer adapters; `feed/feed.ts`: exact-Definition bindings.
 - `client.ts`, `config.ts`, `errors.ts`: transport, configuration, failures.
 
-`local/logos/` and `local/market/calendar/` own bundled declarations and
-implementations; logos also owns its Feed adapter.
+`local/market/calendar/` owns its bundled declaration and implementation.
 
 Provider-specific intervals, identities, capabilities, pagination, polling,
 liveness, finality, stitching, and renewal stay in its directory.

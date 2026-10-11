@@ -67,10 +67,6 @@ vi.mock("@openchart/app/hooks/use-bars", () => ({
     return views.get(symbol);
   },
 }));
-vi.mock("@openchart/app/hooks/use-logo", async (original) => ({
-  ...(await original<typeof import("@openchart/app/hooks/use-logo")>()),
-  useLogo: () => ({ data: null }),
-}));
 
 const listing = (symbol: string) => ({
   provider: "yfinance",

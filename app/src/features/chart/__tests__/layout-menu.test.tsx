@@ -79,7 +79,6 @@ it("lets the empty grid retry a failed save and closes its picker only after com
       search: vi.fn().mockResolvedValue([listing]),
     },
     calendar: { getCalendar: vi.fn() },
-    logos: { getLogo: vi.fn() },
     close: vi.fn(),
   };
   const queryClient = createQueryClient({

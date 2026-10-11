@@ -3,7 +3,6 @@
 export * from "./bars";
 export * from "./symbology";
 export * from "./ticker";
-export * from "./logos";
 export * from "./calendar";
 export * from "./version";
 export * from "./errors";

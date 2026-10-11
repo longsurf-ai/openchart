@@ -28,7 +28,6 @@
     "./tea/context": "./src/lib/tea/context.ts",
     "./hooks/use-datafeed": "./src/hooks/use-datafeed.ts",
     "./hooks/use-symbology": "./src/hooks/use-symbology.ts",
-    "./hooks/use-logo": "./src/hooks/use-logo.ts",
     "./hooks/use-calendar": "./src/hooks/use-calendar.ts",
     "./chart": "./src/lib/chart/core.tsx"
   },

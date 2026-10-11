@@ -4,8 +4,6 @@ import type {
   BarsCapabilities,
   CalendarRequest,
   CalendarResult,
-  LogoRequest,
-  LogoResult,
   SymbolSearchRequest,
   SymbolSearchResult,
   SymbolIndexRequest,
@@ -50,11 +48,6 @@ export interface ISymbologyFeed {
     options?: RequestOptions,
   ): Promise<SymbolSearchResult>;
 }
-/** Identifier-based server logo resolution. */
-export interface ILogosFeed {
-  /** Returns one confident match or null. @example await feed.getLogo({identifier: "BTC"}); */
-  getLogo(request: LogoRequest, options?: RequestOptions): Promise<LogoResult>;
-}
 /** Optional server trading-calendar access. */
 export interface ICalendarFeed {
   /** Resolves venue dates in consumer timezone. @example await feed.getCalendar(request); */
@@ -67,7 +60,6 @@ export interface ICalendarFeed {
 export interface FeedClient {
   readonly bars: IBarsFeed;
   readonly symbology: ISymbologyFeed;
-  readonly logos: ILogosFeed;
   readonly calendar: ICalendarFeed;
   /** Cancels this client's requests and channels; the shared application connection stays open. @example client.close(); */
   close(): void;

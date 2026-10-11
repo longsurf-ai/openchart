@@ -12,7 +12,6 @@ import {
   SymbolSearchResult,
   SymbolIndexAccepted,
   SymbolIndexStatus,
-  LogoResult,
   CalendarResult,
 } from "@openchart/feed";
 import { HoseError, type HoseErrorCode } from "@openchart/hose";
@@ -165,14 +164,6 @@ export class FeedTransport {
     return {
       close: () => {
         lifetime.abort(new ClientFailures.Cancelled());
-      },
-      logos: {
-        getLogo: (request, options) =>
-          run(options, async (signal) =>
-            Schema.decodeUnknownSync(LogoResult)(
-              await this.rpc.feed.logos.get.query(request, { signal }),
-            ),
-          ),
       },
       calendar: {
         getCalendar: (request, options) =>

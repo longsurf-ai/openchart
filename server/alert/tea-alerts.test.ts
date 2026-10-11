@@ -8,7 +8,6 @@ import {
 } from "@openchart/feed";
 import { Feed } from "@openchart/server/feed/service";
 import { calendarFeed } from "@openchart/server/feed/calendar/calendar";
-import { logosFeed } from "@openchart/server/feed/logo/logo";
 import { readBarsHistory } from "@openchart/server/feed/bar/history";
 import { indicatorResource } from "@openchart/server/resources/indicator";
 import {
@@ -146,7 +145,6 @@ function environment(historyCount = 12, offered: readonly Resolution[] = []) {
                 search: () => Effect.succeed([]),
               },
               calendar: calendarFeed(),
-              logos: logosFeed(),
             }),
         }),
       ),

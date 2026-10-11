@@ -194,18 +194,6 @@ process.send({type: 'bootstrapped'});
     assert.equal(source.workspaceId, workspaceId);
     await rpc("tea.dispose", { id: installed.id });
   }
-  for (const [identifier, id] of [
-    ["BTCUSDT", "crypto:btc"],
-    ["Apple", "brand:apple.com"],
-    ["stock:ABT", "brand:abbott.com"],
-    ["crypto:ABT", "crypto:abt"],
-  ]) {
-    const logo = z
-      .object({ id: z.string(), url: z.string() })
-      .parse(await rpc("feed.logos.get", { identifier }, true));
-    assert.equal(logo.id, id);
-    assert.match(logo.url, /^data:image\/(?:jpeg|png|svg\+xml);base64,/);
-  }
   const resource = z.object({ id: z.string().min(1) }).passthrough();
   const dashboard = resource.parse(
     await rpc("resources.dashboard.create", { name: "Boundary smoke" }),
@@ -263,7 +251,7 @@ process.send({type: 'bootstrapped'});
   child.send({ type: "shutdown" });
   assert.equal((await Promise.race([exited, timeout]))[0], 0);
   console.log(
-    "Relocated desktop Tea compile/dispose, bundled logo reads and boundary alert saves passed.",
+    "Relocated desktop Tea compile/dispose and boundary alert saves passed.",
   );
 } finally {
   clearTimeout(deadline);

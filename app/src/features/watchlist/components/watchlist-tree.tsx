@@ -32,7 +32,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@openchart/app/components/ui/context-menu";
-import { listingLogoIdentifier, useLogo } from "@openchart/app/hooks/use-logo";
+import { logoUrl } from "@openchart/app/lib/logo/logo";
 import { cn } from "@openchart/app/utils/cn";
 
 import type { Watchlist } from "../api/queries";
@@ -359,19 +359,15 @@ function ItemRow({
 }
 
 function SymbolCell({ item, depth }: { item: Item; depth: number }) {
-  const logo = useLogo(listingLogoIdentifier(item.listing), {
-    silent: true,
-  }).data;
+  const logo = logoUrl(item.listing);
   return (
     <div
       className="flex min-w-0 items-center gap-2 pr-2"
       style={{ paddingLeft: depth * INDENT + 8 }}
       title={item.listing.name ?? item.listing.symbol}
     >
-      <Avatar key={logo?.url ?? "letter"} className="size-5 shrink-0">
-        {logo?.url ? (
-          <AvatarImage src={logo.url} className="bg-white p-0.5" />
-        ) : null}
+      <Avatar key={logo} className="size-5 shrink-0">
+        <AvatarImage src={logo} />
         <AvatarFallback className="text-2xs">
           {item.listing.symbol.slice(0, 1)}
         </AvatarFallback>

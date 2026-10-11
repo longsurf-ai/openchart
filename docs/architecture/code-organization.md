@@ -44,7 +44,6 @@ openchart/
       bar/                    service, provisioner, Hose handler
       symbology/              service, provisioner, business RPC router
       calendar/               service contract, provider routing and router
-      logo/                   service contract and Provider binding provisioning
     agent/                    durable run admission and process-local execution orchestration
       contracts/              pure Message/Part and prompt input contracts
       link-preview/           optional public-page title/description reads; no cache or browser

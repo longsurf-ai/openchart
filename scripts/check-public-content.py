@@ -18,12 +18,6 @@ FORBIDDEN_HEADING = re.compile(
     r"(?im)^#{1,6} .*\b(?:implementation (?:plan|order|workstreams)|roadmap|pending triage|proposal)\b"
 )
 PUBLIC_ENV = {"app/.env.development", "app/.env.production"}
-# These are real market names, not authored internal prose. Keep original aliases.
-MARKET_NAMES = (
-    "\u4e09\u83f1UFJ\u30d5\u30a3\u30ca\u30f3\u30b7\u30e3\u30eb\u30fb\u30b0\u30eb\u30fc\u30d7",
-    "\u5e01\u5b89\u4eba\u751f",
-    "\u725b\u6765",
-)
 
 
 def files(repository):
@@ -66,9 +60,6 @@ for relative in files(ROOT):
         errors.append(f"{name}: machine-specific absolute path")
     if name.endswith(".md") and FORBIDDEN_HEADING.search(text):
         errors.append(f"{name}: internal planning section")
-    if name == "server/data/providers/local/logos/assets/catalog.json":
-        for market_name in MARKET_NAMES:
-            text = text.replace(market_name, "")
     text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda match: chr(int(match[1], 16)), text)
     if name != "scripts/check-public-content.py" and HAN.search(text):
         errors.append(f"{name}: Chinese internal text needs review")

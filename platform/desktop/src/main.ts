@@ -416,12 +416,13 @@ function start(): void {
               if (!file) return new Response("Not found", { status: 404 });
               const response = await net.fetch(pathToFileURL(file).href);
               const headers = new Headers(response.headers);
-              // Limit the page to bundled files and connections to our local backend.
+              // Limit the page to bundled files and connections to our local backend;
+              // images may also come from Clerk avatars and Elbstream market logos.
               headers.set(
                 "Content-Security-Policy",
                 "default-src 'self'; " +
                   `script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' ${clerk.origin} https://challenges.cloudflare.com; ` +
-                  "style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://img.clerk.com; media-src 'self' blob: data:; font-src 'self' data:; " +
+                  "style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://img.clerk.com https://api.elbstream.com; media-src 'self' blob: data:; font-src 'self' data:; " +
                   `connect-src 'self' blob: http://127.0.0.1:${port} ws://127.0.0.1:${port} ${clerk.origin}; ` +
                   "worker-src 'self' blob:; " +
                   "object-src 'none'; frame-src 'self' https://challenges.cloudflare.com; base-uri 'none'; form-action 'self'",
