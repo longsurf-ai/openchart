@@ -76,11 +76,12 @@ export function WorkspaceSwitcher({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           title={selected?.root}
           aria-label={`Browse workspace: ${selected ? workspaceName(selected.root) : "none"}`}
-          className="h-7 min-w-0 justify-start gap-1.5 px-2 font-medium"
+          // Styled like the header's Widgets picker; it fills the row beside Add.
+          className="h-7 min-w-0 flex-1 justify-start gap-1.5 px-2 font-medium"
           onKeyDown={(event) => event.stopPropagation()}
         >
           {label}
