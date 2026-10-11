@@ -1,7 +1,8 @@
 # Dashboard composition
 
 - `dashboard-page.tsx` binds route ID and transport to the Dashboard feature,
-  ChartSelectionProvider and registry. Mounting creates no Resources.
+  ChartSelectionProvider, WidgetIntentProvider and registry; both scopes reset per
+  Dashboard. Mounting creates no Resources.
 - `dashboard-header.tsx` composes PageHeader, the selected Chart symbol and one
   Widgets dropdown from `app/widgets`. The widget catalog and render registry live
   there; feature grid/host components receive the registry through props.

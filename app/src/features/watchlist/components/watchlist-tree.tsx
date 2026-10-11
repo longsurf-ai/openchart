@@ -32,7 +32,9 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@openchart/app/components/ui/context-menu";
+import { useIntent } from "@openchart/app/hooks/use-intent";
 import { logoUrl } from "@openchart/app/lib/logo/logo";
+import { viewChart } from "@openchart/app/lib/widget/intent/intents";
 import { cn } from "@openchart/app/utils/cn";
 
 import type { Watchlist } from "../api/queries";
@@ -81,7 +83,7 @@ function sortRows(
   });
 }
 
-/** Collapsible sections and draggable rows; each drop saves one JSON Patch move. @example <WatchlistTree watchlist={watchlist} metrics={["price"]} /> */
+/** Collapsible sections and draggable rows; each drop saves one JSON Patch move. Clicking a row, or Enter on it, raises ViewChart for its listing. @example <WatchlistTree watchlist={watchlist} metrics={["price"]} /> */
 export function WatchlistTree({
   watchlist,
   metrics,
@@ -90,6 +92,7 @@ export function WatchlistTree({
   metrics: readonly Metric[];
 }) {
   const { save, view, openDialog } = useWatchlistPlacement();
+  const chart = useIntent(viewChart);
   const collapsed = useStore(view, (state) => state.collapsed);
   const sort = useStore(view, (state) => state.sort);
   // Only a sorted view re-renders when quotes change.
@@ -186,6 +189,19 @@ export function WatchlistTree({
           ? [operation]
           : [];
       });
+    },
+    // Whichever widget answers decides where the listing appears.
+    onPrimaryAction: (item) => {
+      const node = item.getItemData();
+      if (node.kind !== "item") return;
+      const { provider, listing } = node.item;
+      void chart.raise({ listing: { provider, listing } });
+    },
+    hotkeys: {
+      customPrimaryAction: {
+        hotkey: "Enter",
+        handler: (_, tree) => tree.getFocusedItem().primaryAction(),
+      },
     },
     indent: INDENT,
     features: [syncDataLoaderFeature, hotkeysCoreFeature, dragAndDropFeature],

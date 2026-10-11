@@ -14,24 +14,17 @@ import {
   chartList,
   chartMutation,
   chartMutationKey,
-  type ChartResource,
 } from "@openchart/app/features/chart/api/queries";
-import { getGridPreset } from "@openchart/app/features/chart/utils/grid-layout";
 import {
   getMainSource,
   replaceListing,
+  targetCell,
 } from "@openchart/app/features/chart/utils/resource";
 import { dashboardQueryOptions } from "@openchart/app/lib/resource/dashboard";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 
 import { ResourceNotice } from "./resource-notice";
 import { SymbolPicker } from "./symbol-picker";
-
-/** The Dashboard's target cell: the focused cell while visible, else the first visible one. @example const cell = targetCell(chart, focusedCells[chart.id]); */
-export function targetCell(chart: ChartResource, cellId?: string) {
-  const visible = chart.cells.slice(0, getGridPreset(chart.preset).capacity);
-  return visible.find((cell) => cell.id === cellId) ?? visible[0];
-}
 
 /** Save a captured chart/cell target; changing focus never retargets an open picker. @example <SymbolControl dashboardId={dashboardId} chartId={chartId} cellId={cellId} transport={transport} /> */
 export function SymbolControl({

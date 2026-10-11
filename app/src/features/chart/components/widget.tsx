@@ -17,6 +17,7 @@ import { SymbolPicker } from "./symbol-picker";
 import { ResourceNotice } from "./resource-notice";
 import type { WidgetDefinition } from "@openchart/app/lib/widget/widget";
 
+import { useViewChart } from "../hooks/use-view-chart";
 import { FocusedDrawingToolbar } from "./drawing-toolbar";
 import { ChartGrid } from "./grid";
 import { ChartToolbar } from "./toolbar";
@@ -41,9 +42,15 @@ function ChartPlacement({ children }: PropsWithChildren) {
     return <CreateChart dashboardId={dashboardId} transport={transport} />;
   return (
     <ChartGridProvider key={chartId} chartId={chartId} transport={transport}>
-      {children}
+      <ChartIntents>{children}</ChartIntents>
     </ChartGridProvider>
   );
+}
+
+/** Answer Dashboard intents only while a saved Chart's grid is mounted. */
+function ChartIntents({ children }: PropsWithChildren) {
+  useViewChart();
+  return <>{children}</>;
 }
 
 function CreateChart({

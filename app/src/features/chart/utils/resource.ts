@@ -12,6 +12,12 @@ import {
 
 import { getGridPreset, GRID_PRESETS, type GridPreset } from "./grid-layout";
 
+/** The Dashboard's target cell: the focused cell while visible, else the first visible one. @example const cell = targetCell(chart, focusedCells[chart.id]); */
+export function targetCell(chart: ChartResource, cellId?: string) {
+  const visible = chart.cells.slice(0, getGridPreset(chart.preset).capacity);
+  return visible.find((cell) => cell.id === cellId) ?? visible[0];
+}
+
 /** The main binding, independent of pane or series order. */
 export function getMainSeries(cell: CellDefinition) {
   const series = cell.panes

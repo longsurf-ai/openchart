@@ -1,6 +1,6 @@
 # Dashboard and Widget Architecture
 
-Status: as of 2026-10-09, Dashboard placements, the Chart widget, the Workspace file widget, and the Watchlist widget are implemented. This document records the implementation boundaries and verification scope.
+Status: as of 2026-10-11, Dashboard placements, the Chart widget, the Workspace file widget, the Watchlist widget, and cross-widget intents (Watchlist rows raise ViewChart) are implemented. This document records the implementation boundaries and verification scope.
 Metabase serves only as a reference for responsibility boundaries; controls, typography, theme, and interaction styling follow the [app design guidelines](../../app/DESIGN.md).
 
 ## 1. Data model: separate user data from frontend presentation
@@ -252,7 +252,31 @@ The Context only provides identity, the existing transport, the card lease, and 
 The app overrides `WorkspaceFileNavigation` in the Chart widget's Provider: both Open code in the Indicator legend and the code entry in the Indicator picker obtain the Dashboard's single Workspace placement (which shows all registered directories) through `placeBeside(workspaceWidget)`, and before the save completes they write the file into the per-placement request table in `lib/workspace/workspace.ts` (the latest request wins for a given placement). Once mounted, the Workspace widget opens the file, scrolls it into view, and clears the request, so a repeated request re-activates the Tab while a remount does not reopen it. Other places still navigate to the full-page Workspace.
 QueryClient, AppTransport, and FeedProvider keep an application-connection-level lifecycle.
 
-Main owners: `app/widgets/` composes the cross-feature widget catalog and gallery; within it, `widget-registry.ts` is the only place that imports each feature's widget definition. The Dashboard route/header uses this catalog, while placement writes stay owned by the Dashboard. `features/dashboard/components/widget-host.tsx`
+### Cross-widget intents
+
+Widgets that never import each other cooperate through intents, after [FDC3](https://fdc3.finos.org/docs/intents/spec):
+a source states what the user wants, one resolution policy picks the answering placement, and the handler decides how.
+The source never names its target, and the policy lives in one place instead of in each pair of widgets.
+
+```mermaid
+flowchart LR
+  row["Watchlist row · click / Enter"] -- "raise ViewChart {listing}" --> router
+  router["IntentRouter · one per Dashboard<br/>resolver: not the requester, then most recently active"] -- "deliver (latest wins)" --> chart
+  chart["Chart placement · useViewChart"] --> write["Chart mutation → target cell, linked cells follow"]
+  host["WidgetHost · pointer/focus in card"] -. "activate(placementId)" .-> router
+```
+
+- `lib/widget/intent/intents.ts` declares each intent once: an FDC3-style name, a plain-data payload and a delivery.
+  `ViewChart` carries a `ProviderListing` and uses `latest` delivery, so rapid picks apply the running one and only the newest waiting one.
+- `lib/widget/intent/intent.ts` is React-free: registrations, activation order and one delivery lane per handler.
+  It stores no context and never broadcasts, so it is not a business event bus; Resources remain the only state.
+  Raising never rejects: outcomes are `handled`, `unavailable`, `superseded` or `failed`, and handlers report their own failures.
+- `DashboardPage` mounts one `WidgetIntentProvider` per Dashboard beside `ChartSelectionProvider`; `WidgetHost` activates a placement on pointer or focus inside its card.
+  `hooks/use-intent.ts` gives sources `useIntent` (availability plus `raise`) and handlers `useIntentHandler`, registered for the containing placement only.
+- The Chart answers `ViewChart` while a saved Chart's grid is mounted: it fetches capabilities, then saves through the Chart's serialized mutation into the header's target cell (focused while visible, else first visible), re-read when the write applies. A listing already shown saves nothing.
+- Placing no Chart leaves `ViewChart` unavailable, and a row click changes nothing. Link groups (colour channels) would later replace only the resolver: sources and handlers stay unchanged.
+
+Main owners: `lib/widget/intent/` owns intent declarations and routing (see Cross-widget intents); `app/widgets/` composes the cross-feature widget catalog and gallery; within it, `widget-registry.ts` is the only place that imports each feature's widget definition. The Dashboard route/header uses this catalog, while placement writes stay owned by the Dashboard. `features/dashboard/components/widget-host.tsx`
 handles composition; `lib/widget/widget.tsx` holds the contract and Context, `hooks/use-widget.ts` reads the Context, and `features/dashboard/components/widget-card.tsx`
 holds the generic shell. The Chart adapter lives in `features/chart/components/widget.tsx`; features do not import each other.
 
@@ -260,7 +284,7 @@ Dashboard page composition is concentrated in `app/dashboard/`: `workspace.tsx` 
 and owns shared selection, save state, and recovery; `dashboard-header.tsx` composes page actions; `dashboard-grid.tsx` handles outer geometry and gestures.
 `widget-gallery.tsx` renders a DropdownMenu from the same widget catalog. Picking an item adds it immediately; DashboardView captures the current layout/revision and owns the mutation, pending, and recovery state in one place. The first widget fills the viewport; the second splits the width evenly with the first, and both rectangles are submitted in the same save; from the third on, widgets are appended at the bottom at their default size without changing the existing layout.
 Chart's `widget.tsx` defines the Provider, Controls and Content. The Provider resolves the Chart by dashboardId and offers symbol selection to create configuration when absent.
-The Watchlist widget has a Provider and Content but no Controls: its card chrome keeps only drag and close, and its own header owns switching, rename, new/delete watchlist, add symbol, new section, and columns. The gallery adds an unbound browser immediately, like Workspace. Selection, collapsed sections and sorting use a placement-scoped Zustand store persisted in localStorage; switching lists never writes Dashboard. Clearing storage forgets the selection. The browser selects the first available list when no selection remains, and shows a creation entry when none exist. A saved selection is read independently of the cursor-paginated menu, so an unloaded page never implies deletion. Successful deletion and confirmed missing details use the same fallback; failed deletes preserve selection. New lists copy the current columns, or use price/change/change% when starting empty. Watchlists remain independent Resources: removing a placement or Dashboard keeps their contents. Sections, rows and columns are edited with JSON Patch (a drag is one `move`); quotes come from each row's daily bars through Feed.
+The Watchlist widget has a Provider and Content but no Controls: its card chrome keeps only drag and close, and its own header owns switching, rename, new/delete watchlist, add symbol, new section, and columns. The gallery adds an unbound browser immediately, like Workspace. Selection, collapsed sections and sorting use a placement-scoped Zustand store persisted in localStorage; switching lists never writes Dashboard. Clearing storage forgets the selection. The browser selects the first available list when no selection remains, and shows a creation entry when none exist. A saved selection is read independently of the cursor-paginated menu, so an unloaded page never implies deletion. Successful deletion and confirmed missing details use the same fallback; failed deletes preserve selection. New lists copy the current columns, or use price/change/change% when starting empty. Watchlists remain independent Resources: removing a placement or Dashboard keeps their contents. Sections, rows and columns are edited with JSON Patch (a drag is one `move`); quotes come from each row's daily bars through Feed. Clicking a row, or Enter on it, raises `ViewChart` for its listing.
 
 ChartGrid and WorkspaceView each own their content. The Workspace widget shows all registered directories and needs no placement reference; DashboardView adds it using the same placement mutation, pending, and recovery state; it does not copy the editor implementation or create a second file store. The shared exit guard reads each Workspace's live Tab flags; when a Host is removed, only the corresponding placement is checked.
 
@@ -348,6 +372,7 @@ Generate and check `schema.json`, `schema.gen.ts`, and `migration.gen.ts`. The n
 - [x] `just check` passes on Node 24; the backend-to-Query geometry save benchmark covers 1/16/64 placements and 0/50/150ms per-request delay; see the data above.
 - [ ] Paint frame rate with many Charts running at once and the release-to-stable-frame p95 have not been measured specifically; the current benchmark makes no performance promise for that scope.
 - [x] The Workspace file widget reuses the files page directly, with disk storage and the unified read/write API.
+- [x] Cross-widget intents: router tests cover resolution, both deliveries, failures and handler lifetime; a Dashboard test clicks a real Watchlist row into the Chart placement (rapid picks save only the first and the latest). An isolated Electron run showed exactly one Chart write per row click or Enter, and none while adding rows.
 
 The forward migration to unique widget kinds preserves the first placed owned Chart
 (or the oldest Chart when none is placed) on the original Dashboard. Extra Charts
