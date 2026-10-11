@@ -331,8 +331,9 @@ recognizes the Provider's own declarations by identity, and serves
 `feed.series.select({id, from?, to?})` as a native DataFrame. The browser's
 `useDataset` keys its read by Feed version and by the Workspace file, so a
 re-declaration or a rewritten file refetches. Charts bind columns by value as
-`{kind: "dataset", datasetId, output}` series and show each bar's latest
-observation known by its bounded interval end. Alignment carries pre-window
+`{kind: "dataset", datasetId, output}` series and show each column's latest
+finite value by the bar's bounded interval end. Missing cells never discard
+another column's update. Alignment carries pre-window
 observations, caps intervals by resolution and the next bar open, and excludes
 observations beyond the current clock. Months use the UTC calendar boundary.
 Each Dataset has one collection action per chart cell, shared by its columns.

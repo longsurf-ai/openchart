@@ -119,11 +119,13 @@ export function DatasetSource({
       Date.now(),
     );
     return bindings.map((binding, index) => {
-      let held: number | null = null;
       const data = rows.map((row) => {
         const value = row[binding.output];
-        if (typeof value === "number" && Number.isFinite(value)) held = value;
-        return Object.freeze({ time: row.time / 1000, value: held });
+        return Object.freeze({
+          time: row.time / 1000,
+          value:
+            typeof value === "number" && Number.isFinite(value) ? value : null,
+        });
       });
       const defaults = defaultIndicatorOutputSeriesOptions({
         definitionName: name,
@@ -164,16 +166,7 @@ export function DatasetSource({
         data,
       };
     });
-  }, [
-    dataset.data,
-    mainData,
-    chart,
-    bindings,
-    name,
-    prefs,
-    datasetId,
-    cell.resolution,
-  ]);
+  }, [dataset.data, mainData, chart, bindings, name, prefs, cell.resolution]);
   const failure = resource.error ?? dataset.error;
   // A failed Resource read can always be retried; Feed failures say so themselves.
   const retryable = dataset.error

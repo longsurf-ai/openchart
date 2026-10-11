@@ -53,6 +53,12 @@ describe("decodeRows", () => {
     ["date,cpi,note\nyesterday,1,a", /Row 2: "date"/],
     ["date,cpi,note\n2024-01-01,1.2.3,a", /Row 2: "cpi" must be a number/],
     ["date,cpi,note\n2024-01-01,1", /Row 2 has 2 fields/],
+    ["date,cpi,cpi,note\n2024-01-01,1,2,a", /header repeats "cpi"/],
+    ["date,cpi, cpi ,note\n2024-01-01,1,2,a", /header repeats "cpi"/],
+    [
+      "date, date ,cpi,note\n2024-01-01,2024-02-01,1,a",
+      /header repeats "date"/,
+    ],
   ])("rejects %j", (text, message) => {
     expect(() => decodeRows(text, cpi)).toThrow(message);
   });

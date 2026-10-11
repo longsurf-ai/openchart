@@ -21,6 +21,20 @@ test("seeds a sparse window from earlier observations and excludes future rows",
   expect(rows.map((row) => row.time)).toEqual([day, 2 * day, 3 * day, 4 * day]);
 });
 
+test("preserves independently updated columns before and within each bar", () => {
+  const frame = fromPoints({}, [
+    { time: 0, alpha: 1, beta: null },
+    { time: 1, alpha: null, beta: 2 },
+    { time: day + 1, alpha: 3, beta: null },
+    { time: day + 2, alpha: null, beta: 4 },
+    { time: day + 3, alpha: NaN, beta: null },
+  ]);
+  expect(alignDatasetToBars([10, day], frame, "1d", 3 * day)).toEqual([
+    { time: 10, alpha: 1, beta: 2 },
+    { time: day, alpha: 3, beta: 4 },
+  ]);
+});
+
 test("bounds a single unfinished bar by the clock and its exclusive close", () => {
   const frame = fromPoints({}, [
     { time: 0, value: 1 },

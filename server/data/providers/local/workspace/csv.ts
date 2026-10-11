@@ -73,7 +73,8 @@ function parseValue(
 
 /**
  * Reads the declared time column and observation columns from CSV text.
- * Headers are trimmed and matched exactly; other columns are ignored and
+ * Headers are trimmed and matched exactly; a declared name must appear once.
+ * Other columns are ignored and
  * blank lines skipped. Times may be epoch milliseconds or ISO 8601 (a date
  * alone is UTC midnight). Rows are returned in ascending time order, since
  * collected files are often newest first; repeated times remain an error for
@@ -96,6 +97,10 @@ export function decodeRows(
   const indexOf = (name: string) => {
     const index = names.indexOf(name);
     if (index < 0) throw new Error(`The header has no "${name}" column`);
+    if (names.lastIndexOf(name) !== index)
+      throw new Error(
+        `The header repeats "${name}"; declared columns must be unambiguous`,
+      );
     return index;
   };
   const { column: timeColumn } = declaration.time;

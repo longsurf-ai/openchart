@@ -9,7 +9,7 @@ Publishes one runtime timeseries Dataset per `workspace_dataset` Resource.
 - File edits never touch the lifecycle: every select reads the CSV now.
   Missing Workspaces or files fail `Dataset.NotFound`; text that does not match
   the declaration fails `Dataset.InvalidResult` with the row in `cause`.
-- `csv.ts` owns RFC 4180 parsing and declared decoding: trimmed headers,
+- `csv.ts` owns RFC 4180 parsing and declared decoding: trimmed, unambiguous declared headers,
   empty cells as null, epoch-millisecond or ISO 8601 times, rows sorted by
   time. The declaration's own frame rejects repeated times.
 - `datasets.ts` records owned declarations by identity; `feed.ts` binds only
