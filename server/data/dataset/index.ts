@@ -2,7 +2,7 @@
 export * from "./definition";
 export { k } from "./key";
 export type { KeyKind, KeySchema } from "./key";
-export { list as listDefinitions } from "./registry";
+export { list as listDefinitions, unregister } from "./registry";
 export { DatasetError, DatasetFailure, DatasetReason } from "./errors";
 export * as DatasetReasons from "./reasons";
 export { makeDataset } from "./dataset";

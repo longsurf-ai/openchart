@@ -1,20 +1,24 @@
 // Purpose: Give dashboard widgets shared surfaces and a contextual, persistent toolbar.
 import type { ReactNode } from "react";
 
-/** Fill the placement with the card itself; contextual controls never reserve space. @example <WidgetCard title="Chart">{children}</WidgetCard> */
+/** Fill the placement with the card itself; contextual controls never reserve space. Any pointer press or focus inside the card calls `onActivate`, before the target handles it. @example <WidgetCard title="Chart" onActivate={activate}>{children}</WidgetCard> */
 export function WidgetCard({
   title,
   children,
   held = false,
+  onActivate,
 }: {
   title: string;
   children: ReactNode;
   held?: boolean;
+  onActivate?: () => void;
 }) {
   return (
     <section
       aria-label={title}
       data-controls-held={held || undefined}
+      onPointerDownCapture={onActivate}
+      onFocusCapture={onActivate}
       className="widget-card relative size-full min-h-0 min-w-0 rounded-lg bg-background"
     >
       {children}

@@ -5,9 +5,10 @@ Owns durable acceptance provenance with a complete backend Store and intrinsic r
 - All domain fields are server-managed; scheduleId is a list key. readOnly hides
   intrinsic mutations; get/list and ensureOccurrence remain public. Derive entity/Store types from
   owned schemas; empty writable bodies accept no partial provenance.
-- Required Schedule/Run FKs preserve identity. Deleting Schedule cascades Occurrences;
+- Schedule/Run FKs preserve identity; script collections record no Run, and no
+  Session. Deleting Schedule cascades Occurrences;
   deleting Occurrence never deletes Run/Session. Referenced Run deletion is restricted.
-- sessionId derives from Run through a required join, never a duplicate column.
+- sessionId derives from Run through a join, never a duplicate column.
   Explicit backend sessionId must match that Run or roll back.
 - scheduleId/fireAt and agentRunId are independently unique. fireAt is planned time;
   envelope createdAt records acceptance, with no second acceptance timestamp.

@@ -1,10 +1,11 @@
-// Purpose: Owns the Schedule Resource table and recurrence schemas; the target is the shared AgentPromptTarget.
+// Purpose: Owns the Schedule Resource table, its target union and recurrence schemas.
 
 import { AgentPromptTarget } from "@openchart/server/agent/contracts/agent-prompt-target";
 import {
   resourceEnvelopeColumns,
   resourceEnvelopeChecks,
 } from "@openchart/server/lib/resource/envelope-columns";
+import { WorkspaceDatasetId } from "@openchart/server/resources/workspace-dataset/schema";
 import { Cron } from "croner";
 import { desc, sql } from "drizzle-orm";
 import {
@@ -16,9 +17,24 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { Schema, Struct } from "effect";
 
-/** Scheduled execution stores the shared prompt target; Triggers use the same shape. */
-export const AgentScheduleTarget = AgentPromptTarget;
-/** Complete scheduled prompt and optional feature binding. */
+/** Runs one Workspace Dataset's own collection, whether an Agent prompt or a script. */
+export const DataCollectionTarget = Schema.Struct({
+  kind: Schema.Literal("data_collection"),
+  datasetId: WorkspaceDatasetId,
+})
+  .mapFields(Struct.map(Schema.mutableKey))
+  .annotate({ parseOptions: { onExcessProperty: "error" } });
+
+/**
+ * What a fire starts: the shared Agent prompt target Triggers also use, or a
+ * Workspace Dataset collection. Data migrations that rewrite stored prompts
+ * must skip `data_collection` targets.
+ */
+export const AgentScheduleTarget = Schema.Union([
+  AgentPromptTarget,
+  DataCollectionTarget,
+]);
+/** Complete scheduled target. */
 export type AgentScheduleTarget = typeof AgentScheduleTarget.Type;
 
 function cronFieldCount(expression: string): number {
@@ -141,8 +157,14 @@ export const agentSchedules = sqliteTable(
       sql`json_type(${table.target}) = 'object'`,
     ),
     check(
-      "chk_agent_schedules_model",
-      sql`COALESCE(
+      "chk_agent_schedules_target",
+      sql`CASE json_extract(${table.target}, '$.kind')
+      WHEN 'data_collection' THEN COALESCE(
+        json_type(${table.target}, '$.datasetId') = 'text'
+        AND length(json_extract(${table.target}, '$.datasetId')) > 0,
+        0
+      )
+      ELSE COALESCE(
         json_type(${table.target}, '$.prompt.model') = 'object'
         AND json_type(${table.target}, '$.prompt.model.providerID') = 'text'
         AND length(json_extract(${table.target}, '$.prompt.model.providerID')) > 0
@@ -164,7 +186,8 @@ export const agentSchedules = sqliteTable(
           '$.selectedVariant'
         )) = '{}',
         0
-      )`,
+      )
+      END`,
     ),
     check(
       "chk_agent_schedules_recurrence_shape",

@@ -1,5 +1,8 @@
 // Purpose: Verifies scheduled admission, independent commits, retries, timing, and interruption through Scheduler.Service.
 
+import { ResourceStateInvalid } from "@openchart/server/lib/resource/errors";
+import { WorkspaceDatasetId } from "@openchart/server/resources/workspace-dataset/schema";
+import { Collection } from "@openchart/server/collection";
 import { SessionId } from "@openchart/server/agent/contracts/session";
 import { AgentRunStore } from "@openchart/server/agent/run/store";
 import { Publisher } from "@openchart/server/agent/publisher/publisher";
@@ -44,6 +47,7 @@ const cron = {
 };
 type Services =
   | Scheduler.Service
+  | Collection.Service
   | Database.Service
   | AgentRunStore.Service
   | Session.Service
@@ -51,6 +55,11 @@ type Services =
   | Events.Service
   | Publisher.Service
   | Scope.Scope;
+
+// Collection itself is tested separately; dispatch only needs what it started.
+const collect = vi.fn<Collection.Interface["collect"]>(() =>
+  Effect.succeed({ kind: "script" as const }),
+);
 
 function run<A, E>(program: Effect.Effect<A, E, Services>) {
   const database = Layer.unwrap(
@@ -69,6 +78,7 @@ function run<A, E>(program: Effect.Effect<A, E, Services>) {
       wake: vi.fn<SessionExecution.Interface["wake"]>(() => Effect.void),
       interrupt: () => Effect.void,
     })),
+    Layer.succeed(Collection.Service, { collect }),
   );
   const layer = Scheduler.layer.pipe(
     Layer.provideMerge(
@@ -170,6 +180,56 @@ test.each([true, false])(
       }),
     ),
 );
+
+test("a data collection fire starts once and records an Occurrence without a Run", () =>
+  run(
+    Effect.gen(function* () {
+      collect.mockClear();
+      const datasetId = WorkspaceDatasetId.make("wsd_scheduled");
+      const schedule = yield* create({
+        recurrence: cron,
+        nextFireAt: 60_000,
+        target: { kind: "data_collection", datasetId },
+      });
+      yield* start();
+      yield* TestClock.adjust("60 seconds");
+      expect(collect).toHaveBeenCalledExactlyOnceWith(
+        datasetId,
+        `schedule:${schedule.id}:60000`,
+      );
+      expect((yield* occurrences(schedule)).items).toMatchObject([
+        { fireAt: 60_000, agentRunId: null, sessionId: null },
+      ]);
+      // The cursor moved on, and a rescan of the accepted fire starts nothing.
+      expect((yield* read(schedule)).nextFireAt).toBe(120_000);
+    }),
+  ));
+
+test("a collection that cannot run is accepted without work instead of retried", () =>
+  run(
+    Effect.gen(function* () {
+      collect.mockImplementationOnce(() =>
+        Effect.fail(
+          new ResourceStateInvalid({
+            resource: "workspace_dataset",
+            reason: "its collection script changed since it was approved",
+            issues: [],
+          }),
+        ),
+      );
+      const schedule = yield* create({
+        target: {
+          kind: "data_collection",
+          datasetId: WorkspaceDatasetId.make("wsd_unapproved"),
+        },
+      });
+      yield* start();
+      yield* TestClock.adjust("30 seconds");
+      expect((yield* occurrences(schedule)).items).toMatchObject([
+        { fireAt: 0, agentRunId: null },
+      ]);
+    }),
+  ));
 
 test("a manual fire does not exhaust a future one-time fire", () =>
   run(

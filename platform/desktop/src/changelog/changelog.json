@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.1.14",
+    "date": "2026-10-11",
+    "items": [
+      "Ask the Agent to collect CSV data, plot it on charts, and refresh it on demand or on a schedule.",
+      "Add watchlists to dashboards with nested sections, sortable quotes, and configurable columns.",
+      "Cloud charts in Extended or 24 hr mode now shade pre-market and after-hours sessions.",
+      "Fixed incomplete Yahoo Finance data appearing complete; live charts retry failed updates automatically.",
+      "Dashboards now allow one widget of each kind; extra widgets move to new dashboards without losing saved charts.",
+      "Watchlist and alert symbols now use full-size logo images."
+    ]
+  },
+  {
     "version": "0.1.13",
     "date": "2026-10-06",
     "items": [

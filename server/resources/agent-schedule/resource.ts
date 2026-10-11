@@ -12,7 +12,7 @@ export { advanceSchedule } from "@openchart/server/resources/agent-schedule/tran
 export const agentScheduleResource = defineResource({
   name: "agent_schedule",
   description:
-    "A saved schedule for an Agent prompt, with enabled state and either a one-time fire or a cron recurrence with a time zone. The server maintains nextFireAt; accepted fires are recorded as agent_schedule_occurrence Resources.",
+    "A saved schedule for an Agent prompt or a workspace_dataset collection, with enabled state and either a one-time fire or a cron recurrence with a time zone. The server maintains nextFireAt; accepted fires are recorded as agent_schedule_occurrence Resources.",
   entity: AgentScheduleEntity,
   store: agentScheduleStore,
 });

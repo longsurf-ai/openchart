@@ -15,6 +15,7 @@ Owns Dataset access, the observable Catalog and data Provider composition. See
   only their own contribution; unchanged sets preserve snapshot identity.
 - Catalog has no `get`: find a Dataset in `list()`/`watch()` by Definition
   identity. Duplicate or undeclared contributions are wiring defects: Catalog
-  dies rather than overwrite valid bindings.
+  dies rather than overwrite valid bindings. It checks the live registry and
+  Provider definitions, so runtime declarations publish after construction.
 - Local Dataset schemas/connections stay outside application migrations.
 - Common and browser code consume Feed contracts; they never import this module.

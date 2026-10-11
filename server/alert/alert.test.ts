@@ -9,6 +9,7 @@ import { Database } from "@openchart/server/db";
 import { Events, SubscriberOverflowError } from "@openchart/server/events";
 import { readBarsHistory } from "@openchart/server/feed/bar/history";
 import { calendarFeed } from "@openchart/server/feed/calendar/calendar";
+import { seriesFeed } from "@openchart/server/feed/series/series";
 import { Feed } from "@openchart/server/feed/service";
 import { Transactor } from "@openchart/server/lib/resource";
 import * as ResourceEvents from "@openchart/server/lib/resource/events";
@@ -162,6 +163,7 @@ function environment(events = Events.layer) {
                 search: () => Effect.succeed([]),
               },
               calendar: calendarFeed(),
+              series: seriesFeed(),
             }),
         }),
       ),

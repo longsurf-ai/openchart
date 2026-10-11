@@ -164,7 +164,10 @@ async function verifySettings(page: Page) {
   await page
     .getByRole("textbox", { name: "Authorization code for Codex" })
     .fill("smoke-code");
-  await page.getByRole("button", { name: "Send code" }).click();
+  await page
+    .getByRole("region", { name: "Codex", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
   await expect(
     page
       .getByRole("region", { name: "Codex", exact: true })
@@ -234,6 +237,7 @@ async function verifySettings(page: Page) {
   const workspaceRoot = join(home, "workspaces/default");
   assert.deepEqual((await readdir(workspaceRoot)).sort(), [
     "indicators",
+    "studies",
     "workflows",
   ]);
   await writeFile(
@@ -285,6 +289,7 @@ export default defineWorkflow({
   assert.equal(workflowChildren, 1);
   assert.deepEqual((await readdir(workspaceRoot)).sort(), [
     "indicators",
+    "studies",
     "workflows",
     "workspace-smoke.workflow.ts",
   ]);
@@ -433,6 +438,44 @@ async function launch(): Promise<Page> {
   return page;
 }
 
+/** Completes the first-run pages before checking the ordinary chat shell. */
+async function completeOnboarding(page: Page) {
+  const agents = page.getByRole("dialog", {
+    name: "Connect your agent",
+    exact: true,
+  });
+  await expect(agents).toBeVisible({ timeout: 30_000 });
+  await agents
+    .getByRole("button", { name: "Skip for now", exact: true })
+    .click();
+  const notifications = page.getByRole("dialog", {
+    name: "Turn on notifications",
+    exact: true,
+  });
+  await notifications
+    .getByRole("button", { name: "Continue", exact: true })
+    .click();
+  const cards = [
+    "Watch the market from your dashboard",
+    "Make the chart yours",
+    "Ask the Agent for an indicator",
+    "All your agents, in one place",
+    "Alerts put agents to work",
+    "Star us on GitHub",
+  ];
+  for (const [index, title] of cards.entries()) {
+    await page
+      .getByRole("dialog", { name: title, exact: true })
+      .getByRole("button", {
+        name: index === cards.length - 1 ? "Done" : "Next",
+        exact: true,
+      })
+      .click();
+  }
+  await expect(page.locator(".onboarding-card")).toHaveCount(0);
+  await page.goto("openchart://app/app");
+}
+
 /** Checks Mac header spacing and clicks its controls with the sidebar open and closed. */
 async function verifyMacHeader(page: Page, route: "chat" | "settings") {
   if (process.platform !== "darwin") return;
@@ -512,6 +555,7 @@ try {
   }
   await writeFile(join(home, "settings.json"), JSON.stringify({}));
   let page = await launch();
+  await completeOnboarding(page);
 
   await expect(
     page.getByRole("textbox", { name: "Message", exact: true }),
@@ -719,7 +763,7 @@ try {
     stopped,
     settings,
     tests:
-      "chat shell, settings, native window buttons, draggable headers, clickable header controls, sidebar collapse/expand spacing, theme persistence, no mock worker, models, SSE ready, Hose protocol, hosted backend, new chat, reload, graceful backend exit, restart with persisted chat, renderer isolation",
+      "first-run onboarding, chat shell, settings, native window buttons, draggable headers, clickable header controls, sidebar collapse/expand spacing, theme persistence, no mock worker, models, SSE ready, Hose protocol, hosted backend, new chat, reload, graceful backend exit, restart with persisted chat, renderer isolation",
   };
   await writeFile(
     join(artifacts, "smoke-result.json"),

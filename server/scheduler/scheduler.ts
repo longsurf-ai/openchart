@@ -8,6 +8,7 @@ export * as Scheduler from "./scheduler";
 
 import { SessionId } from "@openchart/server/agent/contracts/session";
 import { admitPromptTarget } from "@openchart/server/agent/session/admit-prompt-target";
+import { Collection } from "@openchart/server/collection";
 import { Transactor, Transition } from "@openchart/server/lib/resource";
 import {
   advanceSchedule,
@@ -50,24 +51,83 @@ export class Service extends Context.Service<Service, Interface>()(
   "@openchart/server/Scheduler",
 ) {}
 
+const record = (
+  schedule: AgentSchedule,
+  fireAt: number,
+  run?: { readonly id: string; readonly sessionID: string },
+) =>
+  Transactor.run(
+    agentScheduleOccurrenceResource.transitions.ensureOccurrence({
+      scheduleId: schedule.id,
+      fireAt,
+      agentRunId: run?.id ?? null,
+      sessionId: run ? SessionId.make(run.sessionID) : null,
+    }),
+  );
+
+// The Dataset, its collection or its script is gone or unapproved: retrying
+// cannot help, so the fire is accepted without work. Collection reports
+// script problems to Monitoring; storage failures still retry.
+const skipped = (schedule: AgentSchedule, fireAt: number) => (error: unknown) =>
+  Effect.logWarning("Scheduled collection skipped", {
+    scheduleId: schedule.id,
+    fireAt,
+    error,
+  }).pipe(Effect.as(undefined));
+
 const dispatch = Effect.fn("Scheduler.dispatch")(function* (
   schedule: AgentSchedule,
   fireAt: number,
 ) {
-  const run = yield* admitPromptTarget({
-    intent: `schedule:${schedule.id}:${fireAt}`,
-    title: schedule.name,
-    binding: schedule.target.binding,
-    input: schedule.target.prompt,
-  });
-  return yield* Transactor.run(
-    agentScheduleOccurrenceResource.transitions.ensureOccurrence({
-      scheduleId: schedule.id,
-      fireAt,
-      agentRunId: run.id,
-      sessionId: SessionId.make(run.sessionID),
-    }),
-  );
+  const intent = `schedule:${schedule.id}:${fireAt}`;
+  const target = schedule.target;
+  switch (target.kind) {
+    case "agent_prompt":
+      return yield* record(
+        schedule,
+        fireAt,
+        yield* admitPromptTarget({
+          intent,
+          title: schedule.name,
+          binding: target.binding,
+          input: target.prompt,
+        }),
+      );
+    case "data_collection": {
+      // A script has no Run whose intent replays a retry, so an accepted
+      // Occurrence is what proves this fire already started.
+      // ponytail: a crash between starting a script and recording it reruns
+      // it once; collections rewrite whole files, so the rerun is harmless.
+      const accepted = (yield* Transactor.run(
+        agentScheduleOccurrenceResource.transitions.listAll({
+          filter: { scheduleId: schedule.id },
+        }),
+      )).find((occurrence) => occurrence.fireAt === fireAt);
+      if (accepted) return accepted;
+      const started = yield* (yield* Collection.Service)
+        .collect(target.datasetId, intent)
+        .pipe(
+          Effect.catchTags({
+            "Resource.NotFound": skipped(schedule, fireAt),
+            "Resource.StateInvalid": skipped(schedule, fireAt),
+            WorkspaceUnknown: skipped(schedule, fireAt),
+            WorkspaceMissing: skipped(schedule, fireAt),
+            WorkspacePathInvalid: skipped(schedule, fireAt),
+            EntryMissing: skipped(schedule, fireAt),
+          }),
+        );
+      return yield* record(
+        schedule,
+        fireAt,
+        started?.kind === "agent_prompt"
+          ? { id: started.runId, sessionID: started.sessionId }
+          : undefined,
+      );
+    }
+    default:
+      // A new target kind fails to compile here instead of silently doing nothing.
+      return target satisfies never;
+  }
 });
 
 const runNow = Effect.fn("Scheduler.runNow")(function* (id: AgentScheduleId) {

@@ -72,6 +72,7 @@ test("exposes the built-in catalog and executes Echo", async () => {
     "symbology_search",
     "publish_post",
     "market_data",
+    "dataset_select",
     "tea_check",
     "tea_run",
   ]);
@@ -105,6 +106,7 @@ test("shares initialization within a service while isolating returned catalogs a
       "symbology_search",
       "publish_post",
       "market_data",
+      "dataset_select",
       "tea_check",
       "tea_run",
     ]);

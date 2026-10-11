@@ -57,6 +57,8 @@ const seriesColumns = createSelectSchema(chartSeriesTable, {
   marketSourceId: () => ChartMarketSourceId,
   // An Indicator Resource named by value; its Resource owns the ID shape.
   indicatorId: () => Schema.NonEmptyString,
+  // A Workspace Dataset Resource named by value, like an Indicator.
+  datasetId: () => Schema.NonEmptyString,
   output: (schema) => schema.check(Schema.isMinLength(1)),
 });
 const linkColumns = createSelectSchema(chartLinkTable, {
@@ -95,8 +97,8 @@ const [priceOutput, volumeOutput, volumeProfileOutput] = CHART_MARKET_OUTPUTS;
 /**
  * One display binding. Storage's exclusive nullable source columns become a
  * tagged union. `output` names what the binding draws from its source: a
- * market source's price, volume or volume profile, or an indicator's stable
- * output name. Only a market price binding can have the main role, and only a
+ * market source's price, volume or volume profile, an indicator's stable
+ * output name, or a Workspace Dataset column. Only a market price binding can have the main role, and only a
  * volume profile binding carries settings; no branch contains renderer data
  * or styles.
  */
@@ -143,9 +145,19 @@ export const ChartSeries = Schema.Union([
       output: seriesColumns.fields.output,
     }),
   }),
+  Schema.Struct({
+    id: seriesColumns.fields.id,
+    role: normalRole,
+    source: Schema.Struct({
+      kind: Schema.Literal("dataset"),
+      datasetId: seriesColumns.fields.datasetId.members[0],
+      // One declared column of the Workspace Dataset.
+      output: seriesColumns.fields.output,
+    }),
+  }),
 ]);
 
-/** A market or indicator-output display binding. */
+/** A market, indicator-output or Workspace Dataset column display binding. */
 export type ChartSeries = typeof ChartSeries.Type;
 
 /** A pane always owns at least one display binding, even while its data is unavailable. */

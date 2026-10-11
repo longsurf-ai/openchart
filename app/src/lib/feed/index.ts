@@ -4,6 +4,7 @@ export type {
   IBarsFeed,
   ISymbologyFeed,
   ICalendarFeed,
+  ISeriesFeed,
   RequestOptions,
 } from "./client";
 export { FeedTransport } from "./transport";

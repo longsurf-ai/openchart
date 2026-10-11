@@ -18,13 +18,11 @@ import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { Effect } from "effect";
 import * as tar from "tar";
-import {
-  MODEL_PROVIDER_IDS,
-  type NativeProviderID,
-} from "@openchart/models/model-tiers";
+import type { NativeProviderID } from "@openchart/models/model-tiers";
 import {
   PROVIDER_MANIFEST,
   type RuntimeArtifact,
+  type RuntimeManifest,
 } from "@openchart/server/models/onboarding/manifest";
 import { SetupFailed } from "@openchart/server/models/onboarding/errors";
 
@@ -47,12 +45,13 @@ async function exists(filename: string) {
  * A completed directory is immutable; its identity includes every manifest field.
  * @example const installations = createInstallations(path.join(home, "model-providers"));
  */
-export function createInstallations(
+export function createInstallations<Id extends string = NativeProviderID>(
   directory: string,
-  manifest = PROVIDER_MANIFEST,
+  // The default serves the model providers; other owners pass their own pins.
+  manifest: RuntimeManifest<Id> = PROVIDER_MANIFEST as RuntimeManifest<Id>,
   platform = `${process.platform}-${process.arch}`,
 ) {
-  function target(providerID: NativeProviderID) {
+  function target(providerID: Id) {
     const artifact: RuntimeArtifact | undefined =
       manifest[providerID][platform];
     const identity = createHash("sha256")
@@ -69,9 +68,9 @@ export function createInstallations(
     };
   }
   const executables = Object.fromEntries(
-    MODEL_PROVIDER_IDS.map((id) => [id, target(id).executable]),
-  ) as Record<NativeProviderID, string>;
-  async function installed(providerID: NativeProviderID) {
+    (Object.keys(manifest) as Id[]).map((id) => [id, target(id).executable]),
+  ) as Record<Id, string>;
+  async function installed(providerID: Id) {
     const selected = target(providerID);
     return (
       (await exists(path.join(selected.root, completed))) &&
@@ -79,7 +78,7 @@ export function createInstallations(
     );
   }
   async function install(
-    providerID: NativeProviderID,
+    providerID: Id,
     signal: AbortSignal,
     report: (message: string) => void,
   ) {
@@ -182,10 +181,8 @@ export function createInstallations(
           AGY_CLI_DISABLE_AUTO_UPDATE: "true",
         },
       });
-      const version = stdout
-        .trim()
-        .replace(/^codex-cli\s+/, "")
-        .split(/\s+/)[0];
+      // CLIs prefix or suffix their version ("codex-cli 1.2.3", "uv 0.12.0 (…)").
+      const version = /\d+\.\d+\.\d+\S*/.exec(stdout)?.[0];
       if (version !== artifact.version)
         throw new Error(
           `Expected provider version ${artifact.version}, received ${version}.`,
@@ -209,7 +206,9 @@ export function createInstallations(
 }
 
 /** Installation operations accepted by the onboarding lifecycle. */
-export type Installations = ReturnType<typeof createInstallations>;
+export type Installations = ReturnType<
+  typeof createInstallations<NativeProviderID>
+>;
 
 /**
  * Await Node cleanup on interruption, including streams, child exit, and temp files.

@@ -1,5 +1,6 @@
 // Purpose: Verifies the scheduler fiber outlives calls and finishes cleanup before dependencies close.
 
+import { Collection } from "@openchart/server/collection";
 import { AgentRunStore } from "@openchart/server/agent/run/store";
 import { Publisher } from "@openchart/server/agent/publisher/publisher";
 import { Session } from "@openchart/server/agent/session";
@@ -52,6 +53,7 @@ test("starts once and awaits run cleanup before releasing its service", async ()
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(AgentRunStore.Service, {}),
+          Layer.mock(Collection.Service, {}),
           Layer.mock(Publisher.Service, {}),
           Layer.mock(Session.Service, {}),
           Layer.mock(SessionExecution.Service, {}),

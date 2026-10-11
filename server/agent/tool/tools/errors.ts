@@ -25,6 +25,17 @@ export class MarketDataWindowTooLarge extends Schema.TaggedError<MarketDataWindo
   }
 }
 
+/** A Workspace Dataset read exceeded the row limit; a narrower range succeeds. */
+export class DatasetWindowTooLarge extends Schema.TaggedError<DatasetWindowTooLarge>()(
+  "Tool.DatasetWindowTooLarge",
+  { rows: Schema.Int, maximum: Schema.Int },
+) {
+  /** Guides the model to request a narrower range. @example error.message; */
+  override get message() {
+    return `The dataset returned ${this.rows} rows, exceeding the ${this.maximum}-row maximum. Narrow from and to.`;
+  }
+}
+
 /** The requested task profile does not exist; no child Session has been created. */
 export class TaskAgentNotFound extends Schema.TaggedError<TaskAgentNotFound>()(
   "Tool.TaskAgentNotFound",

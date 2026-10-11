@@ -115,6 +115,7 @@ async function fixture(closes = [10, 20, 30]) {
       indexStatus: () => Effect.die("Unexpected index status"),
     },
     logos: { getLogo: () => Effect.die("Unexpected logos") },
+    series: { select: () => Effect.die("Unexpected series") },
     calendar: { getCalendar: () => Effect.die("Unexpected calendar") },
   }));
   const runtime = ManagedRuntime.make(

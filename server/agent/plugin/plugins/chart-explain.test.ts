@@ -51,6 +51,7 @@ test("prepares selected OHLC waves and an annotation task before model I/O", asy
         },
         symbology: undefined!,
         logos: undefined!,
+        series: undefined!,
         calendar: undefined!,
       }),
     getVersion: () => Effect.die("Unexpected Feed version access"),

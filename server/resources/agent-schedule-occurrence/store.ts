@@ -28,7 +28,7 @@ function toRow(
   root: typeof agentScheduleOccurrences.$inferSelect,
   sessionId: string | null,
 ): Row {
-  if (sessionId === null)
+  if (root.agentRunId !== null && sessionId === null)
     throw new Error(`Occurrence ${root.id} has no Run Session`);
   const { id, revision, createdAt, updatedAt, ...body } = root;
   return { id, revision, createdAt, updatedAt, body: { ...body, sessionId } };
