@@ -15,6 +15,7 @@ import {
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { Effect } from "effect";
 import * as tar from "tar";
@@ -27,6 +28,7 @@ import {
   type RuntimeArtifact,
 } from "@openchart/server/models/onboarding/manifest";
 import { SetupFailed } from "@openchart/server/models/onboarding/errors";
+import { extractZip } from "@openchart/server/models/onboarding/zip";
 
 const execute = promisify(execFile);
 const completed = ".installed";
@@ -90,7 +92,10 @@ export function createInstallations(
     await mkdir(parent, { recursive: true });
     const temporary = await mkdtemp(path.join(parent, ".download-"));
     try {
-      const archive = path.join(temporary, "runtime.tgz");
+      const archive = path.join(
+        temporary,
+        artifact.archive === "zip" ? "runtime.zip" : "runtime.tgz",
+      );
       const payload = path.join(temporary, "payload");
       await mkdir(payload);
       report(`Downloading version ${artifact.version}…`);
@@ -133,40 +138,44 @@ export function createInstallations(
           "Provider download checksum did not match the app manifest.",
         );
       signal.throwIfAborted();
-      // Validate the entire archive before extraction; links and special files are unnecessary in CLI artifacts.
-      const npm = artifact.layout === "npm";
-      let invalid = false;
-      let unpacked = 0;
-      await tar.t({
-        file: archive,
-        strict: true,
-        onReadEntry(entry) {
-          const parts = entry.path.split("/");
-          unpacked += entry.size;
-          if (
-            (npm && !entry.path.startsWith("package/")) ||
-            path.isAbsolute(entry.path) ||
-            parts.includes("..") ||
-            entry.path.includes("\\") ||
-            entry.path.includes(":") ||
-            !["File", "Directory"].includes(entry.type) ||
-            unpacked > 2 * 1024 * 1024 * 1024
-          )
-            invalid = true;
-        },
-      });
-      if (invalid)
-        throw new Error("Provider archive contains unsupported entries.");
-      signal.throwIfAborted();
       report("Installing provider…");
-      await tar.x({
-        file: archive,
-        cwd: payload,
-        strip: npm ? 1 : 0,
-        strict: true,
-        preservePaths: false,
-        chmod: true,
-      });
+      if (artifact.archive === "zip") {
+        await extractZip(archive, payload, artifact.layout, signal);
+      } else {
+        // Validate the entire archive before extraction; links and special files are unnecessary in CLI artifacts.
+        const npm = artifact.layout === "npm";
+        let invalid = false;
+        let unpacked = 0;
+        await tar.t({
+          file: archive,
+          strict: true,
+          onReadEntry(entry) {
+            const parts = entry.path.split("/");
+            unpacked += entry.size;
+            if (
+              (npm && !entry.path.startsWith("package/")) ||
+              path.isAbsolute(entry.path) ||
+              parts.includes("..") ||
+              entry.path.includes("\\") ||
+              entry.path.includes(":") ||
+              !["File", "Directory"].includes(entry.type) ||
+              unpacked > 2 * 1024 * 1024 * 1024
+            )
+              invalid = true;
+          },
+        });
+        if (invalid)
+          throw new Error("Provider archive contains unsupported entries.");
+        signal.throwIfAborted();
+        await tar.x({
+          file: archive,
+          cwd: payload,
+          strip: npm ? 1 : 0,
+          strict: true,
+          preservePaths: false,
+          chmod: true,
+        });
+      }
       signal.throwIfAborted();
       const binary = path.join(payload, artifact.executable);
       if (!(await stat(binary)).isFile())
@@ -176,6 +185,7 @@ export function createInstallations(
         signal,
         timeout: 10_000,
         maxBuffer: 16_384,
+        windowsHide: true,
         env: {
           ...process.env,
           DISABLE_AUTOUPDATER: "1",
@@ -196,7 +206,12 @@ export function createInstallations(
       if ((await exists(root)) && !(await installed(providerID)))
         await rm(root, { recursive: true, force: true });
       try {
-        await rename(payload, root);
+        await publishDirectory(
+          payload,
+          root,
+          signal,
+          platform.startsWith("win32-"),
+        );
       } catch (cause) {
         if (!(await installed(providerID))) throw cause;
       }
@@ -206,6 +221,32 @@ export function createInstallations(
     }
   }
   return { executables, installed, install };
+}
+
+/** Defender can briefly lock a just-verified executable; retry only transient Windows locks. */
+async function publishDirectory(
+  source: string,
+  destination: string,
+  signal: AbortSignal,
+  windows: boolean,
+) {
+  for (let attempt = 0; ; attempt++) {
+    signal.throwIfAborted();
+    try {
+      await rename(source, destination);
+      return;
+    } catch (cause) {
+      if (
+        !windows ||
+        attempt >= 5 ||
+        !(cause instanceof Error) ||
+        !("code" in cause) ||
+        !["EPERM", "EBUSY", "EACCES"].includes(String(cause.code))
+      )
+        throw cause;
+      await delay(100 * (attempt + 1), undefined, { signal });
+    }
+  }
 }
 
 /** Installation operations accepted by the onboarding lifecycle. */

@@ -133,8 +133,10 @@ keys or Vertex). Each call is one `--input-format stream-json` process for one
 turn: the adapter writes a single user event, closes stdin, and translates
 `step_update` and `result` events. Input is text only, so discovery reports no
 image or file input; the stream carries no reasoning text, only reasoning token
-counts. `--disable-slash-commands` keeps user text literal. Abort sends SIGINT,
-and the CLI ends with an interrupted result.
+counts. `--disable-slash-commands` keeps user text literal. On Unix, abort sends
+SIGINT and the CLI ends with an interrupted result. Windows abort terminates the
+process tree with `taskkill /T /F`; the adapter settles as interrupted even without
+a final CLI result, with bounded cleanup if descendants keep output pipes open.
 
 An append-only prompt resumes its remembered conversation with
 `--conversation <id>` after checking the CLI still stores it; otherwise the
@@ -144,11 +146,14 @@ because the CLI has no system prompt option. Usage sums the turn's own steps;
 
 The CLI loads MCP servers only from its global `~/.gemini/config/mcp_config.json`
 and expands no variables there. Before a call with OpenChart tools, the adapter
-ensures one fixed `openchart` entry: a bash relay that forwards stdio to the
+ensures one fixed `openchart` entry: a bash relay on Unix or a system PowerShell
+relay on Windows that forwards stdio to the
 loopback port in `OPENCHART_AGY_MCP_PORT` after sending the request's random
 token. Each call serves its tools on its own port with a minimal MCP server, so
 tools, outcomes, and tokens never cross requests; without those variables, as
-in the user's own sessions, the relay exits. The adapter also adds
+in the user's own sessions, the relay exits. Both relays use system program paths
+and inline commands, so their configuration survives changes to the app's install
+directory during upgrades. The adapter also adds
 `mcp(openchart/*)` and a read rule for the CLI's generated tool schemas to
 `~/.gemini/antigravity-cli/settings.json`. The CLI's schema reads and
 `call_mcp_tool` steps for OpenChart are always hidden: the host server reports
@@ -173,8 +178,18 @@ authorization-code prompt. Linux `script` waits for that pipe to close and then
 misreports the exit status, so the command records the CLI's status, stops the
 feed itself, and exits with that status. The user approves in the browser, pastes the shown
 code within 60 seconds, and the CLI stores its token in the macOS Keychain (or
-under `~/.gemini/antigravity-cli/`). Windows has no pin: its archives are zip
-files and it has no `script`.
+under `~/.gemini/antigravity-cli/`). On Windows x64, the manifest pins the official
+ZIP and discovery requests direct `antigravity.exe -p /usage` with `terminal: true`.
+The server setup owner lazily loads `node-pty` and supplies ConPTY, converts input
+newlines to carriage returns, and retains bounded VT-stripped output. Its scope
+awaits process-tree termination and terminal cleanup on cancellation or timeout.
+Other setup commands retain piped input and hide their Windows console windows.
+Desktop stages the native terminal dependency only in Windows packages. The ZIP
+reader validates entry paths, types, duplicates and expanded size before extraction;
+installation verifies the download hash and exact executable version, then publishes
+the complete directory atomically. Only ZIP pins add an optional archive field,
+preserving existing tar installation identities. Windows native configuration uses
+`USERPROFILE`; Unix configuration uses `HOME`.
 
 ## Model references and shared constants
 

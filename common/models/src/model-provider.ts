@@ -170,8 +170,10 @@ export const ProviderDiscoveryResult = z
       /**
        * Official login command for the detected CLI. The host runs it in an
        * interactive process after explicit user action, passing args separately
-       * without constructing a shell command, with piped stdin and output. The
-       * native CLI owns login.
+       * without constructing a shell command. Stdin/output are piped unless
+       * `terminal` requests a host-owned pseudo-terminal. The native CLI owns
+       * credentials; the host bounds output, reports failed exits, and closes
+       * the process and its terminal on completion, cancellation, or timeout.
        */
       login: z
         .strictObject({
@@ -183,6 +185,13 @@ export const ProviderDiscoveryResult = z
           executable: z.string().min(1),
           /** Native login arguments, e.g. ["login"] or ["auth", "login"]. */
           args: z.array(z.string()).readonly(),
+          /**
+           * Requires terminal input semantics. Windows hosts use ConPTY and
+           * send entered lines with carriage returns; unsupported hosts fail
+           * setup explicitly. Omitted keeps the ordinary piped process.
+           * @example { executable: "C:\\managed\\antigravity.exe", args: ["-p", "/usage"], terminal: true }
+           */
+          terminal: z.literal(true).optional(),
         })
         .readonly(),
     }),

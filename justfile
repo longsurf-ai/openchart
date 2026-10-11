@@ -55,42 +55,26 @@ indicator-study-windows *flags:
     app/node_modules/.bin/tsx server/indicators/select-study-windows.ts {{flags}}
 
 # Package the complete app; use development for test credentials without HMR.
-desktop-package environment="production":
-    npm --prefix platform/desktop run package -- '{{environment}}'
+desktop-package environment="production" target="" signing="signed":
+    npm --prefix platform/desktop run package -- '{{environment}}' '{{target}}' '{{signing}}'
 
-# Produce signed, notarized Apple Silicon installers and the website update feed.
-desktop-release:
-    npm --prefix platform/desktop run release
+# Produce native installers and update files; Windows test builds use explicit unsigned mode.
+desktop-release target="darwin-arm64" signing="signed":
+    npm --prefix platform/desktop run release -- '{{target}}' '{{signing}}'
 
 # Upload verified downloads, then the update manifest, then the GitHub Release.
 [arg('version', pattern='[0-9]+\.[0-9]+\.[0-9]+')]
-desktop-publish version:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd 'platform/desktop/out/release/{{version}}'
-    release_directory="$PWD"
-    shasum -a 256 -c SHA256SUMS
-    test "$(jq -r .currentRelease RELEASES.json)" = '{{version}}'
-    for extension in dmg zip; do
-      file="OpenChart-{{version}}-darwin-arm64.$extension"
-      npx --yes wrangler@4.135.0 r2 object put "openchart-releases/openchart/darwin/arm64/$file" --remote --file "$release_directory/$file" --cache-control 'public, max-age=31536000, immutable'
-    done
-    npx --yes wrangler@4.135.0 r2 object put 'openchart-releases/openchart/darwin/arm64/SHA256SUMS-{{version}}' --remote --file "$release_directory/SHA256SUMS" --content-type text/plain --cache-control 'public, max-age=31536000, immutable'
-    npx --yes wrangler@4.135.0 r2 object put 'openchart-releases/openchart/darwin/arm64/OpenChart.dmg' --remote --file "$release_directory/OpenChart-{{version}}-darwin-arm64.dmg" --content-type application/x-apple-diskimage --content-disposition 'attachment; filename="OpenChart-{{version}}-darwin-arm64.dmg"' --cache-control no-store
-    npx --yes wrangler@4.135.0 r2 object put 'openchart-releases/openchart/darwin/arm64/RELEASES.json' --remote --file "$release_directory/RELEASES.json" --content-type application/json --cache-control no-store
-    # Mirror the release on GitHub, tagged at its source commit, and mark it latest.
-    if gh release view 'v{{version}}' >/dev/null 2>&1; then
-      gh release edit 'v{{version}}' --latest
-    else
-      notes=$(jq -r '.[] | select(.version == "{{version}}") | .items[] | "- \(.)"' '{{justfile_directory()}}/platform/desktop/src/changelog/changelog.json')
-      test -n "$notes"
-      gh release create 'v{{version}}' OpenChart-{{version}}-darwin-arm64.dmg OpenChart-{{version}}-darwin-arm64.zip SHA256SUMS --target "$(cat SOURCE)" --title 'OpenChart {{version}}' --notes "$notes" --latest
-    fi
+desktop-publish version *options:
+    node --experimental-strip-types platform/desktop/scripts/publish.ts '{{version}}' {{options}}
 
 # Verify a packaged Electron executable; all test data stays in a temporary profile.
 [arg('keychain', pattern='mock|system')]
 desktop-smoke executable environment="production" keychain="mock":
     npm --prefix platform/desktop run smoke -- '{{executable}}' '{{environment}}' '{{keychain}}'
+
+# Probe native Windows sign-in, then remove its fixture after the native owner exits.
+desktop-windows-probe:
+    node --experimental-strip-types platform/desktop/tests/windows-runtime-probe.ts
 
 # Run every OpenChart check once in parallel; every dependency must succeed.
 [parallel]

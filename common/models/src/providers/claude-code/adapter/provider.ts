@@ -52,6 +52,7 @@ async function isLoggedIn(
   try {
     const { stdout } = await execute(executable, args, {
       env,
+      windowsHide: true,
       signal,
       timeout: 10_000,
     });

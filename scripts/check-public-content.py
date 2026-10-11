@@ -24,6 +24,16 @@ MARKET_NAMES = (
     "\u5e01\u5b89\u4eba\u751f",
     "\u725b\u6765",
 )
+# Reviewed fixtures verify native UTF-8 streams, arguments and filesystem paths.
+# Keep this exact and file-scoped; test files still reject unrelated internal prose.
+UNICODE_TEST_FIXTURES = {
+    "common/models/src/providers/antigravity/adapter/native-config.test.ts": (
+        "\u5e02\u5834",
+    ),
+    "platform/desktop/tests/native-executable.test.ts": (
+        "\u6d4b\u8bd5", "\u4e2d\u6587",
+    ),
+}
 
 
 def files(repository):
@@ -70,6 +80,8 @@ for relative in files(ROOT):
         for market_name in MARKET_NAMES:
             text = text.replace(market_name, "")
     text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda match: chr(int(match[1], 16)), text)
+    for fixture in UNICODE_TEST_FIXTURES.get(name, ()):
+        text = text.replace(fixture, "")
     if name != "scripts/check-public-content.py" and HAN.search(text):
         errors.append(f"{name}: Chinese internal text needs review")
 

@@ -2,6 +2,7 @@
 
 import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
+import { arch, platform } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -28,6 +29,11 @@ import type { Notify } from "./host-protocol";
 import { prepareOnboardingContent } from "./onboarding/content/content";
 import { BillingLink, isBillingReturn } from "./billing";
 import { cloudEndpoints, developmentTestAccount } from "./cloud";
+import { updateFeedUrl } from "./targets";
+import { handleSquirrelStartup, windowsAppId } from "./squirrel";
+
+const hostPlatform = platform();
+const hostArch = arch();
 
 // The name determines the app's data folder and macOS Keychain entry.
 // Give development runs their own name to keep their data separate.
@@ -50,6 +56,8 @@ function fail(cause: unknown): void {
 // Register protocols before ready, while catching synchronous configuration errors too.
 function start(): void {
   app.setName(developmentBuild ? "OpenChart Development" : "OpenChart");
+  if (hostPlatform === "win32" && !developmentBuild)
+    app.setAppUserModelId(windowsAppId);
   const clerk = configureClerk(
     developmentBuild ? "openchart-dev" : "openchart",
   );
@@ -95,6 +103,7 @@ function start(): void {
   /** The downloaded release waiting for a restart, e.g. "OpenChart 0.1.6". */
   let readyUpdate: string | undefined;
   let hostReady = false;
+  let notificationActivationPending = false;
   let billingReturnPending = process.argv.some((value) =>
     isBillingReturn(value, developmentBuild),
   );
@@ -140,6 +149,22 @@ function start(): void {
   // Electron withdraws a notification once its object is garbage collected.
   const notifications = new Set<Notification>();
 
+  /** Notification activations may arrive before the backend or after a window closes. */
+  async function activateNotification(): Promise<void> {
+    notificationActivationPending = true;
+    if (!hostReady || quitting) return;
+    notificationActivationPending = false;
+    let window = BrowserWindow.getAllWindows()[0];
+    if (!window) {
+      await createWindow();
+      window = BrowserWindow.getAllWindows()[0];
+    }
+    if (!window || quitting) return;
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  }
+
   /** Shows what the backend asked for; a click brings the open window forward. */
   function showNotification({ title, body, sound }: Notify): void {
     if (!Notification.isSupported()) return;
@@ -149,14 +174,12 @@ function start(): void {
       silent: sound === "none",
       // macOS reads custom sounds from the app's Resources, outside ASAR.
       // Other platforms retain their system sound; Electron's sound option is macOS-only.
-      ...(process.platform === "darwin"
+      ...(hostPlatform === "darwin"
         ? { sound: notificationSounds.find((item) => item.id === sound)?.file }
         : {}),
     });
     notifications.add(notification);
     const release = () => notifications.delete(notification);
-    // ponytail: Windows also closes on timeout, so Action Center clicks can miss;
-    // use Notification.handleActivation once Windows ships.
     notification.on("close", release);
     notification.on("failed", (_event, error) => {
       release();
@@ -164,11 +187,8 @@ function start(): void {
     });
     notification.on("click", () => {
       release();
-      const window = BrowserWindow.getAllWindows()[0];
-      if (!window) return;
-      if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
+      // Windows also invokes the activation handler; process the click once.
+      if (hostPlatform !== "win32") void activateNotification().catch(fail);
     });
     notification.show();
   }
@@ -191,9 +211,9 @@ function start(): void {
       minHeight: 600,
       show: false,
       // Let the page fill the top of the Mac window, keeping Apple's three buttons.
-      titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+      titleBarStyle: hostPlatform === "darwin" ? "hiddenInset" : "default",
       trafficLightPosition:
-        process.platform === "darwin" ? { x: 20, y: 23 } : undefined,
+        hostPlatform === "darwin" ? { x: 20, y: 23 } : undefined,
       webPreferences: {
         // Expose the connection and folder picker without letting page scripts
         // read files or run programs directly.
@@ -239,7 +259,7 @@ function start(): void {
 
   // On macOS, closing the last window leaves the app running in the Dock.
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+    if (hostPlatform !== "darwin") app.quit();
   });
 
   function stopBeforeQuit(event: Electron.Event): void {
@@ -275,6 +295,10 @@ function start(): void {
       // Electron must be ready before we use windows or OS-protected storage.
       .whenReady()
       .then(async () => {
+        if (hostPlatform === "win32")
+          Notification.handleActivation(() => {
+            void activateNotification().catch(fail);
+          });
         connectClerkSession(clerk.origin, rendererOrigin);
         // App pages may write to the clipboard, which Copy buttons need. They
         // get no camera, microphone, or other device permissions.
@@ -365,7 +389,7 @@ function start(): void {
             .refine(
               (value) =>
                 isAbsolute(value) &&
-                !value.startsWith("//") &&
+                !/^[\\/]{2}/.test(value) &&
                 !value.includes("\0"),
               "Expected an absolute local path",
             )
@@ -450,25 +474,37 @@ function start(): void {
         );
         hostReady = true;
         if (billingReturnPending) await returnFromBilling();
+        if (notificationActivationPending) await activateNotification();
+        const updateUrl = developmentBuild
+          ? undefined
+          : updateFeedUrl(
+              process.env.OPENCHART_UPDATE_ROOT,
+              hostPlatform,
+              hostArch,
+            );
         if (
           !developmentBuild &&
-          process.platform === "darwin" &&
-          process.arch === "arm64" &&
+          updateUrl &&
+          !process.argv.includes("--squirrel-firstrun") &&
           !quitting
         ) {
           updates = updateElectronApp({
             updateSource: {
               type: UpdateSourceType.StaticStorage,
-              baseUrl: process.env.OPENCHART_UPDATE_URL!,
+              baseUrl: updateUrl,
             },
             updateInterval: "1 hour",
             // The sidebar offers the restart instead of an interrupting dialog.
-            // Without it, Squirrel installs the download on the next normal quit.
+            // Mac installs on quit; Windows applies updates during download.
             onNotifyUser: ({ releaseName }) => {
               updates?.stopUpdates();
-              readyUpdate = releaseName;
+              readyUpdate =
+                hostPlatform === "win32" &&
+                /^\d+\.\d+\.\d+(?:[-+].+)?$/.test(releaseName)
+                  ? `OpenChart ${releaseName}`
+                  : releaseName;
               for (const window of BrowserWindow.getAllWindows())
-                window.webContents.send("desktop.updateReady", releaseName);
+                window.webContents.send("desktop.updateReady", readyUpdate);
             },
           });
         }
@@ -480,7 +516,18 @@ function start(): void {
 }
 
 try {
-  start();
+  const installer = handleSquirrelStartup({
+    app,
+    platform: hostPlatform,
+    argv: process.argv,
+    executable: process.execPath,
+  });
+  if (installer)
+    void installer.catch((cause: unknown) => {
+      console.error(cause);
+      app.exit(1);
+    });
+  else start();
 } catch (cause) {
   fail(cause);
 }

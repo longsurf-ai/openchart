@@ -8,15 +8,32 @@ import { HOST_SERVER, RELAY_PORT, RELAY_TOKEN } from "./host-tools";
 
 /**
  * The CLI starts MCP servers from its global config and never expands
- * variables there, so one fixed bash relay reads them from the CLI's
+ * variables there, so one fixed relay reads them from the CLI's
  * environment instead. Without them, as in the user's own sessions, it exits.
  */
-const RELAY = [
+const UNIX_RELAY = [
   `[ -n "$${RELAY_PORT}" ] || exit 0`,
   `exec 3<>"/dev/tcp/127.0.0.1/$${RELAY_PORT}" || exit 1`,
   `printf '%s\\n' "$${RELAY_TOKEN}" >&3`,
   "cat <&3 &",
   "exec cat >&3",
+].join("\n");
+
+// Only .NET byte streams touch MCP data: PowerShell's text pipeline changes
+// encoding and line endings. No quotes need escaping through the CLI's argv.
+const WINDOWS_RELAY = [
+  "$ErrorActionPreference = 'Stop'",
+  `if (-not $env:${RELAY_PORT}) { exit 0 }`,
+  `$client = [Net.Sockets.TcpClient]::new('127.0.0.1', [int]$env:${RELAY_PORT})`,
+  "try {",
+  "  $socket = $client.GetStream()",
+  `  $token = [Text.Encoding]::UTF8.GetBytes($env:${RELAY_TOKEN} + [char]10)`,
+  "  $socket.Write($token, 0, $token.Length)",
+  "  $send = [Console]::OpenStandardInput().CopyToAsync($socket)",
+  "  $receive = $socket.CopyToAsync([Console]::OpenStandardOutput())",
+  "  $finished = [Threading.Tasks.Task]::WhenAny([Threading.Tasks.Task[]]@($send, $receive)).GetAwaiter().GetResult()",
+  "  $finished.GetAwaiter().GetResult()",
+  "} finally { $client.Dispose() }",
 ].join("\n");
 
 /**
@@ -26,8 +43,20 @@ const RELAY = [
  * a two-hour backstop.
  */
 export const RELAY_SERVER = {
-  command: "/bin/bash",
-  args: ["-c", RELAY],
+  command:
+    process.platform === "win32"
+      ? path.win32.join(
+          process.env.SystemRoot ?? "C:\\Windows",
+          "System32",
+          "WindowsPowerShell",
+          "v1.0",
+          "powershell.exe",
+        )
+      : "/bin/bash",
+  args:
+    process.platform === "win32"
+      ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_RELAY]
+      : ["-c", UNIX_RELAY],
   timeoutSeconds: 2 * 60 * 60,
 };
 
@@ -83,7 +112,7 @@ export async function ensureHostToolConfig(home: string): Promise<void> {
   const schemas = path.join(await fs.realpath(home), path.relative(home, cli));
   const rules = [
     `mcp(${HOST_SERVER}/*)`,
-    `read_file(${path.join(schemas, "mcp", HOST_SERVER)}/)`,
+    `read_file(${path.join(schemas, "mcp", HOST_SERVER)}${path.sep})`,
   ];
   const allow = settings.permissions?.allow ?? [];
   const missing = rules.filter((rule) => !allow.includes(rule));

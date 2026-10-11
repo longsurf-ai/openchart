@@ -1,5 +1,20 @@
 [
   {
+    "version": "0.1.16",
+    "date": "2026-10-07",
+    "items": [
+      "Fixed Antigravity installation getting stuck after a file error on Windows."
+    ]
+  },
+  {
+    "version": "0.1.15",
+    "date": "2026-10-07",
+    "items": [
+      "OpenChart now has installers for Intel Macs and Windows PCs.",
+      "Windows supports Antigravity sign-in and OpenChart tools."
+    ]
+  },
+  {
     "version": "0.1.13",
     "date": "2026-10-06",
     "items": [

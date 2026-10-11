@@ -2,6 +2,8 @@
 
 import { temporaryHome } from "@openchart/server/home.test-utils";
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Notify } from "./host-protocol";
 
@@ -11,18 +13,41 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-let cleanup = () => {};
-afterEach(() => {
-  cleanup();
-  vi.unstubAllEnvs();
+// Startup exercises real onboarding filesystem work. Keep assertion deadlines
+// inside an outer budget that also leaves time to join fixture cleanup.
+vi.setConfig({ testTimeout: 15_000, hookTimeout: 15_000 });
+
+let cleanup = async () => {};
+afterEach(async () => {
+  try {
+    await cleanup();
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });
 
 async function host(
   configurationError?: Error,
   production = false,
   switches: readonly string[] = [],
+  environment: {
+    platform?: NodeJS.Platform;
+    arch?: string;
+    argv?: readonly string[];
+    updateRoot?: string | null;
+    earlyNotification?: boolean;
+  } = {},
 ) {
   vi.resetModules();
+  const runtimePlatform = environment.platform ?? "darwin";
+  const runtimeArch = environment.arch ?? "arm64";
+  vi.doMock("node:os", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("node:os")>()),
+    platform: () => runtimePlatform,
+    arch: () => runtimeArch,
+  }));
+  const previousArgv = process.argv;
+  process.argv = ["OpenChart.exe", ...(environment.argv ?? [])];
   const resourcesPath = Object.getOwnPropertyDescriptor(
     process,
     "resourcesPath",
@@ -37,14 +62,17 @@ async function host(
     production ? "production" : "development",
   );
   vi.stubEnv(
-    "OPENCHART_UPDATE_URL",
-    "https://downloads.longsurf.ai/openchart/darwin/arm64",
+    "OPENCHART_UPDATE_ROOT",
+    environment.updateRoot === null
+      ? undefined
+      : (environment.updateRoot ?? "https://downloads.longsurf.ai/openchart"),
   );
   const signals = (["SIGINT", "SIGTERM"] as const).map((signal) => ({
     signal,
     listeners: process.listeners(signal),
   }));
-  cleanup = () => {
+  const restore = () => {
+    process.argv = previousArgv;
     if (resourcesPath)
       Object.defineProperty(process, "resourcesPath", resourcesPath);
     else Reflect.deleteProperty(process, "resourcesPath");
@@ -56,6 +84,21 @@ async function host(
   const key = deferred<Uint8Array>();
   const ready = deferred<number>();
   const stopped = deferred<void>();
+  const startup = new Set<Promise<unknown>>();
+  function whenReady(): Promise<void> {
+    const ready = Promise.resolve();
+    const then = ready.then.bind(ready);
+    ready.then = (onFulfilled, onRejected) => {
+      const pending = then(onFulfilled, onRejected);
+      startup.add(pending);
+      void pending.then(
+        () => startup.delete(pending),
+        () => startup.delete(pending),
+      );
+      return pending;
+    };
+    return ready;
+  }
   const stop = vi.fn(() => stopped.promise);
   const startBackend = vi.fn<
     (input: { onNotify: (notification: Notify) => void }) => {
@@ -90,8 +133,14 @@ async function host(
   }
   const notifications: SystemNotification[] = [];
   const notificationsSupported = vi.fn(() => true);
+  const handleActivation = vi.fn<
+    (callback: (details: unknown) => void) => void
+  >((callback) => {
+    if (environment.earlyNotification) callback({ type: "click" });
+  });
   class SystemNotification extends EventEmitter {
     static isSupported = notificationsSupported;
+    static handleActivation = handleActivation;
     readonly show = vi.fn();
     readonly options: unknown;
     constructor(options: unknown) {
@@ -108,8 +157,11 @@ async function host(
     },
     isPackaged: true,
     setName: vi.fn(),
-    requestSingleInstanceLock: () => true,
-    whenReady: async () => {},
+    setAppUserModelId: vi.fn(),
+    setAsDefaultProtocolClient: vi.fn(() => true),
+    removeAsDefaultProtocolClient: vi.fn(() => true),
+    requestSingleInstanceLock: vi.fn(() => true),
+    whenReady,
     getPath: () => "/profile",
     getAppPath: () => "/app",
     quit: vi.fn(),
@@ -159,18 +211,38 @@ async function host(
     protocol: { registerSchemesAsPrivileged: vi.fn() },
   }));
   vi.doMock("./credentials", () => ({ loadCredentialKey: () => key.promise }));
+  const configureClerk = vi.fn(() => {
+    if (configurationError) throw configurationError;
+    return {
+      publishableKey: "configured-test-key",
+      origin: "https://test.clerk.accounts.dev",
+      cleanup: vi.fn(),
+    };
+  });
   vi.doMock("./clerk", () => ({
-    configureClerk: () => {
-      if (configurationError) throw configurationError;
-      return {
-        publishableKey: "configured-test-key",
-        origin: "https://test.clerk.accounts.dev",
-        cleanup: vi.fn(),
-      };
-    },
+    configureClerk,
     connectClerkSession: vi.fn(),
   }));
+  const installer = deferred<{ stdout: string; stderr: string }>();
+  const executeInstaller = vi.fn(() => installer.promise);
+  vi.doMock("node:child_process", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("node:child_process")>()),
+    execFile: Object.assign(vi.fn(), { [promisify.custom]: executeInstaller }),
+  }));
   vi.doMock("./backend-process", () => ({ startBackend }));
+  cleanup = async () => {
+    // Cancel startup before releasing any gate. In particular, never remove a
+    // temporaryHome while its asynchronous onboarding snapshot is still writing.
+    app.emit("before-quit", { preventDefault() {} });
+    key.resolve(new Uint8Array(32));
+    ready.resolve(4321);
+    stopped.resolve();
+    try {
+      while (startup.size > 0) await Promise.allSettled([...startup]);
+    } finally {
+      restore();
+    }
+  };
   await import("./main");
   return {
     app,
@@ -194,14 +266,22 @@ async function host(
     quitAndInstall,
     stopUpdates,
     showMessageBox,
+    handleActivation,
+    configureClerk,
+    executeInstaller,
+    installer,
   };
+}
+
+function waitForHost(assertion: () => void) {
+  return vi.waitFor(assertion, { timeout: 5_000 });
 }
 
 async function connection(switches: readonly string[]) {
   const runtime = await host(undefined, false, switches);
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const window = runtime.windows[0]!;
   const [, read] = runtime.handle.mock.calls.find(
     ([name]) => name === "desktop.connection",
@@ -226,7 +306,7 @@ test("development packages never start automatic updates", async () => {
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   expect(runtime.updateElectronApp).not.toHaveBeenCalled();
   expect(runtime.windows[0]!.loadURL).toHaveBeenCalledWith(
     "http://127.0.0.1:5173/app/dashboards/dsh_88JOx0yX7TH65p",
@@ -234,19 +314,23 @@ test("development packages never start automatic updates", async () => {
   expect(runtime.startBackend).toHaveBeenCalledWith(
     expect.objectContaining({
       init: expect.objectContaining({
-        documentationDirectory: "/app/Contents/Resources/docs",
+        documentationDirectory: join("/app/Contents/Resources", "docs"),
       }),
     }),
   );
 });
 
-test.runIf(process.platform === "darwin" && process.arch === "arm64")(
-  "the page's update restart respects cancellation and waits for backend exit",
-  async () => {
-    const runtime = await host(undefined, true);
+test.each([
+  ["darwin", "arm64"],
+  ["darwin", "x64"],
+  ["win32", "x64"],
+] as const)(
+  "%s-%s update restart respects cancellation and waits for backend exit",
+  async (platform, arch) => {
+    const runtime = await host(undefined, true, [], { platform, arch });
     runtime.key.resolve(new Uint8Array(32));
     runtime.ready.resolve(4321);
-    await vi.waitFor(() =>
+    await waitForHost(() =>
       expect(runtime.updateElectronApp).toHaveBeenCalledOnce(),
     );
     const options = runtime.updateElectronApp.mock.calls[0]![0] as unknown as {
@@ -254,7 +338,7 @@ test.runIf(process.platform === "darwin" && process.arch === "arm64")(
       onNotifyUser: (info: { releaseName: string }) => void;
     };
     expect(options.updateSource.baseUrl).toBe(
-      "https://downloads.longsurf.ai/openchart/darwin/arm64",
+      `https://downloads.longsurf.ai/openchart/${platform}/${arch}`,
     );
     const window = runtime.windows[0]!;
     // Release builds load the bundled app, not the development server.
@@ -271,7 +355,9 @@ test.runIf(process.platform === "darwin" && process.arch === "arm64")(
     expect(readyUpdate(trusted)).toBeNull();
     restartToUpdate(trusted);
     expect(runtime.app.quit).not.toHaveBeenCalled();
-    options.onNotifyUser({ releaseName: "OpenChart 0.1.6" });
+    options.onNotifyUser({
+      releaseName: platform === "win32" ? "0.1.6" : "OpenChart 0.1.6",
+    });
     expect(runtime.showMessageBox).not.toHaveBeenCalled();
     expect(window.webContents.send).toHaveBeenCalledExactlyOnceWith(
       "desktop.updateReady",
@@ -299,11 +385,102 @@ test.runIf(process.platform === "darwin" && process.arch === "arm64")(
     expect(runtime.stopUpdates).toHaveBeenCalled();
     expect(runtime.quitAndInstall).not.toHaveBeenCalled();
     runtime.stopped.resolve();
-    await vi.waitFor(() =>
+    await waitForHost(() =>
       expect(runtime.quitAndInstall).toHaveBeenCalledOnce(),
     );
   },
 );
+
+test.each([
+  { platform: "linux", arch: "x64" },
+  { platform: "win32", arch: "arm64" },
+  { platform: "darwin", arch: "x64", updateRoot: "" },
+  { platform: "darwin", arch: "arm64", updateRoot: null },
+  { platform: "win32", arch: "x64", argv: ["--squirrel-firstrun"] },
+] as const)(
+  "disables automatic updates for $platform-$arch with $updateRoot / $argv",
+  async (environment) => {
+    const runtime = await host(undefined, true, [], environment);
+    runtime.key.resolve(new Uint8Array(32));
+    runtime.ready.resolve(4321);
+    await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
+    expect(runtime.updateElectronApp).not.toHaveBeenCalled();
+    expect(runtime.executeInstaller).not.toHaveBeenCalled();
+  },
+);
+
+test.each(["--squirrel-install", "--squirrel-updated", "--squirrel-uninstall"])(
+  "%s completes installer work without starting Clerk, backend or windows",
+  async (event) => {
+    const runtime = await host(undefined, true, [], {
+      platform: "win32",
+      arch: "x64",
+      argv: [event, "0.1.6"],
+    });
+    expect(runtime.executeInstaller).toHaveBeenCalledOnce();
+    expect(runtime.app.quit).not.toHaveBeenCalled();
+    expect(runtime.app.requestSingleInstanceLock).not.toHaveBeenCalled();
+    expect(runtime.configureClerk).not.toHaveBeenCalled();
+    expect(runtime.startBackend).not.toHaveBeenCalled();
+    expect(runtime.opened).not.toHaveBeenCalled();
+    expect(runtime.handleActivation).not.toHaveBeenCalled();
+    runtime.installer.resolve({ stdout: "", stderr: "" });
+    await waitForHost(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
+  },
+);
+
+test("an obsolete Windows package quits without initialization", async () => {
+  const runtime = await host(undefined, true, [], {
+    platform: "win32",
+    argv: ["--squirrel-obsolete"],
+  });
+  expect(runtime.app.quit).toHaveBeenCalledOnce();
+  expect(runtime.executeInstaller).not.toHaveBeenCalled();
+  expect(runtime.configureClerk).not.toHaveBeenCalled();
+  expect(runtime.startBackend).not.toHaveBeenCalled();
+  expect(runtime.opened).not.toHaveBeenCalled();
+});
+
+test("Windows notification activation waits for readiness, survives dismissal, and respects shutdown", async () => {
+  const runtime = await host(undefined, true, [], {
+    platform: "win32",
+    arch: "x64",
+    earlyNotification: true,
+  });
+  expect(runtime.app.setAppUserModelId).toHaveBeenCalledExactlyOnceWith(
+    "com.squirrel.OpenChart.OpenChart",
+  );
+  await waitForHost(() =>
+    expect(runtime.handleActivation).toHaveBeenCalledOnce(),
+  );
+  expect(runtime.opened).not.toHaveBeenCalled();
+  runtime.key.resolve(new Uint8Array(32));
+  runtime.ready.resolve(4321);
+  await waitForHost(() =>
+    expect(runtime.windows[0]?.focus).toHaveBeenCalledOnce(),
+  );
+  const activation = runtime.handleActivation.mock.calls[0]![0];
+  const first = runtime.windows[0]!;
+  const { onNotify } = runtime.startBackend.mock.calls[0]![0];
+  onNotify({ type: "notify", title: "Alert", body: "Ready", sound: "system" });
+  runtime.notifications[0]!.emit("close");
+  activation({ type: "click" });
+  expect(first.focus).toHaveBeenCalledTimes(2);
+  // An instance event accompanies handleActivation; it must not focus twice.
+  runtime.notifications[0]!.emit("click");
+  expect(first.focus).toHaveBeenCalledTimes(2);
+  runtime.windows.length = 0;
+  activation({ type: "click" });
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
+  const reopened = runtime.windows[0]!;
+  await waitForHost(() => expect(reopened.focus).toHaveBeenCalledOnce());
+  runtime.app.emit("before-quit", { preventDefault: vi.fn() });
+  activation({ type: "click" });
+  expect(reopened.focus).toHaveBeenCalledOnce();
+  runtime.windows.length = 0;
+  activation({ type: "click" });
+  expect(runtime.opened).toHaveBeenCalledTimes(2);
+});
 
 test("development startup failures exit visibly without a pre-ready native dialog", async () => {
   const failure = new Error("Native authentication bridge failed");
@@ -324,7 +501,7 @@ test("native picker selects one directory, handles cancellation, and rejects unt
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const pick = runtime.handle.mock.calls.find(
     ([channel]) => channel === "desktop.pickDirectory",
   )![1];
@@ -361,7 +538,7 @@ test("native file open validates local paths and the calling frame, and propagat
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const open = runtime.handle.mock.calls.find(
     ([channel]) => channel === "desktop.openPath",
   )![1];
@@ -385,6 +562,8 @@ test("native file open validates local paths and the calling frame, and propagat
     "file:///other/note.pdf",
     "https://example.com",
     "//remote/file.pdf",
+    "\\\\remote\\file.pdf",
+    "/\\remote\\file.pdf",
     "/other/bad\0.pdf",
   ])
     await expect(open(event, path)).rejects.toThrow();
@@ -408,7 +587,7 @@ test("pages may write to the clipboard and get no other permission", async () =>
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const [decide] = runtime.setPermissionRequestHandler.mock.calls[0]!;
   const granted = (permission: string) => {
     const callback = vi.fn();
@@ -424,7 +603,7 @@ test("a backend notification is shown and its click brings the window forward", 
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const { onNotify } = runtime.startBackend.mock.calls[0]![0];
   onNotify({
     type: "notify",
@@ -439,7 +618,7 @@ test("a backend notification is shown and its click brings the window forward", 
     title: "BTC breakout",
     body: "exceeded 70000",
     silent: false,
-    ...(process.platform === "darwin" ? { sound: "openchart-glass.wav" } : {}),
+    sound: "openchart-glass.wav",
   });
   expect(notification.show).toHaveBeenCalledOnce();
   const window = runtime.windows[0]!;
@@ -467,7 +646,7 @@ test("turning notifications on shows one so macOS can ask, only for the app's ow
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const enable = runtime.handle.mock.calls.find(
     ([channel]) => channel === "desktop.enableNotifications",
   )![1];
@@ -495,7 +674,7 @@ test("Quit during credential loading never starts a backend or window", async ()
   const event = { preventDefault: vi.fn() };
   runtime.app.emit("before-quit", event);
   runtime.key.resolve(new Uint8Array(32));
-  await vi.waitFor(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
   expect(event.preventDefault).toHaveBeenCalledOnce();
   expect(runtime.startBackend).not.toHaveBeenCalled();
   expect(runtime.opened).not.toHaveBeenCalled();
@@ -507,10 +686,12 @@ test.each([false, true])(
   async (alreadyReady) => {
     const runtime = await host();
     runtime.key.resolve(new Uint8Array(32));
-    await vi.waitFor(() => expect(runtime.startBackend).toHaveBeenCalledOnce());
+    await waitForHost(() =>
+      expect(runtime.startBackend).toHaveBeenCalledOnce(),
+    );
     if (alreadyReady) {
       runtime.ready.resolve(4321);
-      await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+      await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
     }
     const event = { preventDefault: vi.fn() };
     runtime.app.emit("before-quit", event);
@@ -530,7 +711,7 @@ test.each([false, true])(
     expect(runtime.opened).toHaveBeenCalledTimes(alreadyReady ? 1 : 0);
     expect(runtime.app.quit).not.toHaveBeenCalled();
     runtime.stopped.resolve();
-    await vi.waitFor(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
+    await waitForHost(() => expect(runtime.app.quit).toHaveBeenCalledOnce());
     expect(runtime.app.listenerCount("before-quit")).toBe(0);
     expect(runtime.showErrorBox).not.toHaveBeenCalled();
   },
@@ -540,7 +721,7 @@ test("canceling an unsaved editor's close keeps the backend available for saving
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   runtime.app.emit("before-quit", { preventDefault: vi.fn() });
   const event = { preventDefault: vi.fn() };
   runtime.windows[0]!.webContents.emit("will-prevent-unload", event);
@@ -556,7 +737,7 @@ test("billing IPC validates the caller and destination, and passes the sandbox e
   const runtime = await host();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   expect(runtime.startBackend).toHaveBeenCalledWith(
     expect.objectContaining({
       init: expect.objectContaining({
@@ -593,7 +774,7 @@ test("billing returns during startup open subscription once and later returns fo
   expect(runtime.opened).not.toHaveBeenCalled();
   runtime.key.resolve(new Uint8Array(32));
   runtime.ready.resolve(4321);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledOnce());
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledOnce());
   const window = runtime.windows[0]!;
   expect(window.loadURL).toHaveBeenCalledWith(
     "http://127.0.0.1:5173/app/settings/subscription",
@@ -614,7 +795,7 @@ test("billing returns during startup open subscription once and later returns fo
     "app",
     "openchart-dev://billing/return",
   ]);
-  await vi.waitFor(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
+  await waitForHost(() => expect(runtime.opened).toHaveBeenCalledTimes(2));
   expect(runtime.windows[0]!.loadURL).toHaveBeenCalledWith(
     "http://127.0.0.1:5173/app/settings/subscription",
   );

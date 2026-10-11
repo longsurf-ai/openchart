@@ -1,13 +1,13 @@
 // Purpose: Isolated native CLI fixture for packaged discovery, login, tools, and chat smoke.
-import { createInterface } from "node:readline";
-import {
+const { createInterface } = require("node:readline");
+const {
   appendFileSync,
   existsSync,
   readFileSync,
   writeFileSync,
-} from "node:fs";
-import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+} = require("node:fs");
+const { join } = require("node:path");
+const { randomUUID } = require("node:crypto");
 
 const state = process.env.OPENCHART_SMOKE_STATE;
 if (!state)

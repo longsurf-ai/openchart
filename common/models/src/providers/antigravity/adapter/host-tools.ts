@@ -67,6 +67,9 @@ function text(value: unknown): string {
  * dropped. Then it speaks newline-delimited MCP JSON-RPC: `initialize`,
  * `ping`, `tools/list` and `tools/call`. Each call runs `execute` in-process;
  * the model reads only `toModelOutput`, and `calls` receives the exact outcome.
+ * Transport errors close that connection and its line reader. In-flight tools
+ * retain the caller's abort signal and still report their exact outcome; closing
+ * the server drops all connections. Failure to bind the loopback port rejects.
  * @example
  * const host = await startHostToolServer(tools, signal, calls);
  * try { spawn(executable, args, { env: { ...env, ...host.env } }); } finally { host.close(); }
@@ -141,33 +144,41 @@ export async function startHostToolServer(
   }
 
   const server = createServer((socket) => {
+    const input = createInterface({ input: socket, crlfDelay: Infinity });
+    const disconnect = () => {
+      input.close();
+      socket.destroy();
+    };
     sockets.add(socket);
-    socket.on("close", () => sockets.delete(socket));
-    socket.on("error", () => socket.destroy());
+    socket.on("close", () => {
+      input.close();
+      sockets.delete(socket);
+    });
+    socket.on("error", disconnect);
+    // readline forwards input errors independently, including a relay's TCP reset.
+    input.on("error", disconnect);
     let authorized = false;
-    createInterface({ input: socket, crlfDelay: Infinity }).on(
-      "line",
-      (line) => {
-        if (!authorized) {
-          const received = Buffer.from(line.trim());
-          authorized =
-            received.length === expected.length &&
-            timingSafeEqual(received, expected);
-          if (!authorized) socket.destroy();
-          return;
-        }
-        const message = parseMessage(line);
-        // Responses and notifications need no answer.
-        if (message?.method === undefined || message.id === undefined) return;
-        const { id, method, params } = message;
-        void reply(method, params).then((answer) => {
-          if (!socket.destroyed)
-            socket.write(
-              `${JSON.stringify({ jsonrpc: "2.0", id, ...answer })}\n`,
-            );
-        });
-      },
-    );
+    input.on("line", (line) => {
+      if (socket.destroyed) return;
+      if (!authorized) {
+        const received = Buffer.from(line.trim());
+        authorized =
+          received.length === expected.length &&
+          timingSafeEqual(received, expected);
+        if (!authorized) disconnect();
+        return;
+      }
+      const message = parseMessage(line);
+      // Responses and notifications need no answer.
+      if (message?.method === undefined || message.id === undefined) return;
+      const { id, method, params } = message;
+      void reply(method, params).then((answer) => {
+        if (!socket.destroyed)
+          socket.write(
+            `${JSON.stringify({ jsonrpc: "2.0", id, ...answer })}\n`,
+          );
+      });
+    });
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

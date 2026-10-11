@@ -13,6 +13,7 @@ import {
 } from "@openchart/models/model-tiers";
 import {
   AvailableProvider,
+  ProviderDiscoveryResult as DiscoverySchema,
   type ModelProvider,
   type ProviderDiscoveryResult,
 } from "@openchart/models/model-provider";
@@ -51,6 +52,7 @@ beforeEach(() => {
   catalog.get.mockReset().mockResolvedValue({});
 });
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await Promise.all(bindings.splice(0).map((binding) => binding.dispose()));
 });
 
@@ -93,7 +95,7 @@ describe("antigravity.createModelProvider", () => {
     });
   });
 
-  it("checks installation first and signs in through bash", async () => {
+  it("checks installation first and offers a host-compatible login", async () => {
     native.installed.mockReturnValue(false);
     const binding = await createBinding();
     expect(await binding.discover()).toEqual({ status: "not_installed" });
@@ -102,6 +104,17 @@ describe("antigravity.createModelProvider", () => {
     native.installed.mockReturnValue(true);
     discoverModels.mockResolvedValue(undefined);
     const result = await binding.discover();
+    if (process.platform === "win32") {
+      expect(result).toEqual({
+        status: "authentication_required",
+        login: {
+          executable: "/test/antigravity",
+          args: ["-p", "/usage"],
+          terminal: true,
+        },
+      });
+      return;
+    }
     expect(result).toMatchObject({
       status: "authentication_required",
       login: {
@@ -112,6 +125,23 @@ describe("antigravity.createModelProvider", () => {
           "antigravity-sign-in",
           "/test/antigravity",
         ],
+      },
+    });
+  });
+
+  it("requests a Windows terminal without invoking a shell", async () => {
+    vi.stubGlobal(
+      "process",
+      Object.create(process, { platform: { value: "win32" } }),
+    );
+    discoverModels.mockResolvedValue(undefined);
+    const result = await (await createBinding()).discover();
+    expect(DiscoverySchema.parse(result)).toEqual({
+      status: "authentication_required",
+      login: {
+        executable: "/test/antigravity",
+        args: ["-p", "/usage"],
+        terminal: true,
       },
     });
   });
