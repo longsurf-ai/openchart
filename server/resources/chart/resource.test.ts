@@ -93,7 +93,7 @@ function cell(suffix: string) {
   >[number];
 }
 
-test("lists complete grids by dashboard, including multiple grids and empty results", async () => {
+test("lists the unique grid by dashboard, including empty results", async () => {
   const first = await caller.resources.dashboard.create({ name: "First" });
   const second = await caller.resources.dashboard.create({ name: "Second" });
   const empty = await caller.resources.dashboard.create({ name: "Empty" });
@@ -105,11 +105,12 @@ test("lists complete grids by dashboard, including multiple grids and empty resu
     dashboardId: second.id,
     cells: [cell("b")],
   });
-  const c = await caller.resources.chart.create({ dashboardId: first.id });
+  const third = await caller.resources.dashboard.create({ name: "Third" });
+  const c = await caller.resources.chart.create({ dashboardId: third.id });
   expect(chartResource.listKeys).toEqual(["dashboardId"]);
   await expect(
     caller.resources.chart.list({ filter: { dashboardId: first.id } }),
-  ).resolves.toEqual({ items: [a, c], nextCursor: null });
+  ).resolves.toEqual({ items: [a], nextCursor: null });
   await expect(
     caller.resources.chart.list({ filter: { dashboardId: second.id } }),
   ).resolves.toEqual({ items: [b], nextCursor: null });
@@ -457,8 +458,11 @@ test("rolls back replacement, revision, and events when a child write fails", as
     dashboardId: dashboard.id,
     cells: [cell("original")],
   });
+  const otherDashboard = await caller.resources.dashboard.create({
+    name: "Other",
+  });
   const other = await caller.resources.chart.create({
-    dashboardId: dashboard.id,
+    dashboardId: otherDashboard.id,
     cells: [cell("other")],
   });
   const events = await runtime.runPromise(Events.Service);
@@ -472,7 +476,8 @@ test("rolls back replacement, revision, and events when a child write fails", as
   ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
   await expect(
     caller.resources.chart.list({ filter: { dashboardId: dashboard.id } }),
-  ).resolves.toEqual({ items: [original, other], nextCursor: null });
+  ).resolves.toEqual({ items: [original], nextCursor: null });
+  expect(await caller.resources.chart.get({ id: other.id })).toEqual(other);
   expect(publish).not.toHaveBeenCalled();
 });
 
@@ -525,4 +530,43 @@ test("dashboard cascade removes every chart table and Indicator and publishes th
       }
     }),
   );
+});
+
+test("rejects a second Chart and a move into an occupied Dashboard without changing either grid", async () => {
+  const first = await caller.resources.dashboard.create({ name: "First" });
+  const second = await caller.resources.dashboard.create({ name: "Second" });
+  const a = await caller.resources.chart.create({ dashboardId: first.id });
+  const b = await caller.resources.chart.create({ dashboardId: second.id });
+  await expect(
+    caller.resources.chart.create({ dashboardId: first.id }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  await expect(
+    caller.resources.chart.patch({
+      id: b.id,
+      expectedRevision: b.revision,
+      operations: [{ op: "replace", path: "/dashboardId", value: first.id }],
+    }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  expect(await caller.resources.chart.get({ id: a.id })).toEqual(a);
+  expect(await caller.resources.chart.get({ id: b.id })).toEqual(b);
+});
+
+test("removing and re-adding the Chart widget keeps the Dashboard's chart configuration", async () => {
+  const { dashboard, chart } =
+    await caller.resources.macro.createDashboardWithChart();
+  const removed = await caller.resources.dashboard.patch({
+    id: dashboard.id,
+    expectedRevision: dashboard.revision,
+    operations: [{ op: "replace", path: "/widgets", value: [] }],
+  });
+  await caller.resources.dashboard.patch({
+    id: dashboard.id,
+    expectedRevision: removed.revision,
+    operations: [{ op: "replace", path: "/widgets", value: dashboard.widgets }],
+  });
+  expect(
+    await caller.resources.chart.list({
+      filter: { dashboardId: dashboard.id },
+    }),
+  ).toEqual({ items: [chart], nextCursor: null });
 });

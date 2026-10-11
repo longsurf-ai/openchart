@@ -10,6 +10,7 @@ import { expect, it, vi } from "vitest";
 
 import {
   chartDetail,
+  chartList,
   createCell,
   type ChartResource,
 } from "@openchart/app/features/chart/api/queries";
@@ -65,8 +66,11 @@ function setup() {
     ],
     links: [],
   });
-  const a = chart("AAPL");
-  const b = chart("MSFT");
+  const a = {
+    ...chart("AAPL"),
+    preset: "1x2" as const,
+    cells: [chart("AAPL").cells[0]!, chart("MSFT").cells[0]!],
+  };
   const patch = vi.fn().mockImplementation((input) =>
     Promise.resolve({
       ...a,
@@ -95,32 +99,33 @@ function setup() {
     revision: 1,
     createdAt: 0,
     updatedAt: 0,
-    widgets: [a, b].map((item, index) => ({
-      id: defineId("wdg", "WidgetPlacement.ID").create(),
-      kind: "chart",
-      resourceId: item.id,
-      layout: { x: index * 6, y: 0, w: 6, h: 8 },
-    })),
+    widgets: [
+      {
+        id: defineId("wdg", "WidgetPlacement.ID").create(),
+        kind: "chart",
+        layout: { x: 0, y: 0, w: 12, h: 8 },
+      },
+    ],
   };
   client.setQueryData(
     dashboardQueryOptions(transport, dashboard.id).queryKey,
     dashboard,
   );
-  for (const item of [a, b])
-    client.setQueryData(chartDetail(transport, item.id).queryKey, item);
-  const content = (chartId: string) => (
+  client.setQueryData(chartDetail(transport, a.id).queryKey, a);
+  client.setQueryData(chartList(transport, dashboard.id).queryKey, [a]);
+  const content = (cellId: string) => (
     <QueryClientProvider client={client}>
       <SymbolControl
         dashboardId={dashboard.id}
-        chartId={chartId}
+        chartId={a.id}
+        cellId={cellId}
         transport={transport}
       />
     </QueryClientProvider>
   );
-  const view = render(content(a.id));
+  const view = render(content(a.cells[0]!.id));
   return {
     a,
-    b,
     patch,
     transport,
     client,
@@ -131,12 +136,12 @@ function setup() {
   };
 }
 
-it("changes the chart captured when opening, even if another widget gains focus", async () => {
-  const { a, b, patch, client, view, content, user } = setup();
+it("changes the chart captured when opening, even if another cell gains focus", async () => {
+  const { a, patch, client, view, content, user } = setup();
   await user.click(
     screen.getByRole("button", { name: "Symbol AAPL. Change symbol" }),
   );
-  view.rerender(content(b.id));
+  view.rerender(content(a.cells[1]!.id));
   await user.click(screen.getByRole("button", { name: "Choose GOOG" }));
   await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
   expect(patch.mock.calls[0]![0]).toMatchObject({
@@ -150,6 +155,7 @@ it("changes the chart captured when opening, even if another widget gains focus"
             id: a.cells[0]!.id,
             marketSources: [{ listing: { symbol: "GOOG", currency: "USD" } }],
           },
+          { id: a.cells[1]!.id },
         ],
       },
     ],

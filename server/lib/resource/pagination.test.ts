@@ -313,27 +313,21 @@ test("paginates existing joined Resources and applies filters before the row lim
   const first = await caller.resources.dashboard.create({
     name: "first",
     widgets: [
-      { id: "wdg_a", kind: "watchlist", layout: { x: 0, y: 0, w: 12, h: 16 } },
+      { id: "wdg_a", kind: "feed", layout: { x: 0, y: 0, w: 12, h: 16 } },
     ],
   });
   const second = await caller.resources.dashboard.create({ name: "second" });
-  const charts = [];
-  for (let i = 0; i < 3; i++) {
-    await caller.resources.chart.create({
-      dashboardId: second.id,
-      preset: "1",
-      cells: [],
-      links: [],
-    });
-    charts.push(
-      await caller.resources.chart.create({
-        dashboardId: first.id,
-        preset: "1",
-        cells: [],
-        links: [],
-      }),
-    );
-  }
+  await caller.resources.chart.create({ dashboardId: second.id });
+  const charts = [
+    await caller.resources.chart.create({ dashboardId: first.id }),
+  ];
+  const allCharts = await caller.resources.chart.list({ limit: 1 });
+  expect(allCharts.nextCursor).not.toBeNull();
+  const nextCharts = await caller.resources.chart.list({
+    limit: 1,
+    cursor: allCharts.nextCursor!,
+  });
+  expect(nextCharts.items).toEqual(charts);
   const chartIds: string[] = [];
   let cursor: string | null = null;
   do {

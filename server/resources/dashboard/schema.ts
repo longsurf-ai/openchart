@@ -42,7 +42,7 @@ export const dashboardTable = sqliteTable(
 
 /**
  * Ordered widget placements owned by a dashboard, sharing its revision.
- * `resourceId` is a reference only; the placement does not own its target.
+ * Each kind occurs once; widgets resolve their own content.
  */
 export const dashboardWidgetTable = sqliteTable(
   "dashboard_widget",
@@ -53,7 +53,6 @@ export const dashboardWidgetTable = sqliteTable(
       .references(() => dashboardTable.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
     kind: text("kind").notNull(),
-    resourceId: text("resource_id"),
     x: integer("x").notNull(),
     y: integer("y").notNull(),
     w: integer("w").notNull(),
@@ -66,12 +65,9 @@ export const dashboardWidgetTable = sqliteTable(
       table.dashboardId,
       table.position,
     ),
+    unique("dashboard_widget_kind_unique").on(table.dashboardId, table.kind),
     check("dashboard_widget_position_check", sql`${table.position} >= 0`),
     check("dashboard_widget_kind_check", sql`length(${table.kind}) > 0`),
-    check(
-      "dashboard_widget_resource_id_check",
-      sql`${table.resourceId} IS NULL OR length(${table.resourceId}) > 0`,
-    ),
     check(
       "dashboard_widget_x_check",
       sql`typeof(${table.x}) = 'integer' AND ${table.x} >= 0`,

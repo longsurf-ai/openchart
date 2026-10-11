@@ -532,4 +532,11 @@ export const migrations = [
     checksum:
       "a70d0974be59dc47ef57d4820afba9c460b01b3450720a68e10d87c438af7985",
   },
+  {
+    ...(await import("./migration/20261010170833_unique-dashboard-widgets"))
+      .default,
+    filename: "20261010170833_unique-dashboard-widgets.ts",
+    checksum:
+      "45a6372295fbbcc694676bb11a687af6416df08c8069cfe82966993938da71c7",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];

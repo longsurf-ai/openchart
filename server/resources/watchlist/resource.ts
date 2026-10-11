@@ -21,7 +21,7 @@ export {
  * The watchlist Resource: the complete {@link WatchlistEntity}, persisted by
  * its own store over `watchlist`, `watchlist_section`, and `watchlist_item`,
  * exposed as the `resources.watchlist` tRPC router and to Agent Resource tools.
- * Watchlists are independent; Dashboards only reference them.
+ * Watchlists are independent; widgets select them in local view state.
  *
  * @example
  * ```ts

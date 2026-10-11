@@ -311,7 +311,7 @@ function backend() {
           {
             id: `wdg_${dashboards.length + 1}` as Dashboard["widgets"][number]["id"],
             kind: "chart",
-            resourceId: chart.id,
+
             layout: { x: 0, y: 0, w: 12, h: 24 },
           },
         ],
@@ -2028,7 +2028,7 @@ test("Dashboard creation opens the returned Chart placement, refreshes the direc
     {
       id: "wdg_1",
       kind: "chart",
-      resourceId: "cht_1",
+
       layout: { x: 0, y: 0, w: 12, h: 24 },
     },
   ]);

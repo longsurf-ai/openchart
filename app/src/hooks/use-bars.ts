@@ -47,6 +47,8 @@ export type {
 /** Gate a finite query without inventing a domain request. */
 export interface QueryOptions {
   readonly enabled?: boolean;
+  /** The caller shows failures in place, so the query raises no global toast. */
+  readonly silent?: boolean;
 }
 
 /**
@@ -265,5 +267,6 @@ export function useBarsCapabilities(
         ? previous
         : undefined,
     enabled: version !== undefined && options.enabled !== false,
+    meta: options.silent ? { silent: true } : undefined,
   });
 }

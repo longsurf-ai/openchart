@@ -39,7 +39,7 @@ export function chartDetail(transport: AppTransport, id: string) {
   });
 }
 
-/** Read all saved grids in a Dashboard without creating or changing placements.
+/** Read the Dashboard's unique saved grid without creating or changing placements.
  * @example useQuery(chartList(transport, dashboardId));
  */
 export function chartList(transport: AppTransport, dashboardId: string) {
@@ -52,23 +52,13 @@ export function chartList(transport: AppTransport, dashboardId: string) {
     ],
     meta: { errorTitle: "Couldn’t load charts." },
     enabled: !!dashboardId,
-    queryFn: async ({ signal }) => {
-      const charts: ChartResource[] = [];
-      let cursor: string | undefined;
-      do {
-        const page = await transport.rpc.resources.chart.list.query(
-          {
-            filter: { dashboardId },
-            limit: 100,
-            cursor,
-          },
+    queryFn: async ({ signal }) =>
+      (
+        await transport.rpc.resources.chart.list.query(
+          { filter: { dashboardId }, limit: 1 },
           { signal },
-        );
-        charts.push(...page.items);
-        cursor = page.nextCursor ?? undefined;
-      } while (cursor);
-      return charts;
-    },
+        )
+      ).items,
   });
 }
 

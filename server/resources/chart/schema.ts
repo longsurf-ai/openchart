@@ -89,8 +89,8 @@ function orderedChildChecks(
 }
 
 /**
- * One Resource is an entire chart grid owned by a dashboard. There may be
- * multiple grids per dashboard; its widgets never duplicate chart membership.
+ * One Resource is the dashboard's only chart grid. Widgets resolve it by
+ * dashboardId; removing the widget keeps this grid and its configuration.
  * Only this table carries an envelope. All child writes share its revision.
  *
  * @see [Resource ownership](../../../docs/architecture/resource.md)
@@ -106,7 +106,7 @@ export const chartTable = sqliteTable(
   },
   (table) => [
     ...resourceEnvelopeChecks("chart", table),
-    index("chart_dashboard_index").on(table.dashboardId),
+    uniqueIndex("chart_dashboard_unique").on(table.dashboardId),
     check(
       "chart_preset_check",
       inArray(table.preset, CHART_PRESETS).inlineParams(),

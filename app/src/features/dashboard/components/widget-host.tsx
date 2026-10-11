@@ -40,11 +40,7 @@ export function WidgetHost({
   transport: AppTransport;
   definition: WidgetDefinition | undefined;
   disabled: boolean;
-  onPlaceBeside: (
-    anchorId: string,
-    definition: WidgetDefinition,
-    resourceId?: string,
-  ) => string;
+  onPlaceBeside: (anchorId: string, definition: WidgetDefinition) => string;
   onRemove: () => void;
   onLayout?: (layout: Placement["layout"]) => Promise<unknown>;
 }) {
@@ -66,8 +62,8 @@ export function WidgetHost({
       dashboardId,
       transport,
       holdControls,
-      placeBeside: (definition: WidgetDefinition, resourceId?: string) =>
-        onPlaceBeside(placement.id, definition, resourceId),
+      placeBeside: (definition: WidgetDefinition) =>
+        onPlaceBeside(placement.id, definition),
     }),
     [placement.id, dashboardId, transport, holdControls, onPlaceBeside],
   );
@@ -140,7 +136,7 @@ export function WidgetHost({
     <WidgetContext.Provider value={context}>
       <WidgetCard title={title} held={holds > 0}>
         <ErrorBoundary
-          resetKeys={[placement.kind, placement.resourceId]}
+          resetKeys={[placement.kind]}
           fallbackRender={({ resetErrorBoundary }) => (
             <>
               <WidgetControls>

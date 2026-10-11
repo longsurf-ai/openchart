@@ -44,8 +44,8 @@ function orderedChildChecks(
 }
 
 /**
- * One independent watchlist. Dashboards place it by reference and never own
- * it. Only this table carries an envelope; column, section, and item writes
+ * One independent watchlist, selected by widgets in local view state.
+ * Only this table carries an envelope; column, section, and item writes
  * share its revision. Columns are what the watchlist tracks; column widths,
  * sorting, and collapsed sections are frontend view state. Market values come
  * from Feed and are never stored.
@@ -86,8 +86,6 @@ export const watchlistSectionTable = sqliteTable(
     watchlistId: text("watchlist_id")
       .notNull()
       .references(() => watchlistTable.id, { onDelete: "cascade" }),
-
-    // When parentSectionId is NULL, the section is a root section, and its position
 
     parentSectionId: text("parent_section_id"),
     position: integer("position").notNull(),

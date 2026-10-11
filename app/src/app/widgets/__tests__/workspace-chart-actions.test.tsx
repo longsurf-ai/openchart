@@ -11,6 +11,7 @@ import { widgetRegistry } from "@openchart/app/app/widgets/widget-registry";
 import { TooltipProvider } from "@openchart/app/components/ui/tooltip";
 import {
   chartDetail,
+  chartList,
   createCell,
   type ChartResource,
 } from "@openchart/app/features/chart/api/queries";
@@ -72,7 +73,7 @@ const charts = ["cht_one", "cht_two"].map(
 function FocusSecondCell() {
   const { focus } = useChartSelection();
   return (
-    <button onClick={() => focus("cht_two", charts[1]!.cells[1]!.id)}>
+    <button onClick={() => focus("cht_one", charts[0]!.cells[1]!.id)}>
       Focus
     </button>
   );
@@ -100,7 +101,6 @@ const placementId = defineId("wdg", "WidgetPlacement.ID");
 const placement = (kind: string, resourceId: string, y: number) => ({
   id: placementId.make(`wdg_${resourceId}`),
   kind,
-  resourceId,
   layout: { x: 0, y, w: 12, h: 12 },
 });
 
@@ -206,6 +206,9 @@ function setup(
     dashboardQueryOptions(transport, dashboard.id).queryKey,
     dashboard,
   );
+  client.setQueryData(chartList(transport, dashboard.id).queryKey, [
+    charts[0]!,
+  ]);
   for (const chart of charts)
     client.setQueryData(chartDetail(transport, chart.id).queryKey, chart);
   const view = render(
@@ -238,10 +241,9 @@ function setup(
   };
 }
 
-test("Add to chart saves the tab, then adds the file to the active chart's focused cell", async () => {
+test("Add to chart saves the tab, then adds the file to the Dashboard chart's focused cell", async () => {
   const { addIndicator, user, cleanup } = setup([
     placement("chart", "cht_one", 0),
-    placement("chart", "cht_two", 12),
     placement("workspace", "wsp_research", 24),
   ]);
   try {
@@ -253,9 +255,9 @@ test("Add to chart saves the tab, then adds the file to the active chart's focus
     await user.click(add);
     await waitFor(() =>
       expect(addIndicator).toHaveBeenCalledExactlyOnceWith({
-        chartId: "cht_two",
+        chartId: "cht_one",
         expectedRevision: 3,
-        cellId: charts[1]!.cells[1]!.id,
+        cellId: charts[0]!.cells[1]!.id,
         source: file,
         parameterOverrides: {},
       }),

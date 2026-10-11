@@ -1,11 +1,11 @@
 # React charts
 
 Open or create a **Dashboard** in the sidebar (`/app/dashboards/:dashboardId`).
-An empty Dashboard creates no chart until you choose **Add chart**, search for a
-symbol, and select a real provider result. One backend transaction creates the
-Chart Resource and its Dashboard placement. All placements render as widgets;
-outer drag/resize is always available on wide layouts without changing the chart's
-inner CSS grid. The grip also accepts arrow keys to move. The X removes the widget placement while preserving its Chart Resource.
+Each Dashboard has at most one Chart widget and one saved Chart configuration.
+Adding the widget uses the same placement write as other kinds. The widget reads
+its Chart by dashboardId; when absent, Choose symbol creates the configuration.
+Mounting never creates data. Outer drag/resize changes Dashboard geometry; the X
+removes only the widget. Re-adding it loads the same Chart configuration.
 
 The page's upper-left symbol control edits the focused cell in the selected
 Chart widget. It queries and mutates the Chart Resource independently of renderer

@@ -78,8 +78,8 @@ raw configuration or parser inputs.
 
 New Dashboard uses `resources.macro.createDashboardWithChart` and starts with a Binance
 BTCUSDT daily Chart, without Feed access during creation. The Widgets dropdown
-uses the same default in `resources.macro.createChartWidget`; existing placement geometry
-and the new Chart are saved atomically. Workspace widgets show all registered folders
+adds one placement per kind through Dashboard patch. Chart resolves its saved
+configuration by dashboardId, offering symbol selection when absent. Workspace widgets show all registered folders
 without a directory reference. Widget creation has no Config setting.
 
 ## Consumers and notifications

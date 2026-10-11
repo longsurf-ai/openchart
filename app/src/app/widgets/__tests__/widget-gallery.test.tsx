@@ -1,5 +1,6 @@
-// Purpose: Verify direct widget actions, menu dismissal and Dashboard save locking.
+// Purpose: Verify direct widget actions, local-content widgets, menu dismissal and Dashboard save locking.
 import { defineId } from "@openchart/identifier";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WidgetGallery } from "@openchart/app/app/widgets/widget-gallery";
@@ -15,35 +16,36 @@ function setup(disabled = false) {
     updatedAt: 1,
     widgets: [],
   };
-  const actions = { Chart: vi.fn(), Workspace: vi.fn() };
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const onAdd = vi.fn();
   const content = (value: Dashboard) => (
-    <WidgetGallery
-      dashboard={value}
-      disabled={disabled}
-      onAddWorkspace={actions.Workspace}
-      onAddChart={actions.Chart}
-    />
+    <QueryClientProvider client={client}>
+      <WidgetGallery dashboard={value} disabled={disabled} onAdd={onAdd} />
+    </QueryClientProvider>
   );
   const view = render(content(dashboard));
   return {
     dashboard,
-    actions,
+    onAdd,
     user: userEvent.setup(),
     refresh: (value: Dashboard) => view.rerender(content(value)),
   };
 }
 
-test.each(["Chart", "Workspace"] as const)(
+test.each([
+  ["Chart", "chart"],
+  ["Workspace", "workspace"],
+  ["Watchlist", "watchlist"],
+] as const)(
   "adds %s with one selection and returns focus to the trigger",
-  async (kind) => {
-    const { actions, user } = setup();
+  async (name, kind) => {
+    const { onAdd, user } = setup();
     await user.click(screen.getByRole("button", { name: "Widgets" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("menuitem", { name: kind }));
-    expect(actions[kind]).toHaveBeenCalledExactlyOnceWith();
-    for (const [name, action] of Object.entries(actions)) {
-      if (name !== kind) expect(action).not.toHaveBeenCalled();
-    }
+    await user.click(screen.getByRole("menuitem", { name }));
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith(kind);
     await waitFor(() =>
       expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
     );
@@ -51,40 +53,45 @@ test.each(["Chart", "Workspace"] as const)(
   },
 );
 
-test("offers Chart and Workspace; Alerts live in the sidebar, not on dashboards", async () => {
+test("offers Chart, Workspace and Watchlist; Alerts live in the sidebar, not on dashboards", async () => {
   const { user } = setup();
   await user.click(screen.getByRole("button", { name: "Widgets" }));
   expect(
     screen.getAllByRole("menuitem").map((item) => item.textContent),
-  ).toEqual(["Chart", "Workspace"]);
+  ).toEqual(["Chart", "Workspace", "Watchlist"]);
 });
 
 test("honors Dashboard's shared pending state", async () => {
-  const { user, actions } = setup(true);
+  const { user, onAdd } = setup(true);
   expect(screen.getByRole("button", { name: "Widgets" })).toBeDisabled();
   await user.click(screen.getByRole("button", { name: "Widgets" }));
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  for (const action of Object.values(actions))
-    expect(action).not.toHaveBeenCalled();
+  expect(onAdd).not.toHaveBeenCalled();
 });
 
-test("disables Workspace when the dashboard already has one", async () => {
+test.each([
+  ["chart", "Chart"],
+  ["workspace", "Workspace"],
+  ["watchlist", "Watchlist"],
+])("disables %s when the dashboard already has one", async (kind, title) => {
   const { user, dashboard, refresh } = setup();
   refresh({
     ...dashboard,
     widgets: [
       {
         id: defineId("wdg", "WidgetPlacement.ID").create(),
-        kind: "workspace",
+        kind,
         layout: { x: 0, y: 0, w: 12, h: 24 },
       },
     ],
   });
   await user.click(screen.getByRole("button", { name: "Widgets" }));
-  expect(screen.getByRole("menuitem", { name: "Workspace" })).toHaveAttribute(
+  expect(screen.getByRole("menuitem", { name: title })).toHaveAttribute(
     "data-disabled",
   );
-  expect(screen.getByRole("menuitem", { name: "Chart" })).not.toHaveAttribute(
-    "data-disabled",
-  );
+  expect(
+    screen.getByRole("menuitem", {
+      name: kind === "chart" ? "Workspace" : "Chart",
+    }),
+  ).not.toHaveAttribute("data-disabled");
 });

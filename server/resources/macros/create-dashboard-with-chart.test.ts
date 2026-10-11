@@ -5,7 +5,7 @@ import { Events } from "@openchart/server/events";
 import { Feed } from "@openchart/server/feed/service";
 import { temporaryHome } from "@openchart/server/home.test-utils";
 import { Transition } from "@openchart/server/lib/resource";
-import { dashboardResource } from "@openchart/server/resources/dashboard";
+import { chartResource } from "@openchart/server/resources/chart";
 import { makeRuntime } from "@openchart/server/runtime";
 import { ConfigProvider, Effect } from "effect";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -41,11 +41,11 @@ test("creates and returns a persisted Binance BTCUSDT Chart and placement withou
   expect(dashboard).toMatchObject({
     name: "New dashboard",
     favorite: false,
-    revision: 2,
+    revision: 1,
     widgets: [
       {
         kind: "chart",
-        resourceId: chart.id,
+
         layout: { x: 0, y: 0, w: 12, h: 24 },
       },
     ],
@@ -116,7 +116,7 @@ test("each call creates independent Resources and ordinary Dashboard create rema
   const second = await caller.resources.macro.createDashboardWithChart();
   expect(second.dashboard.id).not.toBe(first.dashboard.id);
   expect(second.chart.id).not.toBe(first.chart.id);
-  expect(second.dashboard.widgets[0]!.resourceId).toBe(second.chart.id);
+  expect(second.dashboard.widgets[0]).not.toHaveProperty("resourceId");
   expect(second.chart.dashboardId).toBe(second.dashboard.id);
   const empty = await caller.resources.dashboard.create({ name: "Empty" });
   expect(empty.widgets).toEqual([]);
@@ -131,11 +131,11 @@ test("each call creates independent Resources and ordinary Dashboard create rema
 test("a failure after placement write rolls back all Resources and publishes no changes", async () => {
   const events = await runtime.runPromise(Events.Service);
   const publish = vi.spyOn(events, "publish");
-  const patch = dashboardResource.transitions.patch;
-  vi.spyOn(dashboardResource.transitions, "patch").mockImplementationOnce(
+  const create = chartResource.transitions.create;
+  vi.spyOn(chartResource.transitions, "create").mockImplementationOnce(
     (input) =>
       Transition.from((tx) =>
-        patch(input)
+        create(input)
           .apply(tx, undefined)
           .pipe(
             Effect.andThen(Effect.die(new Error("Injected write failure"))),

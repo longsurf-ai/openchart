@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@openchart/app/components/ui/button";
 import {
   chartDetail,
+  chartList,
   chartMutation,
   chartMutationKey,
   type ChartResource,
@@ -50,16 +51,15 @@ export function SymbolControl({
   const source = cell ? getMainSource(cell) : undefined;
   const busy = useIsMutating({ mutationKey: chartMutationKey(chartId) }) > 0;
   const dashboard = useQuery(dashboardQueryOptions(transport, dashboardId));
+  const charts = useQuery(chartList(transport, dashboardId));
   const targetStillPlaced =
     !!target &&
-    dashboard.data?.widgets.some(
-      (widget) =>
-        widget.kind === "chart" && widget.resourceId === target.chartId,
-    );
+    charts.data?.[0]?.id === target.chartId &&
+    dashboard.data?.widgets.some((widget) => widget.kind === "chart");
   useEffect(() => {
-    if (target && dashboard.isSuccess && !targetStillPlaced)
+    if (target && dashboard.isSuccess && charts.isSuccess && !targetStillPlaced)
       setTarget(undefined);
-  }, [target, dashboard.isSuccess, targetStillPlaced]);
+  }, [target, dashboard.isSuccess, charts.isSuccess, targetStillPlaced]);
   return (
     <>
       <Button

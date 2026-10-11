@@ -24,14 +24,13 @@ test("the first widget fills the viewport and omits an absent Resource reference
 });
 
 test("adding the second widget splits the viewport without changing identities or the input", () => {
-  const first = appendWidget([], definition, "cht_first");
-  const [existing, second] = appendWidget(first, definition, "cht_second");
+  const first = appendWidget([], definition);
+  const [existing, second] = appendWidget(first, definition);
   expect(existing).toEqual({
     ...first[0],
     layout: { x: 0, y: 0, w: 6, h: 24 },
   });
   expect(second).toMatchObject({
-    resourceId: "cht_second",
     layout: { x: 6, y: 0, w: 6, h: 24 },
   });
   expect(first[0]!.layout).toEqual({ x: 0, y: 0, w: 12, h: 24 });
@@ -60,13 +59,7 @@ const overlaps = (a: Rectangle, b: Rectangle) =>
 
 /** Dock beside `anchorId` and check what every result must satisfy; returns the saved rectangles. */
 function dockChecked(widgets: Dashboard["widgets"], anchorId: string) {
-  const result = placeWidgetBeside(
-    widgets,
-    registry,
-    anchorId,
-    workspace,
-    "wsp_1",
-  );
+  const result = placeWidgetBeside(widgets, registry, anchorId, workspace);
   const saved = result.widgets.map(({ layout }) => layout);
   // Every result is a valid persisted layout: in bounds and never overlapping.
   for (const [index, a] of saved.entries()) {
@@ -94,14 +87,13 @@ function dockChecked(widgets: Dashboard["widgets"], anchorId: string) {
       saved.some((layout) => overlaps(layout, { ...docked, x: next, w: 1 })),
     ).toBe(true);
   // Other placements keep their identity and order; only the new one is appended.
-  const identity = ({ id, kind, resourceId }: (typeof widgets)[number]) => ({
+  const identity = ({ id, kind }: (typeof widgets)[number]) => ({
     id,
     kind,
-    resourceId,
   });
   expect(result.widgets.map(identity)).toEqual([
     ...widgets.map(identity),
-    { id: result.id, kind: "workspace", resourceId: "wsp_1" },
+    { id: result.id, kind: "workspace" },
   ]);
   return saved;
 }
@@ -118,7 +110,7 @@ function dock(chart: Rectangle, others: Rectangle[] = []) {
       {
         id: placementId.make("wdg_chart"),
         kind: "chart",
-        resourceId: "cht_1",
+
         layout: chart,
       },
     ],

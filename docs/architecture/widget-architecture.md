@@ -1,6 +1,6 @@
 # Dashboard and Widget Architecture
 
-Status: as of 2026-09-19, Dashboard placements, the Chart widget, and the Workspace file widget are implemented. This document records the implementation boundaries and verification scope.
+Status: as of 2026-10-09, Dashboard placements, the Chart widget, the Workspace file widget, and the Watchlist widget are implemented. This document records the implementation boundaries and verification scope.
 Metabase serves only as a reference for responsibility boundaries; controls, typography, theme, and interaction styling follow the [app design guidelines](../../app/DESIGN.md).
 
 ## 1. Data model: separate user data from frontend presentation
@@ -31,7 +31,7 @@ The old `ChartPage` and `?chart=` selection logic have been removed. The existin
 | Drawing           | Drawing geometry, style, visibility           | Drawing revision   |
 
 `WidgetPlacement` is one data item in the Dashboard Resource's `widgets[]`:
-`{id, kind, resourceId?, layout: {x,y,w,h}}`. It records one placement; it is not a running component,
+`{id, kind, layout: {x,y,w,h}}`. It records one placement; it is not a running component,
 and it has no Resource envelope of its own. Each placement has one `wdg_` ID and shares the Dashboard's revision.
 
 The frontend `WidgetDefinition` statically declares the type, controls, components, and size constraints; the Host mounts that definition by placement ID.
@@ -39,19 +39,19 @@ A widget can read several Resources and can also read workspace data through the
 We add no Widget Resource, generic Card Resource, second chart configuration, or arbitrary `settings: JSON`.
 `kind` stays a non-empty string, and existing unknown kinds show an unsupported card; adding a new frontend presentation does not require changing a backend enum.
 
-The existing `resourceId` is a reference field on the placement, not a unified data interface for all widgets.
-The Chart adapter queries its own placement in the Dashboard where it is used, validates it, and obtains the required `chartId`; the generic Host does not interpret this field, nor does it treat a missing value as an unbound widget.
+Each Dashboard contains at most one widget of each kind. Placements carry no Resource reference.
+The Chart adapter queries the unique Chart by `dashboardId`; an absent Chart offers symbol selection and creates configuration only after that action. Watchlist selection remains local to its component.
 Workspace files use the disk as the source of truth and are read through the backend API; there are no separate Resource records for files and does not store file contents in the placement or ViewState.
 The Workspace adapter is not bound to a single directory; it mounts the complete `WorkspaceView` shared with the files page directly. For the file API, see [Workspace architecture](workspace.md).
 
 ### What data changes mean
 
-- New Dashboard/Command+D calls `resources.macro.createDashboardWithChart()`, which atomically creates a Dashboard, a default Binance `BTCUSDT` daily Chart, and a placement, then navigates to it on success. Creation does not read Feed. Picking an item in the Widgets dropdown adds it immediately: Chart reuses the same default BTC daily configuration, and Workspace shows all registered directories. Alerts are not a widget; the sidebar and Feed host them.
+- New Dashboard/Command+D calls `resources.macro.createDashboardWithChart()`, which atomically creates a Dashboard, a default Binance `BTCUSDT` daily Chart, and a placement, then navigates to it on success. Creation does not read Feed. Picking any item in the Widgets dropdown adds it immediately: Chart loads the Dashboard's saved configuration or offers symbol selection, and Workspace shows all registered directories. Watchlist opens a browser whose own header selects and creates lists. Alerts are not a widget; the sidebar and Feed host them.
 - Changing a widget's position or size, or removing a placement, modifies the Dashboard Resource's `widgets` data.
 - Changing the interval in a Chart widget modifies the Chart Resource; this is a different operation from changing the Dashboard layout.
 - Today, `Remove from dashboard` removes only the placement and keeps the linked Chart; the button does not mean deleting the Chart.
-  Duplicating a widget is not implemented, and there is no generic operation to put a Resource back.
-- The existing `Chart.dashboardId` ownership FK, the Chart/Drawing cascade on Dashboard deletion, and the fact that placement references carry no FK to their target all stay unchanged.
+  Duplicating a widget is not implemented, and adding the Chart widget again restores the saved configuration.
+- The existing `Chart.dashboardId` ownership FK, the Chart/Drawing cascade on Dashboard deletion, and unique Chart per Dashboard remain enforced in storage.
   Storage relationships do not replace UI command semantics; the existing remove entry point only submits a Dashboard mutation.
 - Moving a Chart and existing references keep their current contracts; drawings are still decided by the Chart's actual owner.
 
@@ -199,7 +199,7 @@ Following the default behavior stated at implementation time, the page symbol en
 The Dashboard uses `ChartSelectionContext` to provide the current chart ID and the cell ID each chart remembers; it updates when a chart or its controls are clicked/focused, and hover does not switch the target.
 The header and Grid read this single piece of frontend selection state, derive the first visible target on first display, and neither store a separate entity nor save focus to the backend.
 When the search dialog opens it captures the full `{chartId, cellId}`, and submit uses the captured chartId; later focus changes do not change the target of this operation.
-If the target is deleted, the placement is rebound, or the Dashboard switches, the dialog closes; it does not fall back to another Chart or the first cell.
+If the target is deleted, the Dashboard switches, the dialog closes; it does not fall back to another Chart or the first cell.
 Query and save errors are shown by the header symbol component; the header dialog does not need to keep the widget toolbar expanded.
 
 `ChartGridProvider` sits inside `WidgetCard` and wraps both Controls and Content so they share runtime/preferences handles
@@ -228,7 +228,7 @@ type WidgetContextValue = {
   dashboardId: string;
   transport: AppTransport;
   holdControls: () => () => void;
-  placeBeside: (definition: WidgetDefinition, resourceId?: string) => string;
+  placeBeside: (definition: WidgetDefinition) => string;
 };
 ```
 
@@ -247,8 +247,8 @@ serves as a reference, but its shared action bar is not fully declared by the vi
 
 `holdControls()` only manages card UI: it takes a lease when a menu/dialog opens and releases it idempotently on close or unmount.
 Multiple nested portals do not hide the toolbar early for each other; there is no global popover scan or business event bus.
-The Context only provides identity, the existing transport, the card lease, and the single Host layout capability `placeBeside`; it does not create another resource/dataset/agent client, and consumers still use the libraries' hooks directly.
-`placeBeside` returns a placement ID synchronously: if the Dashboard (or the save still being saved or refreshed) already has a placement with the same kind and `resourceId`, it returns that ID directly without saving (widgets that need no Resource, such as the single Workspace, match by kind only); otherwise it starts one save at the current revision with the same DashboardView mutation, docks the new placement to the right of the caller, and returns the new ID immediately. A failed save uses the existing Retry/Discard; Retry replays the same ID and never retries automatically against a new revision; it throws if another change is still unsaved.
+The Context only provides identity, the existing transport, the card lease, and the Host placement capability `placeBeside`; it does not create another resource/dataset/agent client, and consumers still use the libraries' hooks directly.
+`placeBeside` returns a placement ID synchronously: if the Dashboard (or the save still being saved or refreshed) already has a placement with the same kind, it returns that ID directly without saving; otherwise it starts one save at the current revision with the same DashboardView mutation, docks the new placement to the right of the caller, and returns the new ID immediately. A failed save uses the existing Retry/Discard; Retry replays the same ID and never retries automatically against a new revision; it throws if another change is still unsaved.
 The app overrides `WorkspaceFileNavigation` in the Chart widget's Provider: both Open code in the Indicator legend and the code entry in the Indicator picker obtain the Dashboard's single Workspace placement (which shows all registered directories) through `placeBeside(workspaceWidget)`, and before the save completes they write the file into the per-placement request table in `lib/workspace/workspace.ts` (the latest request wins for a given placement). Once mounted, the Workspace widget opens the file, scrolls it into view, and clears the request, so a repeated request re-activates the Tab while a remount does not reopen it. Other places still navigate to the full-page Workspace.
 QueryClient, AppTransport, and FeedProvider keep an application-connection-level lifecycle.
 
@@ -259,7 +259,8 @@ holds the generic shell. The Chart adapter lives in `features/chart/components/w
 Dashboard page composition is concentrated in `app/dashboard/`: `workspace.tsx` connects the Header and Grid
 and owns shared selection, save state, and recovery; `dashboard-header.tsx` composes page actions; `dashboard-grid.tsx` handles outer geometry and gestures.
 `widget-gallery.tsx` renders a DropdownMenu from the same widget catalog. Picking an item adds it immediately; DashboardView captures the current layout/revision and owns the mutation, pending, and recovery state in one place. The first widget fills the viewport; the second splits the width evenly with the first, and both rectangles are submitted in the same save; from the third on, widgets are appended at the bottom at their default size without changing the existing layout.
-Chart's `widget.tsx` only defines the Provider, Controls, and Content for an existing placement and contains no creation entry point.
+Chart's `widget.tsx` defines the Provider, Controls and Content. The Provider resolves the Chart by dashboardId and offers symbol selection to create configuration when absent.
+The Watchlist widget has a Provider and Content but no Controls: its card chrome keeps only drag and close, and its own header owns switching, rename, new/delete watchlist, add symbol, new section, and columns. The gallery adds an unbound browser immediately, like Workspace. Selection, collapsed sections and sorting use a placement-scoped Zustand store persisted in localStorage; switching lists never writes Dashboard. Clearing storage forgets the selection. The browser selects the first available list when no selection remains, and shows a creation entry when none exist. A saved selection is read independently of the cursor-paginated menu, so an unloaded page never implies deletion. Successful deletion and confirmed missing details use the same fallback; failed deletes preserve selection. New lists copy the current columns, or use price/change/change% when starting empty. Watchlists remain independent Resources: removing a placement or Dashboard keeps their contents. Sections, rows and columns are edited with JSON Patch (a drag is one `move`); quotes come from each row's daily bars through Feed.
 
 ChartGrid and WorkspaceView each own their content. The Workspace widget shows all registered directories and needs no placement reference; DashboardView adds it using the same placement mutation, pending, and recovery state; it does not copy the editor implementation or create a second file store. The shared exit guard reads each Workspace's live Tab flags; when a Host is removed, only the corresponding placement is checked.
 
@@ -295,9 +296,19 @@ Container resize only changes pixel sizes; it does not save placements or remoun
 RGL maxRows limits the current gesture, and keyboard editing uses the same row limit; when an old layout or collision pushing exceeds the budget, page scrolling is kept rather than clipping content.
 Narrow screens show a single column in array order; the first version does not save a breakpoint layout dictionary. Layout engine types do not enter the Resource schema.
 
-## 4. Persistence changes and migration
+## 4. Persistence and migration history
 
-`server/resources/dashboard/schema.ts` adds only four layout columns, which the API combines into `layout`:
+The current schema permits one placement per `(dashboard_id, kind)` and one Chart
+per Dashboard. Placements contain only ID, kind and layout; `resource_id` is gone.
+The `20261010170833_unique-dashboard-widgets` migration moves extra Charts into
+new Dashboards, preserves their IDs and child configuration, and copies the
+original Dashboard's drawings. It keeps the first placed Chart on the original
+Dashboard and moves duplicate non-Chart placements to their own Dashboards.
+Removing a Chart placement leaves its saved configuration available for readding.
+
+### Original layout migration
+
+The original layout migration added four columns, which the API combines into `layout`:
 
 ```text
 BEFORE: dashboard_widget          AFTER: dashboard_widget
@@ -332,8 +343,15 @@ Generate and check `schema.json`, `schema.gen.ts`, and `migration.gen.ts`. The n
 - [x] Temporary SQLite: fresh creation/upgrade of old data, rectangle bounds and overlap validation, ID preservation; a failure in any step of creating Chart + placement rolls back.
 - [x] Real RGL mouse events: only the handle starts outer dragging, and release submits all affected rectangles once; the request uses the revision from gesture start, and saving neither changes the Query cache nor remounts widgets.
 - [x] Dashboard interaction regressions: delayed Query confirmation, retry at the original revision, re-read after discard, unknown kind, menu lease, no save when the window narrows, bounds and collisions for keyboard handle operations, X removing the placement directly.
-- [x] Chart regressions: header search has no renderer dependency and captures its target; an invalidated target closes the dialog; a failed background refresh keeps mounted charts; repeated references do not create a second runtime; each vertical axis has independent settings.
+- [x] Chart regressions: header search has no renderer dependency and captures its target; an invalidated target closes the dialog; a failed background refresh keeps mounted charts; duplicate widget kinds are rejected; each vertical axis has independent settings.
 - [x] Browser/isolated Electron window: multiple widgets with live market data, creating a Chart, saving position/size, axis Log, the session menu, the always-on floating drawing toolbar, dark and light themes, and the 320px single-column layout.
 - [x] `just check` passes on Node 24; the backend-to-Query geometry save benchmark covers 1/16/64 placements and 0/50/150ms per-request delay; see the data above.
 - [ ] Paint frame rate with many Charts running at once and the release-to-stable-frame p95 have not been measured specifically; the current benchmark makes no performance promise for that scope.
 - [x] The Workspace file widget reuses the files page directly, with disk storage and the unified read/write API.
+
+The forward migration to unique widget kinds preserves the first placed owned Chart
+(or the oldest Chart when none is placed) on the original Dashboard. Extra Charts
+move to new Dashboards with their IDs, grids and Indicators intact. Dashboard-scoped
+drawings are copied to each moved Chart's Dashboard; the original drawing IDs and
+alert references stay unchanged. Duplicate views of the same Chart are removed;
+extra non-Chart placements move to new Dashboards with their placement IDs intact.

@@ -2,6 +2,8 @@
 import type { Listing } from "@openchart/market";
 import type * as Tea from "@openchart/tea";
 
+import { listingLogoIdentifier } from "@openchart/app/hooks/use-logo";
+
 type SymbolInput = {
   readonly provider: string;
   readonly listing: Pick<Listing, "symbol" | "currency" | "venue" | "class">;
@@ -22,7 +24,7 @@ type ConfigNode = Partial<Pick<Tea.NodeConfigEncoded, "inputs">> &
 
 /** Pass an identifier to useLogo only when every Bars input of `config`, its
  * request children included, is the market `input`.
- * Qualify known asset classes; ticker parsing and alias resolution remain backend-owned.
+ * Known asset classes are qualified by `listingLogoIdentifier`.
  * Undefined disables the lookup and leaves the caller's name initial.
  * @example const identifier = alertLogoIdentifier(market, config);
  */
@@ -38,11 +40,5 @@ export function alertLogoIdentifier(
       if (child._tag === "Bars" && !sameSymbol(input, child)) return;
     pending.push(...Object.values(node.requests));
   }
-  const namespace =
-    input.listing.class === "crypto"
-      ? "crypto:"
-      : input.listing.class === "stock" || input.listing.class === "etf"
-        ? "stock:"
-        : "";
-  return `${namespace}${input.listing.symbol}`;
+  return listingLogoIdentifier(input.listing);
 }

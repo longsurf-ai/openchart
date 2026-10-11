@@ -48,7 +48,8 @@ const state = vi.hoisted(() => ({
 vi.mock("@openchart/app/hooks/use-widget", () => ({
   useWidget: () => ({ transport: state.transport }),
 }));
-vi.mock("@openchart/app/hooks/use-logo", () => ({
+vi.mock("@openchart/app/hooks/use-logo", async (original) => ({
+  ...(await original<typeof import("@openchart/app/hooks/use-logo")>()),
   useLogo: () => ({ data: null }),
 }));
 vi.mock("@openchart/app/features/chart/components/widget", () => ({

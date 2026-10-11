@@ -217,9 +217,11 @@ test("normal startup migrates the template and reads the chart, actions, and lin
     expect(dashboard.name).toBe("Bitcoin");
     expect(view?.path).toBe(`/app/dashboards/${dashboard.id}`);
     expect(dashboard.widgets).toHaveLength(1);
-    const chart = await caller.resources.chart.get({
-      id: dashboard.widgets[0]!.resourceId!,
+    const charts = await caller.resources.chart.list({
+      filter: { dashboardId: dashboard.id },
     });
+    expect(charts.items).toHaveLength(1);
+    const chart = charts.items[0]!;
     expect(chart.cells).toHaveLength(1);
     const cell = chart.cells[0]!;
     expect(cell).toMatchObject({

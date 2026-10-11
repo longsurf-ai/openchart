@@ -74,7 +74,7 @@ const placementId = defineId("wdg", "WidgetPlacement.ID");
 const chart = {
   id: placementId.make("wdg_chart"),
   kind: "chart",
-  resourceId: "cht_1",
+
   layout: { x: 0, y: 0, w: 12, h: 24 },
 };
 

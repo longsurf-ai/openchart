@@ -5,22 +5,11 @@ import { router } from "@openchart/server";
 import { makeRuntime } from "@openchart/server/runtime";
 import { Database } from "@openchart/server/db";
 import { Events } from "@openchart/server/events";
-import {
-  ResourceStateInvalid,
-  Transactor,
-} from "@openchart/server/lib/resource";
+import { ResourceStateInvalid } from "@openchart/server/lib/resource";
 import { ResourceChanged } from "@openchart/server/lib/resource/events";
 import { TRPCError } from "@trpc/server";
 import { asc, eq } from "drizzle-orm";
-import {
-  Cause,
-  ConfigProvider,
-  Effect,
-  Exit,
-  Fiber,
-  Schema,
-  Stream,
-} from "effect";
+import { ConfigProvider, Effect, Fiber, Schema, Stream } from "effect";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { DashboardEntity, DashboardId } from "./entity";
@@ -102,8 +91,8 @@ test("creates with defaults, reads, patches, lists, and deletes a dashboard", as
         path: "/widgets/-",
         value: {
           id: "wdg_1",
-          kind: "watchlist",
-          resourceId: "wl_1",
+          kind: "feed",
+
           layout: { x: 0, y: 0, w: 12, h: 16 },
         },
       },
@@ -115,8 +104,8 @@ test("creates with defaults, reads, patches, lists, and deletes a dashboard", as
   expect(patched.widgets).toEqual([
     {
       id: "wdg_1",
-      kind: "watchlist",
-      resourceId: "wl_1",
+      kind: "feed",
+
       layout: { x: 0, y: 0, w: 12, h: 16 },
     },
   ]);
@@ -200,14 +189,14 @@ test("uses SQLite time for create and widget-only updates despite a wrong JS clo
   ).resolves.toEqual(patched);
 });
 
-test("persists widget order and nullable references, with deletion isolated to the owner", async () => {
+test("persists widget order and geometry, with deletion isolated to the owner", async () => {
   const created = await caller.resources.dashboard.create({
     name: "Macro",
     widgets: [
       {
         id: "wdg_z",
-        kind: "watchlist",
-        resourceId: "wl_missing",
+        kind: "news",
+
         layout: { x: 0, y: 16, w: 12, h: 16 },
       },
       { id: "wdg_a", kind: "feed", layout: { x: 0, y: 0, w: 12, h: 16 } },
@@ -230,8 +219,8 @@ test("persists widget order and nullable references, with deletion isolated to t
     { id: "wdg_a", kind: "feed", layout: { x: 0, y: 0, w: 12, h: 16 } },
     {
       id: "wdg_z",
-      kind: "watchlist",
-      resourceId: "wl_missing",
+      kind: "news",
+
       layout: { x: 0, y: 16, w: 12, h: 16 },
     },
   ]);
@@ -254,7 +243,6 @@ test("persists widget order and nullable references, with deletion isolated to t
       dashboardId: created.id,
       position: 0,
       kind: "feed",
-      resourceId: null,
     },
     {
       id: "wdg_z",
@@ -264,8 +252,7 @@ test("persists widget order and nullable references, with deletion isolated to t
       h: 16,
       dashboardId: created.id,
       position: 1,
-      kind: "watchlist",
-      resourceId: "wl_missing",
+      kind: "news",
     },
   ]);
 
@@ -280,7 +267,6 @@ test("persists widget order and nullable references, with deletion isolated to t
       dashboardId: other.id,
       position: 0,
       kind: "feed",
-      resourceId: null,
     },
   ]);
   await expect(
@@ -300,7 +286,7 @@ test("rolls back a create without publishing when the stored entity fails to dec
     caller.resources.dashboard.create({
       name: "Must roll back",
       widgets: [
-        { id: "wdg_new", kind: "feed", layout: { x: 0, y: 32, w: 12, h: 16 } },
+        { id: "wdg_new", kind: "extra", layout: { x: 0, y: 32, w: 12, h: 16 } },
       ],
     }),
   ).rejects.toMatchObject({
@@ -324,7 +310,7 @@ test("rolls back metadata, revision, and widgets without publishing when a saved
     name: "Original",
     widgets: [
       { id: "wdg_a", kind: "feed", layout: { x: 0, y: 0, w: 12, h: 16 } },
-      { id: "wdg_b", kind: "watchlist", layout: { x: 0, y: 16, w: 12, h: 16 } },
+      { id: "wdg_b", kind: "quotes", layout: { x: 0, y: 16, w: 12, h: 16 } },
     ],
   });
   const before = await storedWidgets();
@@ -350,7 +336,7 @@ test("rolls back metadata, revision, and widgets without publishing when a saved
           path: "/widgets/-",
           value: {
             id: "wdg_new",
-            kind: "feed",
+            kind: "extra",
             layout: { x: 0, y: 32, w: 12, h: 16 },
           },
         },
@@ -387,7 +373,7 @@ test("rolls back metadata, revision, and replaced widget rows when a child write
     widgets: [
       {
         id: "wdg_taken",
-        kind: "watchlist",
+        kind: "feed",
         layout: { x: 0, y: 0, w: 12, h: 16 },
       },
     ],
@@ -493,7 +479,7 @@ test("rejects missing, fractional, out-of-grid, duplicate and overlapping placem
   const first = {
     id: "wdg_first",
     kind: "chart",
-    resourceId: "cht_saved",
+
     layout: { x: 0, y: 0, w: 6, h: 8 },
   };
   const second = {
@@ -582,130 +568,68 @@ test("publishes resource.changed after every committed write", async () => {
   ]);
 });
 
-test("allows one workspace per dashboard and rejects a second placement atomically", async () => {
-  const widget = (id: string, y: number) => ({
-    id,
-    kind: "workspace",
-    layout: { x: 0, y, w: 12, h: 8 },
-  });
-  const dashboard = await caller.resources.dashboard.create({
-    name: "Authoring",
-    widgets: [widget("wdg_first", 0)],
-  });
-  await expect(
-    caller.resources.dashboard.patch({
-      id: dashboard.id,
-      expectedRevision: dashboard.revision,
-      operations: [
-        { op: "add", path: "/widgets/-", value: widget("wdg_second", 8) },
-      ],
-    }),
-  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  expect(await caller.resources.dashboard.get({ id: dashboard.id })).toEqual(
-    dashboard,
-  );
-  await expect(
-    caller.resources.dashboard.create({
-      name: "Another",
-      widgets: [widget("wdg_third", 0)],
-    }),
-  ).resolves.toMatchObject({ name: "Another" });
-});
-
-test.each([
-  ["chart", undefined, "dashboard.chart_reference"],
-  ["chart", "wsp_wrong_kind", "dashboard.chart_reference"],
-] as const)(
-  "rejects %s placements referencing %s on create and patch",
-  async (kind, resourceId, code) => {
-    const widget = {
-      id: "wdg_reference",
+test.each(["workspace", "chart", "watchlist", "future-widget"])(
+  "allows one %s per dashboard and rejects a second placement atomically",
+  async (kind) => {
+    const widget = (id: string, y: number) => ({
+      id,
       kind,
-      ...(resourceId === undefined ? {} : { resourceId }),
-      layout: { x: 0, y: 0, w: 12, h: 8 },
-    };
+      layout: { x: 0, y, w: 12, h: 8 },
+    });
     const dashboard = await caller.resources.dashboard.create({
-      name: "References",
+      name: "Authoring",
+      widgets: [widget("wdg_first", 0)],
     });
-    const { db } = await runtime.runPromise(Database.Service);
-    const before = await storedWidgets();
-    const publish = vi.spyOn(
-      await runtime.runPromise(Events.Service),
-      "publish",
-    );
-    const insert = vi.spyOn(dashboardResource.store, "insert");
-    const save = vi.spyOn(dashboardResource.store, "save");
     await expect(
-      caller.resources.dashboard.create({ name: "Invalid", widgets: [widget] }),
+      caller.resources.dashboard.patch({
+        id: dashboard.id,
+        expectedRevision: dashboard.revision,
+        operations: [
+          { op: "add", path: "/widgets/-", value: widget("wdg_second", 8) },
+        ],
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    const rejected = await runtime.runPromiseExit(
-      Transactor.run(
-        dashboardResource.transitions.patch({
-          id: dashboard.id,
-          expectedRevision: dashboard.revision,
-          operations: [{ op: "add", path: "/widgets/-", value: widget }],
-        }),
-      ),
-    );
-    if (Exit.isSuccess(rejected)) throw new Error("Expected invalid reference");
-    expect(Cause.squash(rejected.cause)).toMatchObject({
-      issues: [
-        { code, path: "/widgets/0/resourceId", message: expect.any(String) },
-      ],
-    });
-    expect(insert).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
-    expect(publish).not.toHaveBeenCalled();
-    expect(await storedWidgets()).toEqual(before);
     expect(await caller.resources.dashboard.get({ id: dashboard.id })).toEqual(
       dashboard,
     );
-    expect(
-      await runtime.runPromise(db.select().from(dashboardTable)),
-    ).toHaveLength(1);
+    await expect(
+      caller.resources.dashboard.create({
+        name: "Another",
+        widgets: [widget("wdg_third", 0)],
+      }),
+    ).resolves.toMatchObject({ name: "Another" });
   },
 );
 
-test("chart references may repeat within and across dashboards", async () => {
-  const widgets = ["cht_first", "cht_second"].map((resourceId, index) => ({
-    id: `wdg_${index}`,
-    kind: "chart",
-    resourceId,
-    layout: { x: index * 6, y: 0, w: 6, h: 8 },
-  }));
+test("Watchlist browsers need no Resource reference on create or patch", async () => {
+  const widget = {
+    id: "wdg_lists",
+    kind: "watchlist",
+    layout: { x: 0, y: 0, w: 12, h: 8 },
+  };
   const dashboard = await caller.resources.dashboard.create({
-    name: "Charts",
-    widgets,
+    name: "Lists",
+    widgets: [widget],
   });
-  const repeated = await caller.resources.dashboard.patch({
+  expect(dashboard.widgets).toEqual([widget]);
+  const changed = await caller.resources.dashboard.patch({
     id: dashboard.id,
     expectedRevision: dashboard.revision,
-    operations: [
-      { op: "replace", path: "/widgets/1/resourceId", value: "cht_first" },
-    ],
+    operations: [{ op: "replace", path: "/widgets/0/layout/h", value: 10 }],
   });
-  expect(repeated.widgets.map((widget) => widget.resourceId)).toEqual([
-    "cht_first",
-    "cht_first",
-  ]);
-  expect(repeated.revision).toBe(dashboard.revision + 1);
-  // References are not ownership: unavailable targets and references in other dashboards remain valid.
-  const otherWidgets = repeated.widgets.map((widget) => ({
+  expect(changed.widgets[0]).toEqual({
     ...widget,
-    id: `${widget.id}_other`,
-  }));
-  await expect(
-    caller.resources.dashboard.create({ name: "Other", widgets: otherWidgets }),
-  ).resolves.toMatchObject({ widgets: otherWidgets });
+    layout: { ...widget.layout, h: 10 },
+  });
 });
 
-test("widget kinds remain open and changing a reference kind is atomic", async () => {
+test("widget kinds remain open and changing a kind is atomic", async () => {
   const widgets = [
     { id: "wdg_alerts", kind: "alerts", layout: { x: 0, y: 0, w: 6, h: 8 } },
     {
       id: "wdg_future",
       kind: "future-widget",
-      resourceId: "external-reference",
+
       layout: { x: 6, y: 0, w: 6, h: 8 },
     },
   ];
@@ -718,11 +642,9 @@ test("widget kinds remain open and changing a reference kind is atomic", async (
     expectedRevision: dashboard.revision,
     operations: [
       { op: "replace", path: "/widgets/1/kind", value: "workspace" },
-      { op: "replace", path: "/widgets/1/resourceId", value: "wsp_retained" },
     ],
   });
   expect(changed.widgets[1]).toMatchObject({
     kind: "workspace",
-    resourceId: "wsp_retained",
   });
 });

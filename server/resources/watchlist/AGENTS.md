@@ -1,8 +1,8 @@
 # watchlist
 
 Owns independent watchlists: ordered metric columns and a recursive tree of
-sections holding provider-scoped listings. Dashboards reference a watchlist
-through `widgets[].resourceId` and never own it.
+sections holding provider-scoped listings. The Watchlist widget selects a list
+in local view state; Dashboards never own that selection or the list.
 
 - schema.ts owns watchlist/watchlist_section/watchlist_item. Only the root has
   an envelope; sections and items share its revision and cascade with it.
