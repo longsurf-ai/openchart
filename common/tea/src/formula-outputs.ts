@@ -12,6 +12,9 @@ export type FormulaOutput = {
 
 /**
  * Lists scalar numeric and nominal Plot outputs a Formula column can select.
+ * Scalars must use JavaScript numbers: Arrow floats or integers below 64 bits.
+ * Tea compiles both int and float outputs to Float64; Int64/Uint64 fields use
+ * bigint and are excluded rather than converted with possible precision loss.
  * Unsupported siblings, append outputs, and nested/list visuals are omitted.
  * An indicator declaration is optional; this is output eligibility, not chart
  * binding validation. Returns an empty array when no output is eligible.
@@ -25,7 +28,10 @@ export function formulaOutputs({
 }: Pick<CompileResponse, "definition">): FormulaOutput[] {
   return definition.outputs.fields.flatMap((field): FormulaOutput[] => {
     if (field.metadata.get("tea:write") !== "set") return [];
-    if (DataType.isFloat(field.type) || DataType.isInt(field.type))
+    if (
+      DataType.isFloat(field.type) ||
+      (DataType.isInt(field.type) && field.type.bitWidth < 64)
+    )
       return [{ name: field.name, kind: "numeric", path: [field.name] }];
     const visual = describeTeaVisual(field);
     if (visual?.kind === "series" && visual.listDepth === 0)

@@ -4,9 +4,12 @@ import {
   Field,
   Float64,
   Int32,
+  Int64,
   List,
   Schema,
   Struct,
+  Uint32,
+  Uint64,
   Utf8,
 } from "apache-arrow";
 import { expect, test } from "vitest";
@@ -81,4 +84,43 @@ test("no eligible output is an empty result, independent of an indicator declara
       ),
     ),
   ).toEqual([]);
+});
+
+test("excludes bigint fields while retaining compiler int outputs and number-backed unsigned integers", () => {
+  expect(
+    formulaOutputs(
+      compiled(
+        new Field(
+          "tea_int",
+          new Float64(),
+          false,
+          new Map([
+            ["tea:write", "set"],
+            ["tea:type", "int"],
+          ]),
+        ),
+        new Field(
+          "unsigned",
+          new Uint32(),
+          true,
+          new Map([["tea:write", "set"]]),
+        ),
+        new Field(
+          "signed64",
+          new Int64(),
+          true,
+          new Map([["tea:write", "set"]]),
+        ),
+        new Field(
+          "unsigned64",
+          new Uint64(),
+          true,
+          new Map([["tea:write", "set"]]),
+        ),
+      ),
+    ),
+  ).toEqual([
+    { name: "tea_int", kind: "numeric", path: ["tea_int"] },
+    { name: "unsigned", kind: "numeric", path: ["unsigned"] },
+  ]);
 });

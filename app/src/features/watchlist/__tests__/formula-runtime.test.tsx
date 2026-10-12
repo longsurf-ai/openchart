@@ -3,9 +3,11 @@ import { act, render } from "@testing-library/react";
 import {
   Field,
   Float64,
+  Int64,
   Schema,
   Struct,
   TimestampMillisecond,
+  Uint64,
 } from "apache-arrow";
 import { BehaviorSubject } from "rxjs";
 import { fromRows } from "@openchart/timeseries";
@@ -292,3 +294,36 @@ it("never uses another output when a saved output is missing", () => {
   expect(f.values.value.wit_a?.wcl_value?.error).toContain("removed");
   expect(f.values.value.wit_a?.wcl_value?.value).toBeUndefined();
 });
+
+it.each([
+  { type: new Int64(), value: 42n },
+  { type: new Int64(), value: -9_223_372_036_854_775_808n },
+  { type: new Uint64(), value: 0n },
+  { type: new Uint64(), value: 18_446_744_073_709_551_615n },
+])(
+  "reports unsupported $type output $value instead of silently rendering an empty cell",
+  ({ type, value }) => {
+    const f = setup();
+    const integerOutputs = new Schema([
+      new Field("time", new TimestampMillisecond(), false),
+      new Field("value", type, true, new Map([["tea:write", "set"]])),
+    ]);
+    const data = fromRows(integerOutputs, [{ time: 10, value }]);
+    expect(data.get(0)?.value).toBe(value);
+    f.states.set("wit_a:wcl_value", {
+      status: "ready",
+      compiled: {
+        ...compiled,
+        definition: { ...compiled.definition, outputs: integerOutputs },
+      },
+      time: 10,
+      data,
+    });
+    render(<FormulaRuntime watchlist={list()} values={f.values} />);
+    expect(f.values.value.wit_a?.wcl_value).toMatchObject({
+      status: "error",
+      error: expect.stringContaining("Output “value” is unavailable"),
+    });
+    expect(f.values.value.wit_a?.wcl_value).not.toHaveProperty("value");
+  },
+);
