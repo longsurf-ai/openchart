@@ -15,6 +15,7 @@ import {
 import { ascending } from "@openchart/identifier";
 import type { AvailableModel } from "@openchart/models/model-provider";
 import { isObservedProviderTool } from "@openchart/models/provider-protocol";
+import { nativeProvider } from "@openchart/models/providers";
 import { assertExists, assertTrue } from "@openchart/utils/assert";
 import { LLM } from "@openchart/server/agent/llm/llm";
 import { Session } from "@openchart/server/agent/session/session";
@@ -656,6 +657,8 @@ export const create = Effect.fn("Processor.create")(function* (input: {
      * failures retain their original types; defects and interruption retain their
      * causes. After success, Prompt reads the committed transcript and applies its
      * completion and next-action policy before starting another request.
+     * Native agents own turn termination; output silence does not cancel them.
+     * Ordinary model requests retain the idle deadline while not executing tools.
      *
      * @returns Completes with no value after transcript writes and cleanup finish.
      * @example
@@ -669,12 +672,18 @@ export const create = Effect.fn("Processor.create")(function* (input: {
           "Processor Session differs from request",
         );
         const llm = yield* LLM.Service;
-        yield* createModelStream(llm, request).pipe(
-          withIdleTimeout(
-            isWaitingForToolOrPermission,
-            120_000,
-            Queue.take(callbackActivitySignals),
-          ),
+        const source = createModelStream(llm, request);
+        yield* (
+          nativeProvider(input.model.providerID)
+            ? source
+            : source.pipe(
+                withIdleTimeout(
+                  isWaitingForToolOrPermission,
+                  120_000,
+                  Queue.take(callbackActivitySignals),
+                ),
+              )
+        ).pipe(
           Stream.runForEach((event) => withExclusiveTransition(consume(event))),
         );
       }).pipe(

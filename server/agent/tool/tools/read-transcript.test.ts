@@ -294,7 +294,7 @@ test("serializes model history including synthetic text, files and tools, withou
   expect(textOf(page)).not.toContain("thinking");
 });
 
-test("uses replay semantics for failed messages and unfinished tools", async () => {
+test("retains failed output and pairs unfinished tools in transcript reads", async () => {
   const failed = assistant("msg_failed", [text("msg_failed", "failed output")]);
   if (failed.info.role !== "assistant") throw new Error("Expected assistant");
   failed.info.error = { name: "UnknownError", data: { message: "failed" } };
@@ -320,7 +320,12 @@ test("uses replay semantics for failed messages and unfinished tools", async () 
     ]),
   );
   const page = await read({ session_id: SOURCE, cursor: null });
-  expect(modelHistoryOf(page, "assistant", "msg_failed")).toEqual([]);
+  expect(modelHistoryOf(page, "assistant", "msg_failed")).toEqual([
+    {
+      role: "assistant",
+      content: [{ type: "text", text: "failed output" }],
+    },
+  ]);
   expect(modelHistoryOf(page, "assistant", "msg_running")).toMatchObject([
     {
       role: "assistant",

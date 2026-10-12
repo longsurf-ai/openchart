@@ -20,7 +20,8 @@ const TOOL_OUTPUT_MAX_CHARS = 2_000;
 
 /**
  * Converts already-parsed transcript messages into model history in input order.
- * Replays tools without execution, pairs unfinished calls with interruption errors,
+ * Retains partial output after failures, skips failed reasoning-only messages,
+ * replays tools without execution, pairs unfinished calls with interruption errors,
  * and preserves stored Parts while adapting provider metadata and attachments.
  * History selection and compaction boundaries remain caller-owned.
  * Clipped tool output keeps a fixed 2,000-character text preview per successful
@@ -52,8 +53,7 @@ export const toModelMessages = Effect.fn("toModelMessages")(function* (
       if (
         msg.info.error &&
         !(
-          msg.info.error.name === "MessageAbortedError" &&
-          // Replay an aborted assistant only if it produced more than reasoning.
+          // Failed turns still own committed text and tool outcomes.
           msg.parts.some(
             (part) => part.type !== "step-start" && part.type !== "reasoning",
           )

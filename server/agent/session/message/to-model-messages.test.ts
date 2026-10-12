@@ -9,6 +9,13 @@ import { toModelMessages } from "./to-model-messages";
 import { transcriptText } from "./transcript-text";
 
 const model = { providerID: "openai", id: "gpt-test" };
+const timeoutError = {
+  name: "APIError",
+  data: {
+    message: "Model stream produced no events for 120000 ms",
+    isRetryable: true,
+  },
+};
 
 function message(
   role: "user" | "assistant",
@@ -226,11 +233,13 @@ describe("model-message replay", () => {
   });
 
   test.each(["pending", "running"] as const)(
-    "pairs %s calls with an interruption result",
+    "pairs %s calls with an interruption result after a failed request",
     async (status) => {
-      const input = message("assistant", [
-        tool({ status, input: { x: 1 }, time: { start: 1 } }),
-      ]);
+      const input = message(
+        "assistant",
+        [tool({ status, input: { x: 1 }, time: { start: 1 } })],
+        { error: timeoutError },
+      );
       expect(await Effect.runPromise(toModelMessages([input], model))).toEqual([
         {
           role: "assistant",
@@ -265,10 +274,14 @@ describe("model-message replay", () => {
     { type: "text", value: "result" },
     { type: "json", value: { rows: [{ x: 1 }], empty: null } },
     { type: "json", value: false },
-  ])("keeps structured output $type", async (output) => {
+  ])("keeps structured output $type after a failed request", async (output) => {
     const result = await Effect.runPromise(
       toModelMessages(
-        [message("assistant", [tool(completed({ output }))])],
+        [
+          message("assistant", [tool(completed({ output }))], {
+            error: timeoutError,
+          }),
+        ],
         model,
       ),
     );
@@ -515,24 +528,38 @@ describe("model-message replay", () => {
     });
   });
 
-  test.each(["MessageAbortedError", "UnknownError"])(
-    "replays partial output only for an abort: %s",
+  test.each(["MessageAbortedError", "APIError", "UnknownError"])(
+    "replays partial text after %s",
     async (name) => {
       const input = message("assistant", [{ type: "text", text: "partial" }], {
-        error: { name, data: { message: "failed" } },
+        error: { name, data: { message: "failed", isRetryable: true } },
       });
-      expect(await Effect.runPromise(toModelMessages([input], model))).toEqual(
-        name === "MessageAbortedError"
-          ? [
-              {
-                role: "assistant",
-                content: [{ type: "text", text: "partial" }],
-              },
-            ]
-          : [],
-      );
+      expect(await Effect.runPromise(toModelMessages([input], model))).toEqual([
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "partial" }],
+        },
+      ]);
     },
   );
+
+  test("skips failed reasoning-only messages", async () => {
+    const input = message(
+      "assistant",
+      [
+        { type: "step-start" },
+        {
+          type: "reasoning",
+          text: "Unfinished reasoning",
+          time: { start: 1, end: 2 },
+        },
+      ],
+      { error: timeoutError },
+    );
+    expect(await Effect.runPromise(toModelMessages([input], model))).toEqual(
+      [],
+    );
+  });
 
   test.each([
     ["openai", "gpt-test"],
