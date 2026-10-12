@@ -172,6 +172,17 @@ it.each([
     f.group.reconcile([request("a"), request("b", change)]);
     await vi.waitFor(() => expect(f.calls).toHaveLength(2));
     expect(f.client.compile).toHaveBeenCalledOnce();
+    for (const call of f.calls)
+      call.sink.next(snapshot(fromPoints({}, [{ time: 1, value: 1 }])));
+    const ready = f.group.getSnapshot().get("b")!;
+    expect(ready.executionKey).toEqual(expect.any(String));
+    expect(f.group.getSnapshot().get("a")?.executionKey).not.toBe(
+      ready.executionKey,
+    );
+    // Joining a ready run changes identity without an intermediate loading state.
+    f.group.reconcile([request("a", change), request("b", change)]);
+    expect(f.group.getSnapshot().get("a")).toBe(ready);
+    expect(f.calls).toHaveLength(2);
   },
 );
 
@@ -248,6 +259,7 @@ it("keeps only the newest whole row, including provisional null and nonfinite re
   ]);
   const sink = f.calls[0]!.sink;
   sink.next(snapshot(data));
+  const executionKey = f.group.getSnapshot().get("a")?.executionKey;
   expect(f.group.getSnapshot().get("a")?.data?.numRows).toBe(1);
   expect(f.group.getSnapshot().get("a")?.time).toBe(2);
   sink.next({
@@ -282,6 +294,7 @@ it("keeps only the newest whole row, including provisional null and nonfinite re
     provisional: true,
   });
   expect(f.group.getSnapshot().get("a")?.data?.numRows).toBe(1);
+  expect(f.group.getSnapshot().get("a")?.executionKey).toBe(executionKey);
 });
 
 it("limits startup to four and admits more history after snapshots without stopping live channels", async () => {

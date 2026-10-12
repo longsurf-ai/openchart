@@ -29,6 +29,8 @@ export type TeaGroupRequest = {
  */
 export type TeaLatestState = {
   readonly status: "loading" | "ready" | "empty" | "error";
+  /** Group-local execution identity; stable across ticks and shared consumers. */
+  readonly executionKey?: string;
   readonly data?: DataFrame;
   readonly config?: Tea.NodeConfig;
   readonly compiled?: Pick<Tea.CompileResponse, "definition" | "declaration">;
@@ -326,6 +328,7 @@ export function createTeaGroup(
                         );
                         return {
                           status: data.numRows ? "ready" : "empty",
+                          executionKey: runKey,
                           data,
                           config:
                             message.type === "snapshot"

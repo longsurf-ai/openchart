@@ -60,8 +60,12 @@ const outputs = new Schema([
   new Field("time", new TimestampMillisecond(), false),
   new Field("value", new Float64(), true, new Map([["tea:write", "set"]])),
 ]);
-const readyFormula = (value: number): TeaLatestState => ({
+const readyFormula = (
+  value: number,
+  executionKey = "initial",
+): TeaLatestState => ({
   status: "ready",
+  executionKey,
   compiled: {
     declaration: null,
     definition: {
@@ -745,6 +749,13 @@ test("live bars and Tea results highlight only the latest changed digits", async
       .queryAllByText(/./u, { selector: ".text-up" })
       .map((digit) => digit.textContent),
   ).toEqual(["2", "5"]);
+  // A cached execution can replace the value without first publishing loading.
+  act(() =>
+    formulaStates.next(
+      new Map([["wit_msft:wcl_formula", readyFormula(3000, "other-run")]]),
+    ),
+  );
+  expect(await within(msft).findByText("3,000.00")).toBeInTheDocument();
 });
 
 test("Formula retry works by click and Enter without opening the row in Chart", async () => {

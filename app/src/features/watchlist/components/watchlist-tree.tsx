@@ -574,7 +574,7 @@ function MetricCells({
             </Button>
           ) : cell?.status === "ready" && cell.value !== undefined ? (
             <LiveNumber
-              key={`${providerListingKey(item)}:${column.metric.output}`}
+              key={`${providerListingKey(item)}:${column.metric.output}:${cell.identity}`}
               value={cell.value}
               text={text}
             />
