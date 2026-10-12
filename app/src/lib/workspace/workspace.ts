@@ -82,7 +82,7 @@ export function defaultWorkspaceQueryOptions(transport: AppTransport) {
   });
 }
 
-/** A registration's display name: its folder's name, or the whole root for a drive. @example workspaceName("/Users/me/research"); // "research" */
+/** A registration's display name: its folder's name, or the whole root for a drive. @example workspaceName("/workspaces/research"); // "research" */
 export const workspaceName = (root: string) =>
   root.split(/[\\/]/).filter(Boolean).at(-1) ?? root;
 
