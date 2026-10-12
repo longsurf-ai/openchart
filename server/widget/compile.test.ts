@@ -37,6 +37,17 @@ test("rejects imports outside the module table, dynamic loading and require", ()
     );
 });
 
+test("rejects every /// reference directive", () => {
+  for (const line of [
+    '/// <reference path="./other.ts" />',
+    '/// <reference types="node" />',
+    '/// <reference lib="esnext" />',
+  ])
+    expect(() => checkWidget(`${line}\n${source}`, filename)).toThrow(
+      "Widget files may not use /// reference directives.",
+    );
+});
+
 test("requires a literal kind and title on a default-exported defineWidget", () => {
   expect(() =>
     checkWidget(source.replace(/export default[^\n]+/, ""), filename),

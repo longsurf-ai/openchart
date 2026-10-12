@@ -120,7 +120,11 @@ function invalid(source: ts.SourceFile, node: ts.Node, message: string) {
 }
 
 function inspectImports(source: ts.SourceFile, allowed: readonly string[]) {
-  if (source.referencedFiles.length || source.typeReferenceDirectives.length)
+  if (
+    source.referencedFiles.length ||
+    source.typeReferenceDirectives.length ||
+    source.libReferenceDirectives.length
+  )
     throw new WidgetInvalid({
       message: "Widget files may not use /// reference directives.",
     });

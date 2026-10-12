@@ -1,4 +1,4 @@
-// Purpose: Verify direct widget actions, local-content widgets, custom widget sources, menu dismissal and Dashboard save locking.
+// Purpose: Verify direct widget actions, local-content widgets, custom widget sources and load retry, menu dismissal and Dashboard save locking.
 import { defineId } from "@openchart/identifier";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -17,7 +17,7 @@ type Saved = {
   source: { workspaceId: string; path: string };
 };
 
-function setup(disabled = false, custom: Saved[] = []) {
+function setup(disabled = false, custom: Saved[] = [], failFirstList = false) {
   const dashboard: Dashboard = {
     id: defineId("dsh", "Dashboard.ID").create(),
     name: "Research",
@@ -37,7 +37,14 @@ function setup(disabled = false, custom: Saved[] = []) {
     rpc: {
       resources: {
         custom_widget: {
-          list: { query: vi.fn(async () => ({ items: custom, cursor: null })) },
+          list: {
+            query: failFirstList
+              ? vi
+                  .fn()
+                  .mockRejectedValueOnce(new Error("Backend unavailable"))
+                  .mockResolvedValue({ items: custom, cursor: null })
+              : vi.fn(async () => ({ items: custom, cursor: null })),
+          },
         },
       },
     },
@@ -173,4 +180,20 @@ test("opens a custom widget's source in Workspace, even while it is placed", asy
   );
   expect(openFile).toHaveBeenCalledExactlyOnceWith(rates.source);
   expect(onAdd).not.toHaveBeenCalled();
+});
+
+test("offers a retry when saved widgets fail to load, keeping the menu open", async () => {
+  const { user } = setup(false, [rates], true);
+  await user.click(screen.getByRole("button", { name: "Widgets" }));
+  await user.click(
+    await screen.findByRole("menuitem", {
+      name: "Retry loading saved widgets",
+    }),
+  );
+  expect(
+    await screen.findByRole("menuitem", { name: "Rates heatmap Custom" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("menuitem", { name: "Retry loading saved widgets" }),
+  ).not.toBeInTheDocument();
 });

@@ -36,8 +36,9 @@ A widget file may import only these modules, statically:
 - `react/jsx-runtime`
 - `vega-embed`: `embed(element, spec, { actions: false })` renders a Vega or
   Vega-Lite spec. Finalize its result on unmount, and use `width` and `height`
-  `"container"` inside a sized parent (see `price-chart.widget.tsx` beside this
-  guide).
+  `"container"` inside a sized parent. `view.data(name, rows).runAsync()`
+  replaces a named data source's rows, for example with live bars (see
+  `price-chart.widget.tsx` beside this guide).
 
 Other packages, `require`, dynamic `import()` and `/// <reference>` directives
 are rejected. Widgets cannot reach the network themselves; read data through
@@ -73,7 +74,9 @@ the colors it was drawn with, so a theme switch shows once the widget redraws.
   `{ status, current, error, retry }`. `current.data` is a DataFrame of rows
   `{ time, open, high, low, close, volume }` (values may be null); iterate it
   with `Array.from(current.data, (row) => …)`. `current.updates` emits later
-  frames; combine them with `mergeByTime(previous, update)`.
+  frames without re-rendering; combine them with `mergeByTime(previous, update)`
+  and redraw. Keep `request` equal across renders (take `from` from
+  `useState`), or the stream reopens on every render.
 - `useTea(node)`: run a Tea script over market data. A node is
   `{ source, parameters: {}, ...barsInputs(series), requests: {}, from, to,
 countBack, warmupBars: standardWarmupBars }`. `source` is inline text,

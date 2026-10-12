@@ -1,10 +1,11 @@
 // Purpose: Chart the Dashboard symbol's daily closes with Vega-Lite; the page's symbol control chooses the listing.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import embed from "vega-embed";
 import {
   Button,
   barsSeries,
   defineWidget,
+  mergeByTime,
   useBars,
   useBarsCapabilities,
   useSymbol,
@@ -46,6 +47,8 @@ function PriceChart() {
 
 function DailyCloses({ listing }: { listing: ProviderListing }) {
   const capabilities = useBarsCapabilities(listing);
+  // useBars reopens its stream whenever the request changes, so `from` is fixed once.
+  const [from] = useState(() => Date.now() - 365 * DAY);
   const daily = capabilities.data?.find((option) => option.resolution === "1d");
   if (capabilities.error) return <p>Couldn’t load this symbol.</p>;
   if (!capabilities.data) return <p>Loading…</p>;
@@ -54,7 +57,7 @@ function DailyCloses({ listing }: { listing: ProviderListing }) {
     <Chart
       request={{
         ...barsSeries(listing, daily),
-        from: Date.now() - 365 * DAY,
+        from,
         to: "now",
         countBack: 250,
       }}
@@ -65,13 +68,12 @@ function DailyCloses({ listing }: { listing: ProviderListing }) {
 function Chart({ request }: { request: BarsRequest }) {
   const bars = useBars(request);
   const element = useRef<HTMLDivElement>(null);
-  const data = bars.current?.data;
+  const current = bars.current;
   useEffect(() => {
-    if (!element.current || !data) return;
-    const values = Array.from(data, (row) => ({
-      date: row.time,
-      close: row.close,
-    }));
+    if (!element.current || !current) return;
+    let frame = current.data;
+    const values = () =>
+      Array.from(frame, (row) => ({ date: row.time, close: row.close }));
     // Canvas needs resolved colors; the app's theme variables follow light and dark.
     const style = getComputedStyle(element.current);
     const color = (name: string) => style.getPropertyValue(name).trim();
@@ -83,7 +85,7 @@ function Chart({ request }: { request: BarsRequest }) {
         width: "container",
         height: "container",
         background: "transparent",
-        data: { values },
+        data: { name: "bars", values: values() },
         mark: { type: "line", tooltip: true, color: color("--chart-1") },
         encoding: {
           x: { field: "date", type: "temporal", title: null },
@@ -102,8 +104,19 @@ function Chart({ request }: { request: BarsRequest }) {
       },
       { actions: false },
     );
-    return () => void chart.then((result) => result.finalize());
-  }, [data]);
+    // Live bars arrive as updates, not renders: fold each in and redraw.
+    const subscription = current.updates.subscribe({
+      next: (update) => {
+        frame = mergeByTime(frame, update);
+        void chart.then(({ view }) => view.data("bars", values()).runAsync());
+      },
+      error: () => {}, // useBars reports it as bars.status === "error".
+    });
+    return () => {
+      subscription.unsubscribe();
+      void chart.then((result) => result.finalize());
+    };
+  }, [current]);
   if (bars.status === "error")
     return (
       <Button size="sm" variant="outline" onClick={bars.retry}>

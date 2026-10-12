@@ -1,6 +1,6 @@
 // Purpose: Add widgets from a compact menu; Dashboard owns every placement write.
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, CodeXml, LayoutGrid } from "lucide-react";
+import { ChevronDown, CodeXml, LayoutGrid, RotateCw } from "lucide-react";
 import { useContext, type ReactNode } from "react";
 import { Badge } from "@openchart/app/components/ui/badge";
 import { Button } from "@openchart/app/components/ui/button";
@@ -26,7 +26,8 @@ import { widgetCatalog } from "./widget-registry";
 /** Add a widget with one selection. Dashboard owns pending and recovery state;
  * each widget owns its content selection. Saved custom widgets follow the
  * built-ins with a Custom pill and a source item that opens their file in
- * Workspace (ponytail: first page only; paginate when a page is not enough).
+ * Workspace (ponytail: the first page of full Resources, sources included;
+ * paginate when a page is not enough, project metadata if sources grow large).
  * @example <WidgetGallery dashboard={dashboard} transport={transport} disabled={saving} onAdd={add} />
  */
 export function WidgetGallery({
@@ -74,6 +75,18 @@ export function WidgetGallery({
         {Object.values(widgetCatalog).map(({ definition }) =>
           add(definition, definition.title),
         )}
+        {custom.error ? (
+          // Keeps the menu open while the saved widgets load again.
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              void custom.refetch();
+            }}
+          >
+            <RotateCw />
+            Retry loading saved widgets
+          </DropdownMenuItem>
+        ) : null}
         {custom.data?.map((widget) => (
           // Menu items cannot nest controls, so the source is a sibling item;
           // it stays enabled while the widget is placed.

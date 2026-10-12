@@ -27,12 +27,17 @@ const declarationDependencies = {
 } as const;
 
 // ponytail: the spec stays a plain object; adopt vega-lite's TopLevelSpec when widgets need spec completion.
-const vegaEmbed = `/** Render a Vega or Vega-Lite spec into an element. Call \`finalize()\` on unmount. */
+const vegaEmbed = `/** A rendered view. \`data\` replaces a named data source's rows; \`runAsync\` redraws. */
+export interface View {
+  data(name: string, values: readonly object[]): View;
+  runAsync(): Promise<View>;
+}
+/** Render a Vega or Vega-Lite spec into an element. Call \`finalize()\` on unmount. */
 export default function embed(
   element: HTMLElement,
   spec: object,
   options?: { actions?: boolean; renderer?: "canvas" | "svg"; theme?: string },
-): Promise<{ view: unknown; finalize(): void }>;
+): Promise<{ view: View; finalize(): void }>;
 `;
 
 /**
