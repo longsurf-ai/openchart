@@ -270,6 +270,17 @@ export namespace Chart {
     };
     visibleRanges: Record<string, { from: number; to: number }>;
     drawings: Drawing.State;
+    /** Local ruler anchors in raw series values and epoch seconds. Core owns the
+     * gesture and retains its result until the next click, tool change or Escape.
+     * Never serialize this state or create a Drawing resource from it.
+     */
+    measurement?: {
+      seriesId: string;
+      phase: "dragging" | "tracking" | "complete";
+      start: { time: number; price: number };
+      end: { time: number; price: number };
+      contextMenu?: { x: number; y: number };
+    };
     annotations: ChartAnnotation.Record[];
     sourceBadgesByAnnotationId?: Record<
       string,

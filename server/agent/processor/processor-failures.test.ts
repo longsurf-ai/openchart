@@ -1,6 +1,7 @@
 // Purpose: Verifies processor retries, cancellation, and failure cleanup through real persistence.
 
 import { APICallError } from "@ai-sdk/provider";
+import { ANTIGRAVITY, CLAUDE_CODE, CODEX } from "@openchart/models/model-tiers";
 import { StoreNotFound } from "@openchart/server/agent/errors";
 import { RequestFailed } from "@openchart/server/agent/llm/errors";
 import { CorrectedError } from "@openchart/server/agent/permission/errors";
@@ -47,6 +48,72 @@ const blockedTool = {
 };
 
 describe("processor failure lifecycle", () => {
+  test.each(
+    [CODEX, CLAUDE_CODE, ANTIGRAVITY].flatMap((providerID) =>
+      ["completed", "failed", "stop"].map((outcome) => ({
+        providerID,
+        outcome,
+      })),
+    ),
+  )(
+    "native $providerID waits through silence until $outcome",
+    ({ providerID, outcome }) =>
+      run((f) =>
+        Effect.gen(function* () {
+          const selected = { ...model, providerID };
+          const assistant = { ...f.assistant, providerID };
+          yield* f.session.updateMessage(assistant);
+          const terminal = yield* Deferred.make<void>();
+          let released = false;
+          f.source = () =>
+            streamOf({ type: "start-step" }).pipe(
+              Stream.concat(
+                Stream.fromEffect(Deferred.await(terminal)).pipe(
+                  Stream.flatMap(() =>
+                    outcome === "failed"
+                      ? Stream.fail(transient())
+                      : streamOf(finishStep(), finish),
+                  ),
+                ),
+              ),
+              Stream.ensuring(Effect.sync(() => (released = true))),
+            );
+          const processor = yield* Processor.create({
+            assistantMessage: assistant,
+            model: selected,
+          });
+          const running = yield* Effect.forkChild(
+            processor.process({ ...f.request, model: selected }),
+          );
+          yield* TestClock.adjust(300_000);
+          expect(running.pollUnsafe()).toBeUndefined();
+          if (outcome === "stop") yield* Fiber.interrupt(running);
+          else yield* Deferred.succeed(terminal, undefined);
+          const exit = yield* Fiber.await(running);
+          expect(Exit.isSuccess(exit)).toBe(outcome === "completed");
+          if (outcome === "stop" && Exit.isFailure(exit))
+            expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+          const saved = yield* f.session.getMessage({
+            sessionID: assistant.sessionID,
+            messageID: assistant.id,
+          });
+          expect(saved?.info).toMatchObject({
+            time: { completed: 300_000 },
+            ...(outcome === "completed"
+              ? { finish: "stop" }
+              : {
+                  error: {
+                    name:
+                      outcome === "failed" ? "APIError" : "MessageAbortedError",
+                  },
+                }),
+          });
+          expect(released).toBe(true);
+          expect(f.calls).toHaveLength(1);
+        }),
+      ),
+  );
+
   test.each(["text", "reasoning"] as const)(
     "empty %s progress resets idle without writes, then genuine silence times out",
     (type) =>

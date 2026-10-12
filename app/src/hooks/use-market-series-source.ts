@@ -28,7 +28,6 @@ import { useBars } from "./use-bars";
 /** One selected input can supply several independently styled display series. */
 export interface MarketSeriesInput {
   readonly id: string;
-  readonly colorIndex?: number;
   readonly series: BarsSeries;
   readonly bindings: readonly {
     id: string;
@@ -64,8 +63,20 @@ export function useMarketSeriesSource(
   const [window, setWindow] = useState(initialWindow);
   const activeWindow = window.identity === identity ? window : initialWindow;
   useLayoutEffect(() => {
-    if (window.identity !== identity) setWindow(initialWindow);
-  }, [window.identity, identity, initialWindow]);
+    if (window.identity === identity) return;
+    setWindow(initialWindow);
+    const measuredSeries = chart.store.getState().measurement?.seriesId;
+    if (
+      measuredSeries &&
+      input.bindings.some(
+        (binding) => binding.main || binding.id === measuredSeries,
+      )
+    ) {
+      chart.mutate((state) => {
+        delete state.measurement;
+      });
+    }
+  }, [window.identity, identity, initialWindow, chart, input.bindings]);
   const request = useMemo(
     () => ({
       ...input.series,

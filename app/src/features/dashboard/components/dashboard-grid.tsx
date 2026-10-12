@@ -23,6 +23,7 @@ import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { cn } from "@openchart/app/utils/cn";
 
 import { WidgetHost } from "./widget-host";
+import { DashboardSeparators } from "./dashboard-separators";
 import type {
   WidgetDefinition,
   WidgetResolver,
@@ -67,6 +68,19 @@ export function DashboardGrid({
     return () => observer.disconnect();
   }, [containerRef]);
   const gesture = useRef<Dashboard>();
+  const [interaction, setInteraction] = useState<"widget" | "separator">();
+  const [preview, setPreview] = useState<{
+    layout: Layout;
+    revision: number;
+    resetKey: number;
+  }>();
+  useLayoutEffect(() => {
+    if (!narrow || interaction !== "separator") return;
+    // Switching to the single-column view cancels the pointer gesture that lost its control.
+    gesture.current = undefined;
+    setPreview(undefined);
+    setInteraction(undefined);
+  }, [narrow, interaction]);
   const layout = useMemo(
     () => widgetLayout(dashboard?.widgets ?? [], registry),
     [dashboard?.widgets, registry],
@@ -85,9 +99,24 @@ export function DashboardGrid({
             })),
             1,
           )
-        : layout,
-    [layout, narrow],
+        : preview &&
+            preview.revision === dashboard?.revision &&
+            preview.resetKey === resetKey
+          ? preview.layout
+          : verticalCompactor.compact(layout, 12),
+    [layout, narrow, preview, dashboard?.revision, resetKey],
   );
+  const rowHeight = Math.max(
+    1,
+    (height - 8 * (dashboardRows - 1)) / dashboardRows,
+  );
+  const previewLayout = (next: Layout) => {
+    setPreview({
+      layout: verticalCompactor.compact(next, 12),
+      revision: gesture.current?.revision ?? dashboard!.revision,
+      resetKey,
+    });
+  };
   const commitLayout = (next: Layout, snapshot: Dashboard) => {
     const widgets = placeWidgets(snapshot.widgets, next);
     if (
@@ -102,6 +131,7 @@ export function DashboardGrid({
     return onSave(snapshot, widgets);
   };
   const stop = (next: Layout) => {
+    setInteraction(undefined);
     const snapshot = gesture.current;
     gesture.current = undefined;
     if (snapshot) void commitLayout(next, snapshot).catch(() => undefined);
@@ -127,71 +157,99 @@ export function DashboardGrid({
       mounted &&
       (narrow || height > 0) &&
       dashboard.widgets.length ? (
-        <GridLayout
-          key={resetKey}
-          className="dashboard-grid"
-          width={width}
-          layout={displayed}
-          autoSize={narrow}
-          style={narrow ? undefined : { height }}
-          gridConfig={{
-            cols: narrow ? 1 : 12,
-            rowHeight: narrow
-              ? 24
-              : Math.max(1, (height - 8 * (dashboardRows - 1)) / dashboardRows),
-            maxRows: narrow ? Infinity : dashboardRows,
-            margin: [8, 8],
-            containerPadding: [0, 0],
-          }}
-          compactor={verticalCompactor}
-          dragConfig={{
-            enabled: !narrow && !disabled,
-            bounded: !narrow,
-            handle: "[data-widget-drag-handle]",
-          }}
-          resizeConfig={{
-            enabled: !narrow && !disabled,
-            handles: ["se"],
-          }}
-          onDragStart={() => {
-            gesture.current = dashboard;
-          }}
-          onResizeStart={() => {
-            gesture.current = dashboard;
-          }}
-          onDragStop={stop}
-          onResizeStop={stop}
+        <div
+          className="relative"
+          data-separator-resizing={interaction === "separator" || undefined}
         >
-          {dashboard.widgets.map((placement) => (
-            <div key={placement.id}>
-              <WidgetHost
-                placement={placement}
-                dashboardId={dashboard.id}
-                transport={transport}
-                definition={registry(placement.kind)}
-                disabled={disabled}
-                onPlaceBeside={onPlaceBeside}
-                onRemove={() =>
-                  void onSave(
-                    dashboard,
-                    dashboard.widgets.filter(
-                      (widget) => widget.id !== placement.id,
-                    ),
-                  ).catch(() => undefined)
-                }
-                onLayout={
-                  narrow
-                    ? undefined
-                    : (rectangle) =>
-                        commitLayout(
-                          editWidgetLayout(layout, placement.id, rectangle),
-                          dashboard,
-                        )
-                }
-              />
-            </div>
-          ))}
-        </GridLayout>
+          <GridLayout
+            key={resetKey}
+            className="dashboard-grid"
+            width={width}
+            layout={displayed}
+            autoSize={narrow}
+            style={narrow ? undefined : { height }}
+            gridConfig={{
+              cols: narrow ? 1 : 12,
+              rowHeight: narrow ? 24 : rowHeight,
+              maxRows: narrow ? Infinity : dashboardRows,
+              margin: [8, 8],
+              containerPadding: [0, 0],
+            }}
+            compactor={verticalCompactor}
+            dragConfig={{
+              enabled: !narrow && !disabled,
+              bounded: !narrow,
+              handle: "[data-widget-drag-handle]",
+            }}
+            resizeConfig={{
+              enabled: !narrow && !disabled,
+              handles: ["se"],
+            }}
+            onDragStart={() => {
+              gesture.current = dashboard;
+              setInteraction("widget");
+            }}
+            onResizeStart={() => {
+              gesture.current = dashboard;
+              setInteraction("widget");
+            }}
+            onDragStop={stop}
+            onResizeStop={stop}
+          >
+            {dashboard.widgets.map((placement) => (
+              <div key={placement.id} id={placement.id}>
+                <WidgetHost
+                  placement={placement}
+                  dashboardId={dashboard.id}
+                  transport={transport}
+                  definition={registry(placement.kind)}
+                  disabled={disabled}
+                  onPlaceBeside={onPlaceBeside}
+                  onRemove={() =>
+                    void onSave(
+                      dashboard,
+                      dashboard.widgets.filter(
+                        (widget) => widget.id !== placement.id,
+                      ),
+                    ).catch(() => undefined)
+                  }
+                  onLayout={
+                    narrow
+                      ? undefined
+                      : (rectangle) =>
+                          commitLayout(
+                            editWidgetLayout(layout, placement.id, rectangle),
+                            dashboard,
+                          )
+                  }
+                />
+              </div>
+            ))}
+          </GridLayout>
+          {!narrow && interaction !== "widget" ? (
+            <DashboardSeparators
+              layout={displayed}
+              width={width}
+              rowHeight={rowHeight}
+              disabled={disabled}
+              onStart={() => {
+                gesture.current = dashboard;
+                setInteraction("separator");
+              }}
+              onPreview={previewLayout}
+              onCommit={(next) => {
+                const compacted = verticalCompactor.compact(next, 12);
+                previewLayout(compacted);
+                stop(compacted);
+              }}
+              onCancel={() => {
+                gesture.current = undefined;
+                setPreview(undefined);
+                setInteraction(undefined);
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

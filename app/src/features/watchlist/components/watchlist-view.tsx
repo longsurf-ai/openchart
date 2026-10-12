@@ -16,6 +16,7 @@ import {
 import {
   columnLabel,
   columnTitle,
+  columnWidth,
   gridTemplate,
   minimumGridWidth,
 } from "../utils/columns";
@@ -75,15 +76,22 @@ function Loaded({ watchlist }: { watchlist: Watchlist }) {
     (column) => column.visible !== false,
   );
   const empty = !hasVisibleRows(watchlist.sections);
+  const tableStyle = {
+    gridTemplateColumns: gridTemplate(columns),
+    minWidth: minimumGridWidth(columns),
+    "--watchlist-metric-space": columns.length
+      ? `max(${columns.map(columnWidth).join(", ")})`
+      : "0px",
+  };
   return (
     <div className="flex h-full min-h-0 flex-col">
       <FormulaRuntime watchlist={watchlist} values={formulaValues} />
       <WatchlistHeader watchlist={watchlist} />
-      <div className="min-h-0 flex-1 overflow-auto">
-        <div style={{ minWidth: minimumGridWidth(columns) }}>
+      <div className="min-h-0 flex-1 overflow-auto [container-type:inline-size]">
+        <div className="grid min-w-full" style={tableStyle}>
           <ColumnHeader columns={columns} />
           {empty ? (
-            <div className="flex flex-col items-center gap-2 p-6 text-sm text-muted-foreground">
+            <div className="col-span-full flex flex-col items-center gap-2 p-6 text-sm text-muted-foreground">
               <p>No symbols yet.</p>
               <Button variant="outline" size="sm" onClick={() => addSymbol()}>
                 <Plus aria-hidden />
@@ -112,10 +120,9 @@ function ColumnHeader({ columns }: { columns: readonly Column[] }) {
   return (
     <div
       role="row"
-      className="sticky top-0 z-10 grid h-7 shrink-0 items-center border-b bg-background text-xs text-muted-foreground"
-      style={{ gridTemplateColumns: gridTemplate(columns) }}
+      className="sticky top-0 z-20 col-span-full grid h-7 grid-cols-subgrid items-center border-b bg-background text-xs text-muted-foreground"
     >
-      <span role="columnheader" className="pl-2">
+      <span role="columnheader" className="sticky left-0 z-10 bg-inherit pl-2">
         Symbol
       </span>
       {columns.map((column, index) => {

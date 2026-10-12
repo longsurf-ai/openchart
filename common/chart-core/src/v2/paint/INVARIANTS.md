@@ -35,3 +35,7 @@ Stateless repaint pipeline that reads `Chart.State`, computes layout, coordinate
   `Chart.resolveTimeDisplayTimezone`: daily-or-higher calendar periods use the
   active series' grid-owned calendar timezone, while intraday instants use the
   chart display timezone.
+
+- Measurement range/card hit regions come from their final painted rectangles.
+  Clear them before the empty-series return; events must not reconstruct label
+  bounds or let an underlying drawing win the ruler context menu.

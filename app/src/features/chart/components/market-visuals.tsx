@@ -72,19 +72,16 @@ export const MarketVisuals = memo(function MarketVisuals({
   );
   const element = chart.renderer.canvas?.parentElement;
   const colors = {
-    up: element ? chartTokenColor(element, "--up") : "#26a69a",
-    down: element ? chartTokenColor(element, "--down") : "#ef5350",
-    comparison: element
-      ? chartTokenColor(
-          element,
-          `--chart-${((Math.max(1, input.colorIndex ?? 1) - 1) % 5) + 1}`,
-        )
-      : "#6366f1",
+    up: element
+      ? chartTokenColor(element, main ? "--up" : "--chart-comparison-up")
+      : "#26a69a",
+    down: element
+      ? chartTokenColor(element, main ? "--down" : "--chart-comparison-down")
+      : "#ef5350",
   };
   // The Resource says what a binding draws; preferences only style it.
   const optionsFor = (binding: Binding) => ({
     ...defaultSeriesPreferences,
-    type: binding.main ? ("Candlestick" as const) : ("Line" as const),
     ...(binding.output === "volume" ? { valueLineVisible: false } : {}),
     ...preferences.series[binding.id],
   });
@@ -133,8 +130,7 @@ export const MarketVisuals = memo(function MarketVisuals({
       {bindings.map((binding) => {
         const prefs = optionsFor(binding);
         const histogram = binding.output === "volume";
-        const color =
-          prefs.color ?? (binding.main ? colors.up : colors.comparison);
+        const color = prefs.color ?? colors.up;
         const options = {
           ...prefs,
           title: histogram ? undefined : symbol,

@@ -631,7 +631,7 @@ describe("setupEvents", () => {
     cleanup();
   });
 
-  it("scopes shift-drag vertical pan to the pane under the pointer", () => {
+  it("scopes Shift measurement to the lower pane without panning either axis", () => {
     const state = createState({
       id: "chart",
       series: {
@@ -681,6 +681,26 @@ describe("setupEvents", () => {
       panePrimitives: {} as RuntimeState["panePrimitives"],
       seriesPrimitives: new Map(),
       disposed: false,
+      coord: createCartesian2D(
+        {
+          x: layout.areaX,
+          y: 0,
+          width: layout.areaWidth,
+          height: layout.areaHeight,
+        },
+        {
+          x: { min: 0, max: 40 },
+          y: {
+            right: { min: 0, max: 100 },
+            [lowerAxisId]: { min: 100, max: 200 },
+          },
+        },
+        "right",
+        {
+          right: { from: 0.4, to: 1, mode: "linear" },
+          [lowerAxisId]: { from: 0, to: 0.4, mode: "linear" },
+        },
+      ),
     };
 
     const cleanup = setupEvents({
@@ -719,13 +739,17 @@ describe("setupEvents", () => {
       }),
     );
 
+    expect(state.measurement?.seriesId).toBe(lowerSeriesId);
+    expect(state.measurement?.phase).toBe("complete");
+    expect(state.measurement?.start.price).toBeCloseTo(150);
+    expect(state.measurement!.end.price).toBeLessThan(150);
     cleanup();
 
     expect(Chart.getAxis(state, "right")?.visibleExtent).toEqual({
       min: 0,
       max: 100,
     });
-    expect(Chart.getAxis(state, lowerAxisId)?.visibleExtent).not.toEqual({
+    expect(Chart.getAxis(state, lowerAxisId)?.visibleExtent).toEqual({
       min: 100,
       max: 200,
     });

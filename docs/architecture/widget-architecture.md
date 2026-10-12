@@ -354,6 +354,16 @@ The rows A occupies are called the band; columns where no other widget intersect
 An A shorter than `M.h` cannot use rule 1; if the free columns to its right are wide enough, A stays in place and both grow downward together.
 Rows: the pair is pinned as one block of height `max(A.h, M.h)` at A's rows (rule 1 pins only A), RGL vertical compaction moves the covered widgets down (under the first three rules this happens only when A is shorter than `M.h`), and then the pin is released and the layout is compacted the way the Grid does it; finally each half rises to the bottom of the widget above its own columns, and both halves share the block's bottom edge. So the first three rules move no widget other than A; the saved layout is exactly the layout the Grid shows after compaction, and the two always sit side by side without overlap and without changing other widgets' IDs or order.
 Container resize only changes pixel sizes; it does not save placements or remount widgets; Chart and Workspace resize with their own containers.
+Dashboard overlays keyboard-accessible separators on complete shared edges, independently of
+widget kind. A separator exchanges width or height between its two placements in integer
+grid steps, bounded by both definitions' size constraints. The gesture previews locally
+and saves all affected rectangles once against its starting revision; cancellation saves
+nothing. Partial shared edges and T junctions retain the ordinary widget resize handle.
+Watchlist headers and rows share CSS subgrid tracks. Complete ticker text, logos and section
+indentation determine the Symbol track's intrinsic minimum width; tickers are never
+ellipsized. The table scrolls horizontally when needed, with Symbol cells pinned left and
+the column header pinned above the rows. Long symbols wrap in full while leaving
+room to read metric columns; deep indentation is bounded to preserve text space.
 RGL maxRows limits the current gesture, and keyboard editing uses the same row limit; when an old layout or collision pushing exceeds the budget, page scrolling is kept rather than clipping content.
 Narrow screens show a single column in array order; the first version does not save a breakpoint layout dictionary. Layout engine types do not enter the Resource schema.
 

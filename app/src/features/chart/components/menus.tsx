@@ -40,6 +40,7 @@ import {
 import { ChartAlertContext } from "@openchart/app/features/chart/components/alert-button";
 import type { DrawingResource } from "@openchart/app/lib/chart/drawings";
 import { useWidgetControls } from "@openchart/app/hooks/use-widget";
+import { useDrawingTool } from "@openchart/app/hooks/use-drawing-tool";
 import { useChart } from "@openchart/app/hooks/use-chart";
 import type { ChartPreferencesStore } from "@openchart/app/lib/chart/preferences";
 
@@ -94,6 +95,11 @@ export function ChartMenus({
 }) {
   const chart = useChart();
   const alerts = useContext(ChartAlertContext);
+  const { clearMeasurement } = useDrawingTool(chart);
+  const measurementMenu = useStore(
+    chart.store,
+    (state) => state.measurement?.contextMenu,
+  );
   const [savingDrawing, setSavingDrawing] = useState(false);
   const seriesMenu = useStore(chart.store, (state) => state.seriesContextMenu);
   const magnetSeriesId = useStore(chart.store, (state) => state.magnetSeriesId);
@@ -108,7 +114,7 @@ export function ChartMenus({
   );
   const preferences = useStore(localStore);
   const [editingDrawing, setEditingDrawing] = useState<string>();
-  const target = drawingMenu ?? seriesMenu ?? axisMenu;
+  const target = measurementMenu ?? drawingMenu ?? seriesMenu ?? axisMenu;
   const openingDialog = useRef(false);
   const anchor = useMemo(
     () => ({
@@ -225,6 +231,7 @@ export function ChartMenus({
       delete state.seriesContextMenu;
       delete state.yAxisContextMenu;
       delete state.drawings.contextMenu;
+      if (state.measurement) delete state.measurement.contextMenu;
     });
   const setAxis = (change: Partial<(typeof preferences.axes)[string]>) => {
     if (axisMenu)
@@ -243,7 +250,7 @@ export function ChartMenus({
       if (item) update(item);
     });
   const editedDrawing = drawings.find((item) => item.id === editingDrawing);
-  const menuOpen = !!(currentSeries || axis || drawing);
+  const menuOpen = !!(measurementMenu || currentSeries || axis || drawing);
   useWidgetControls(menuOpen || !!editedDrawing);
   return (
     <>
@@ -266,6 +273,14 @@ export function ChartMenus({
             openingDialog.current = false;
           }}
         >
+          {measurementMenu ? (
+            <>
+              <MenuLabel>Measurement</MenuLabel>
+              <MenuItem onSelect={clearMeasurement}>
+                Delete measurement
+              </MenuItem>
+            </>
+          ) : null}
           {currentSeries ? (
             <>
               <MenuLabel>

@@ -17,7 +17,7 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
 
 import {
@@ -46,12 +46,7 @@ import {
   type Quote,
 } from "../hooks/use-quote";
 import type { WatchlistView } from "../stores/view";
-import {
-  formatFormula,
-  formatMetric,
-  gridTemplate,
-  metricTone,
-} from "../utils/columns";
+import { formatFormula, formatMetric, metricTone } from "../utils/columns";
 import {
   indexWatchlist,
   moveOperation,
@@ -250,7 +245,6 @@ export function WatchlistTree({
   useEffect(() => {
     tree.rebuildTree();
   }, [tree, children, expandedItems]);
-  const tracks = { gridTemplateColumns: gridTemplate(columns) };
   const target = tree.getDragTarget();
   const parent = target?.item.getItemData();
   const depth =
@@ -263,12 +257,20 @@ export function WatchlistTree({
       ? (depth - target.dragLineLevel) * INDENT
       : 0;
   return (
-    <div {...tree.getContainerProps("Watchlist")} className="outline-none">
+    <div
+      {...tree.getContainerProps("Watchlist")}
+      className="col-span-full grid grid-cols-subgrid outline-none"
+    >
       {tree.getItems().map((item) => {
         const node = item.getItemData();
         if (node.kind === "section")
           return node.section.name === undefined ? (
-            <div key={item.getKey()} ref={item.getProps().ref} aria-hidden />
+            <div
+              key={item.getKey()}
+              ref={item.getProps().ref}
+              aria-hidden
+              className="col-span-full"
+            />
           ) : (
             <SectionRow
               key={item.getKey()}
@@ -290,7 +292,6 @@ export function WatchlistTree({
               item={item}
               node={node}
               columns={columns}
-              style={tracks}
               onRemove={() =>
                 save.mutate((current) => removeNode(current, node.id))
               }
@@ -300,7 +301,7 @@ export function WatchlistTree({
       })}
       <div
         aria-hidden
-        className="h-0.5 bg-primary"
+        className="col-span-full h-0.5 bg-primary"
         style={tree.getDragLineStyle(-1, lineOffset)}
       />
     </div>
@@ -309,7 +310,7 @@ export function WatchlistTree({
 
 function rowState(item: ItemInstance<WatchlistNode>) {
   return cn(
-    "relative outline-none hover:bg-accent/50 focus-visible:bg-accent",
+    "relative bg-background outline-none hover:bg-accent focus-visible:bg-accent",
     item.isUnorderedDragTarget() && "bg-accent ring-1 ring-inset ring-primary",
   );
 }
@@ -331,7 +332,7 @@ function SectionRow({
           <div
             {...item.getProps()}
             className={cn(
-              "flex h-8 cursor-default select-none items-center gap-1 border-b pr-2 text-xs font-medium uppercase tracking-wide text-muted-foreground",
+              "col-span-full flex h-8 cursor-default select-none items-center gap-1 border-b pr-2 text-xs font-medium uppercase tracking-wide text-muted-foreground",
               rowState(item),
             )}
             style={{ paddingLeft: node.depth * INDENT + 4 }}
@@ -379,13 +380,11 @@ function ItemRow({
   item,
   node,
   columns,
-  style,
   onRemove,
 }: {
   item: ItemInstance<WatchlistNode>;
   node: Extract<WatchlistNode, { kind: "item" }>;
   columns: readonly Column[];
-  style: CSSProperties;
   onRemove: () => void;
 }) {
   return (
@@ -395,10 +394,9 @@ function ItemRow({
           <div
             {...item.getProps()}
             className={cn(
-              "grid h-8 cursor-default select-none items-center border-b text-sm",
+              "col-span-full grid min-h-8 cursor-default select-none grid-cols-subgrid items-center border-b bg-background py-1 text-sm hover:bg-accent focus-visible:bg-accent",
               rowState(item),
             )}
-            style={style}
           >
             <SymbolCell item={node.item} depth={node.depth} />
             <QuoteCells item={node.item} columns={columns} />
@@ -416,10 +414,14 @@ function ItemRow({
 
 function SymbolCell({ item, depth }: { item: Item; depth: number }) {
   const logo = logoUrl(item.listing);
+  // Leave room to read metric columns while the symbol remains pinned.
+  const space = "max(6rem, calc(100cqi - var(--watchlist-metric-space, 0px)))";
+  // Preserve indentation while reserving text space even inside a very narrow widget.
+  const paddingLeft = `min(${depth * INDENT + 8}px, max(8px, calc(${space} - 8rem)))`;
   return (
     <div
-      className="flex min-w-0 items-center gap-2 pr-2"
-      style={{ paddingLeft: depth * INDENT + 8 }}
+      className="sticky left-0 z-10 flex min-w-max items-center gap-2 bg-inherit pr-2"
+      style={{ paddingLeft }}
       title={item.listing.name ?? item.listing.symbol}
     >
       <Avatar key={logo} className="size-5 shrink-0">
@@ -428,7 +430,14 @@ function SymbolCell({ item, depth }: { item: Item; depth: number }) {
           {item.listing.symbol.slice(0, 1)}
         </AvatarFallback>
       </Avatar>
-      <span className="truncate font-medium">{item.listing.symbol}</span>
+      <span
+        className="min-w-0 break-all font-medium"
+        style={{
+          maxWidth: `max(1ch, calc(${space} - ${paddingLeft} - 2.25rem))`,
+        }}
+      >
+        {item.listing.symbol}
+      </span>
     </div>
   );
 }

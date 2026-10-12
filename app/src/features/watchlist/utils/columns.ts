@@ -20,12 +20,13 @@ export const COLUMNS: Readonly<
 /** Metrics shown as one formatted number; Price History draws a sparkline. */
 export type ScalarMetric = Exclude<Metric, "priceHistory">;
 
-/** One CSS grid template shared by the header and every row. */
+/** Shared tracks reserve full symbol text, logos and indentation; quote and Formula columns keep their widths. */
 export function gridTemplate(columns: readonly Column[]): string {
-  return ["minmax(6rem, 1fr)", ...columns.map(columnWidth)].join(" ");
+  return ["minmax(max-content, 1fr)", ...columns.map(columnWidth)].join(" ");
 }
 
-function columnWidth(column: Column): string {
+/** Fixed quote or Formula track width, with no I/O or cleanup. @example columnWidth({ metric: { kind: "price" } }) */
+export function columnWidth(column: Pick<Column, "metric">): string {
   return column.metric.kind === "formula"
     ? "7rem"
     : COLUMNS[column.metric.kind].width;

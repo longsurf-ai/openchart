@@ -121,7 +121,12 @@ beforeEach(() => {
         ? document.documentElement.classList.contains("dark")
           ? "#000000"
           : "#ffffff"
-        : "#168863",
+        : ((
+            {
+              "--chart-comparison-up": "#0e5c42",
+              "--chart-comparison-down": "#7e2222",
+            } as Record<string, string>
+          )[key] ?? "#168863"),
   }));
 });
 afterEach(() => {
@@ -838,6 +843,35 @@ it("shares price/volume data, preserves immutable versions, and does not reopen 
   fixture.snapshot("MSFT");
   expect(fixture.active("AAPL")).toBe(channel);
   const comparison = fixture.active("MSFT");
+  const compared = v2.ChartStateUtils.getSeries(
+    fixture.runtime.store.getState(),
+    "csr_compare",
+  );
+  expect(compared?.type).toBe("Candlestick");
+  expect(compared?.options).toMatchObject({
+    upColor: "#0e5c42",
+    downColor: "#7e2222",
+    wickUpColor: "#0e5c42",
+    wickDownColor: "#7e2222",
+    borderUpColor: "#0e5c42",
+    borderDownColor: "#7e2222",
+  });
+  act(() =>
+    fixture.local.setState((state) => ({
+      series: {
+        ...state.series,
+        csr_compare: { type: "Line", color: "#123456" },
+      },
+    })),
+  );
+  expect(
+    v2.ChartStateUtils.getSeries(
+      fixture.runtime.store.getState(),
+      "csr_compare",
+    ),
+  ).toMatchObject({ type: "Line", options: { color: "#123456" } });
+  expect(fixture.active("MSFT")).toBe(comparison);
+
   act(() =>
     fixture.runtime.mutate((draft) => {
       draft.lockedSeriesId = "csr_compare";
@@ -903,6 +937,38 @@ it("shares price/volume data, preserves immutable versions, and does not reopen 
   for (const renderer of mocks.renderers)
     expect(renderer.dispose).toHaveBeenCalledOnce();
 });
+
+it.each([
+  ["MSFT", "1m"],
+  ["AAPL", "1d"],
+] as const)(
+  "clears a measurement when the market input changes to %s %s, retaining it on live updates",
+  (symbol, resolution) => {
+    const fixture = setup();
+    fixture.snapshot("AAPL");
+    const measurement = {
+      seriesId: "csr_price",
+      phase: "complete" as const,
+      start: { time: 1, price: 2 },
+      end: { time: 2, price: 3 },
+    };
+    act(() =>
+      fixture.runtime.mutate((state) => {
+        state.measurement = measurement;
+      }),
+    );
+    act(() =>
+      fixture
+        .active("AAPL")
+        .sink.next({ type: "updates", data: fixture.data("AAPL", 3, 2000) }),
+    );
+    fixture.view.rerender(fixture.tree());
+    expect(fixture.runtime.store.getState().measurement).toEqual(measurement);
+    fixture.view.rerender(fixture.tree(symbol, false, resolution));
+    expect(fixture.runtime.store.getState().measurement).toBeUndefined();
+    fixture.view.unmount();
+  },
+);
 
 it("keeps the previous symbol label, rejects retired updates, and exposes retry", async () => {
   const fixture = setup();

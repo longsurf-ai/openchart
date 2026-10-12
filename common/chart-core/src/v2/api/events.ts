@@ -66,6 +66,7 @@ import {
   modeBaseline,
   modeTransformValue,
 } from "@openchart/chart-core/v2/scale-mode";
+import { rawValueAtY } from "@openchart/chart-core/v2/series/coordinates";
 import { resolveDrawingDefaultColor } from "./drawing-default-color";
 
 type Axis = YAxisConfig.Axis;
@@ -149,6 +150,12 @@ export function setupEvents(config: EventsConfig): EventsController {
     mode: "thinking" | "fast";
   } | null;
   let chartExplainDrag: ChartExplainDragState = null;
+  let measurementDrag: {
+    tool: Drawing.Tool | null | undefined;
+    start: Action.Point;
+    mode: "pressed" | "tracking";
+    moved: boolean;
+  } | null = null;
 
   const CHART_EXPLAIN_SCAN_COLORS = [
     "174 86% 62%",
@@ -2146,6 +2153,179 @@ export function setupEvents(config: EventsConfig): EventsController {
     window.removeEventListener("mouseup", endDrawing);
   }
 
+  function measurementPoint(
+    state: Chart.State,
+    seriesId: string,
+    point: Action.Point,
+  ) {
+    const series = getSeries(state, seriesId);
+    const runtime = getRuntime();
+    const scale = series && runtime.coord?.scales.y[Series.getYAxisId(series)];
+    if (!series?.data.length || !scale) return null;
+    const axis = getAxis(state.config.xAxis, Series.getXAxisId(series));
+    if (axis.mode !== "ordinal" || (axis.field ?? "time") !== "time")
+      return null;
+    const layout = Chart.computeLayout(state.config);
+    const pane = primarySeriesPaneArea(state, seriesId, layout);
+    const x = Math.max(pane.x, Math.min(pane.x + pane.width, point.x));
+    const y = Math.max(pane.y, Math.min(pane.y + pane.height, point.y));
+    const index =
+      xToSeriesIndex(state, series, x, layout) -
+      Number(series.options.xOffset ?? 0);
+    const xField = resolveField(series, "x", "time");
+    const row = series.data[index] as Record<string, unknown> | undefined;
+    const time =
+      Data.readTime(row?.[xField]) ??
+      projectedTimeForX({
+        state,
+        series,
+        layout,
+        xField,
+        x: makeIndexToSeriesX(state, series, layout)(index),
+      });
+    const price = rawValueAtY(
+      scale,
+      runtime.modeCache?.modeTransforms.get(seriesId),
+      y,
+    );
+    return time === null || price === undefined ? null : { time, price };
+  }
+
+  function releaseMeasurementDrag() {
+    measurementDrag = null;
+    window.removeEventListener("mousemove", handleMeasurementDrag);
+    window.removeEventListener("mouseup", endMeasurementDrag);
+    window.removeEventListener("blur", cancelMeasurement);
+    setCanvasCursor("default");
+  }
+
+  function cancelMeasurement() {
+    releaseMeasurementDrag();
+    setState((s) => {
+      delete s.measurement;
+    });
+    scheduleRender("light");
+  }
+
+  function handleMeasurementDrag(e: MouseEvent) {
+    if (!measurementDrag) return;
+    const state = getState();
+    if (
+      !state.measurement ||
+      state.drawings.activeTool !== measurementDrag.tool
+    ) {
+      cancelMeasurement();
+      return;
+    }
+    const point = Input.point(e, canvas.getBoundingClientRect());
+    if (
+      measurementDrag.mode === "pressed" &&
+      Math.hypot(
+        point.x - measurementDrag.start.x,
+        point.y - measurementDrag.start.y,
+      ) >= 4
+    ) {
+      measurementDrag.moved = true;
+    }
+    const end = measurementPoint(state, state.measurement.seriesId, point);
+    if (!end) {
+      cancelMeasurement();
+      return;
+    }
+    setState((s) => {
+      if (s.measurement) s.measurement.end = end;
+      s.crosshair.visible = false;
+    });
+    scheduleRender("light");
+  }
+
+  function endMeasurementDrag(e: MouseEvent) {
+    if (e.button !== 0 || !measurementDrag) return;
+    handleMeasurementDrag(e);
+    if (!measurementDrag) return;
+    if (!measurementDrag.moved) {
+      measurementDrag.mode = "tracking";
+      window.removeEventListener("mouseup", endMeasurementDrag);
+      setState((s) => {
+        if (s.measurement) s.measurement.phase = "tracking";
+      });
+      scheduleRender("light");
+      return;
+    }
+    finishMeasurement(e);
+  }
+
+  function finishMeasurement(e: MouseEvent) {
+    handleMeasurementDrag(e);
+    if (!measurementDrag) return;
+    const toolbar = measurementDrag.tool === "measurement";
+    releaseMeasurementDrag();
+    let autoCleared = false;
+    setState((s) => {
+      if (!s.measurement) return;
+      s.measurement.phase = "complete";
+      if (toolbar && !s.drawings.toolLocked) {
+        s.drawings.activeTool = null;
+        autoCleared = true;
+      }
+    });
+    if (autoCleared) onDrawingToolAutoClear?.();
+    scheduleRender("light");
+  }
+
+  function beginMeasurement(state: Chart.State, point: Action.Point) {
+    const layout = Chart.computeLayout(state.config);
+    const paneId = paneIdAtY(state, layout, point.y);
+    const candidates = paneSeriesIds(state, paneId)
+      .map((id) => getSeries(state, id))
+      .filter(
+        (series): series is Series.State =>
+          !!series?.data.length && series.options.visible !== false,
+      );
+    const main = ChartStateModel.mainSeries(state);
+    const series =
+      candidates.find((item) => item.id === state.lockedSeriesId) ??
+      candidates.find((item) => item.id === main?.id) ??
+      candidates.find((item) => !item.parentId && item.type !== "Histogram") ??
+      candidates[0];
+    if (!series) return false;
+    const start = measurementPoint(state, series.id, point);
+    if (!start) return false;
+    if (chartExplainDrag) cancelChartExplainDrag();
+    drawingDrag = null;
+    window.removeEventListener("mouseup", endDrawing);
+    measurementDrag = {
+      tool: state.drawings.activeTool,
+      start: point,
+      mode: "pressed",
+      moved: false,
+    };
+    canvas.focus({ preventScroll: true });
+    canvasHoveredAnnotationId = undefined;
+    setState((s) => {
+      s.measurement = {
+        seriesId: series.id,
+        phase: "dragging",
+        start,
+        end: start,
+      };
+      delete s.drawings.draft;
+      delete s.drawings.hoveredId;
+      delete s.drawings.selectedId;
+      s.hoveredMarkerId = undefined;
+      s.hoveredAnnotationId = undefined;
+      s.hoveredAnnotationPart = undefined;
+      s.expandedAnnotation = undefined;
+      s.crosshair.visible = false;
+    });
+    window.addEventListener("mousemove", handleMeasurementDrag);
+    window.addEventListener("mouseup", endMeasurementDrag);
+    window.addEventListener("blur", cancelMeasurement);
+    setCanvasCursor("crosshair");
+    scheduleRender("light");
+    return true;
+  }
+
   function releaseChartExplainDrag() {
     chartExplainDrag = null;
     window.removeEventListener("mousemove", handleChartExplainDrag);
@@ -2255,6 +2435,7 @@ export function setupEvents(config: EventsConfig): EventsController {
   }
 
   const onMouseMove = (e: MouseEvent) => {
+    if (measurementDrag) return handleMeasurementDrag(e);
     if (chartExplainDrag) return handleChartExplainDrag(e);
     if (handleAnnotationMove(e)) return;
     if (handleDrawingMove(e)) return;
@@ -2269,6 +2450,8 @@ export function setupEvents(config: EventsConfig): EventsController {
 
     if (
       state.drawings.activeTool === "agent_session" ||
+      state.drawings.activeTool === "measurement" ||
+      e.shiftKey ||
       state.annotationCreate?.phase === "armed"
     ) {
       if (
@@ -2591,6 +2774,7 @@ export function setupEvents(config: EventsConfig): EventsController {
       !drag &&
       !paneResizeDrag &&
       !chartExplainDrag &&
+      !measurementDrag &&
       !annotationHandleDrag &&
       state.annotationCreate?.phase !== "placing"
     ) {
@@ -2638,6 +2822,27 @@ export function setupEvents(config: EventsConfig): EventsController {
       pt.y <= layout.areaHeight;
     const inSelectableX =
       pt.x >= layout.areaX && pt.x <= layout.areaX + layout.areaWidth;
+
+    if (
+      measurementDrag &&
+      (!state.measurement || state.drawings.activeTool !== measurementDrag.tool)
+    ) {
+      releaseMeasurementDrag();
+    }
+    if (measurementDrag?.mode === "tracking" && inPlot) {
+      e.preventDefault();
+      suppressNextClick = true;
+      finishMeasurement(e);
+      return;
+    }
+
+    if (inPlot && (mods.shift || state.drawings.activeTool === "measurement")) {
+      e.preventDefault();
+      suppressNextClick = true;
+      beginMeasurement(state, pt);
+      return;
+    }
+    if (state.measurement) cancelMeasurement();
 
     if (state.drawings.activeTool === "agent_session" && inSelectableX) {
       e.preventDefault();
@@ -3002,7 +3207,12 @@ export function setupEvents(config: EventsConfig): EventsController {
     }
 
     const activeTool = state.drawings?.activeTool;
-    if (activeTool && activeTool !== "agent_session" && !mods.alt) {
+    if (
+      activeTool &&
+      activeTool !== "agent_session" &&
+      activeTool !== "measurement" &&
+      !mods.alt
+    ) {
       const anchor = pointToAnchor(pt, entry, { drawingType: activeTool });
       if (!anchor) return;
       const defaultColor = resolveDrawingDefaultColor(state.config.chart);
@@ -3152,6 +3362,42 @@ export function setupEvents(config: EventsConfig): EventsController {
     const entry = createFakeEntry();
     const rect = canvas.getBoundingClientRect();
     const pt = Input.point(e, rect);
+
+    if (measurementDrag && state.measurement) {
+      e.preventDefault();
+      setState((s) => {
+        if (s.drawings.activeTool === "measurement")
+          s.drawings.activeTool = null;
+      });
+      cancelMeasurement();
+      return;
+    }
+    if (
+      state.measurement &&
+      getRuntime().measurementHitRegions?.some(
+        (bounds) =>
+          pt.x >= bounds.x - 4 &&
+          pt.x <= bounds.x + bounds.width + 4 &&
+          pt.y >= bounds.y - 4 &&
+          pt.y <= bounds.y + bounds.height + 4,
+      )
+    ) {
+      e.preventDefault();
+      setState((s) => {
+        if (s.measurement) s.measurement.contextMenu = pt;
+        delete s.drawings.contextMenu;
+        delete s.seriesContextMenu;
+        delete s.yAxisContextMenu;
+        s.crosshair.visible = false;
+      });
+      scheduleRender("light");
+      return;
+    }
+    if (state.measurement?.contextMenu) {
+      setState((s) => {
+        if (s.measurement) delete s.measurement.contextMenu;
+      });
+    }
 
     const floatingOverlay = floatingAxisAtPoint(pt);
     const axis = floatingOverlay
@@ -3518,20 +3764,39 @@ export function setupEvents(config: EventsConfig): EventsController {
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== "Escape") return;
+    if (e.defaultPrevented) return;
+    const deleting = e.key === "Delete" || e.key === "Backspace";
+    if (e.key !== "Escape" && !deleting) return;
     const target = e.target as HTMLElement | null;
     if (
       target?.closest?.('input, textarea, select, [contenteditable="true"]')
     ) {
       return;
     }
-    if (annotationHandleDrag) {
+    if (annotationHandleDrag && !deleting) {
       releaseAnnotationDrag();
       scheduleRender("light");
       return;
     }
     const state = getState();
     ChartStateModel.assertModelReady(state);
+    if (deleting && !state.measurement) return;
+    if (state.measurement || state.drawings.activeTool === "measurement") {
+      if (
+        !state.measurement?.contextMenu &&
+        document.activeElement !== canvas &&
+        !(target instanceof Node && root.contains(target))
+      )
+        return;
+      e.preventDefault();
+      setState((s) => {
+        if (s.drawings.activeTool === "measurement")
+          s.drawings.activeTool = null;
+      });
+      cancelMeasurement();
+      return;
+    }
+    if (deleting) return;
     if (
       state.drawings.activeTool === "agent_session" ||
       state.chartExplain?.draftBand
@@ -3575,6 +3840,7 @@ export function setupEvents(config: EventsConfig): EventsController {
     canvas.removeEventListener("dblclick", onDblClick);
     window.removeEventListener("keydown", onKeyDown);
     if (chartExplainDrag) cancelChartExplainDrag();
+    if (measurementDrag || getState().measurement) cancelMeasurement();
     endDrag();
     endDrawing();
     // Disposal cancels an unfinished annotation gesture; it must not save or expand.

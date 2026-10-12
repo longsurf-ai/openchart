@@ -160,7 +160,7 @@ export function ChartCell({
   const marketInputs = useMemo<MarketSeriesInput[]>(
     () =>
       cell
-        ? cell.marketSources.flatMap((source, colorIndex) => {
+        ? cell.marketSources.flatMap((source) => {
             const bindings = cell.panes.flatMap((pane, index) =>
               pane.series.flatMap((series) =>
                 series.source.kind === "market" &&
@@ -190,7 +190,6 @@ export function ChartCell({
               ? [
                   {
                     id: source.id,
-                    colorIndex,
                     bindings,
                     series: barsSeries(source, cell),
                   },
