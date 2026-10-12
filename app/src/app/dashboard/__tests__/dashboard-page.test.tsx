@@ -525,6 +525,80 @@ it("submits resize once and keeps content mounted across width changes", async (
   expect(harness.mounted).toHaveBeenCalledTimes(2);
 });
 
+it("previews a shared separator drag, commits both placements once, and keeps widget drafts mounted", async () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  const { patch } = setup();
+  patch.mockReturnValue(new Promise(() => undefined));
+  const separator = screen.getByRole("separator", {
+    name: "Resize adjacent widgets horizontally",
+  });
+  const draft = screen.getByRole("textbox", { name: "Draft wdg_one" });
+  fireEvent.change(draft, { target: { value: "Keep my work" } });
+  fireEvent.pointerDown(separator, { button: 0, clientX: 600 });
+  fireEvent.pointerMove(separator, { clientX: 702 });
+  expect(
+    harness.grid!.layout!.slice(0, 2).map(({ x, w }) => ({ x, w })),
+  ).toEqual([
+    { x: 0, w: 7 },
+    { x: 7, w: 5 },
+  ]);
+  expect(patch).not.toHaveBeenCalled();
+  fireEvent.pointerUp(separator, { clientX: 702 });
+  await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+  const saved = patch.mock.calls[0]![0];
+  expect(saved.expectedRevision).toBe(1);
+  expect(
+    saved.operations[0].value
+      .slice(0, 2)
+      .map(({ layout }: Dashboard["widgets"][number]) => layout),
+  ).toEqual([
+    { x: 0, y: 0, w: 7, h: 8 },
+    { x: 7, y: 0, w: 5, h: 8 },
+  ]);
+  expect(draft).toHaveValue("Keep my work");
+  expect(harness.mounted).toHaveBeenCalledTimes(2);
+});
+
+it("cancels separator previews without saving and supports a one-step keyboard resize", async () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  const { patch, resize } = setup();
+  patch.mockReturnValue(new Promise(() => undefined));
+  const separator = screen.getByRole("separator", {
+    name: "Resize adjacent widgets horizontally",
+  });
+  fireEvent.pointerDown(separator, { button: 0, clientX: 600 });
+  fireEvent.pointerMove(separator, { clientX: 702 });
+  fireEvent.pointerCancel(separator);
+  expect(harness.grid!.layout![0]!.w).toBe(6);
+  expect(patch).not.toHaveBeenCalled();
+  fireEvent.keyDown(separator, { key: "ArrowLeft" });
+  await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+  expect(patch.mock.calls[0]![0].operations[0].value[0].layout.w).toBe(5);
+  expect(patch.mock.calls[0]![0].operations[0].value[1].layout).toMatchObject({
+    x: 5,
+    w: 7,
+  });
+  resize(480);
+  expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+});
+
+it("cancels a shared-edge drag when the container switches to a single column", () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  const { patch, resize } = setup();
+  const separator = screen.getByRole("separator", {
+    name: "Resize adjacent widgets horizontally",
+  });
+  fireEvent.pointerDown(separator, { button: 0, clientX: 600 });
+  fireEvent.pointerMove(separator, { clientX: 702 });
+  resize(480);
+  expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+  resize(1200);
+  expect(harness.grid!.layout![0]!.w).toBe(6);
+  expect(harness.grid!.layout![1]!.x).toBe(6);
+  expect(patch).not.toHaveBeenCalled();
+  expect(harness.mounted).toHaveBeenCalledTimes(2);
+});
+
 it("keeps failed mutation variables for retry even after a newer revision arrives", async () => {
   const { resource, patch, client, key, user } = setup();
   patch

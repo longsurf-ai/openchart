@@ -16,6 +16,32 @@
   @apply border-muted-foreground;
 }
 
+.dashboard-separator::after {
+  content: "";
+  @apply absolute rounded-full bg-transparent;
+}
+
+.dashboard-separator[aria-orientation="vertical"]::after {
+  @apply inset-y-2 left-1/2 w-px -translate-x-1/2;
+}
+
+.dashboard-separator[aria-orientation="horizontal"]::after {
+  @apply inset-x-2 top-1/2 h-px -translate-y-1/2;
+}
+
+.dashboard-separator:hover::after,
+.dashboard-separator:active::after {
+  @apply bg-muted-foreground;
+}
+
+.dashboard-separator:focus-visible::after {
+  @apply bg-ring;
+}
+
+[data-separator-resizing] > .dashboard-grid > .react-grid-item {
+  transition: none;
+}
+
 .dashboard-grid .react-grid-item:has(.widget-card:hover),
 .dashboard-grid .react-grid-item:has(:focus-visible),
 .dashboard-grid .react-grid-item:has([data-controls-held]) {
