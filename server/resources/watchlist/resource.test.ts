@@ -7,7 +7,7 @@ import { Database } from "@openchart/server/db";
 import { Events } from "@openchart/server/events";
 import { ResourceChanged } from "@openchart/server/lib/resource/events";
 import { TRPCError } from "@trpc/server";
-import { asc } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import {
   ConfigProvider,
   Effect,
@@ -20,7 +20,11 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 
 import { WatchlistEntity } from "./entity";
 import { watchlistResource } from "./resource";
-import { watchlistItemTable, watchlistSectionTable } from "./schema";
+import {
+  watchlistItemTable,
+  watchlistSectionTable,
+  watchlistTable,
+} from "./schema";
 
 type Runtime = ReturnType<typeof makeRuntime>;
 type Caller = ReturnType<typeof router.createCaller>;
@@ -226,6 +230,41 @@ test("exposes the recursive section schema to the Agent as one definition", () =
       },
     },
   });
+});
+
+test("legacy stored columns decode visible and normalize lazily on the next save", async () => {
+  const created = await caller.resources.watchlist.create({ name: "Legacy" });
+  const oldColumns = [{ id: "wcl_price", metric: { kind: "price" } }];
+  await runtime.runPromise(
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service;
+      yield* db.transaction((tx) =>
+        tx
+          .update(watchlistTable)
+          .set({ columns: sql`${JSON.stringify(oldColumns)}` })
+          .where(eq(watchlistTable.id, created.id)),
+      );
+    }),
+  );
+  const current = await caller.resources.watchlist.get({ id: created.id });
+  expect(current.columns).toEqual([{ ...oldColumns[0], visible: true }]);
+  expect(current.revision).toBe(created.revision);
+  await caller.resources.watchlist.patch({
+    id: current.id,
+    expectedRevision: current.revision,
+    operations: [{ op: "replace", path: "/name", value: "Normalized" }],
+  });
+  const stored = await runtime.runPromise(
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service;
+      return yield* db
+        .select({ columns: watchlistTable.columns })
+        .from(watchlistTable)
+        .where(eq(watchlistTable.id, created.id))
+        .get();
+    }),
+  );
+  expect(stored?.columns).toEqual(current.columns);
 });
 
 test("publishes resource.changed for nested-only writes", async () => {

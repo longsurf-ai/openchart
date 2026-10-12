@@ -12,7 +12,10 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NEVER } from "rxjs";
+import { BehaviorSubject, NEVER } from "rxjs";
+import { fromRows } from "@openchart/timeseries";
+import type { TeaLatestState } from "@openchart/app/hooks/use-tea";
+import { Schema, Field, Float64, TimestampMillisecond } from "apache-arrow";
 
 import { TooltipProvider } from "@openchart/app/components/ui/tooltip";
 import { useIntentHandler } from "@openchart/app/hooks/use-intent";
@@ -23,6 +26,56 @@ import { WidgetContext } from "@openchart/app/lib/widget/widget";
 
 import { watchlistDetail, type Watchlist } from "../api/queries";
 import { watchlistWidget } from "../components/widget";
+
+vi.mock("@openchart/app/hooks/use-tea", () => ({
+  useTeaGroup: () => ({ states: formulaStates, retry: formulaRetry }),
+  useTeaDefinition: () => ({
+    pending: false,
+    compiled: {
+      definition: {
+        parameters: [],
+        outputs: new Schema([
+          new Field(
+            "value",
+            new Float64(),
+            true,
+            new Map([["tea:write", "set"]]),
+          ),
+        ]),
+      },
+    },
+  }),
+  useTeaSource: () => ({
+    pending: false,
+    program: { entry: "rsi.tea", sources: { "rsi.tea": "code" } },
+  }),
+}));
+
+const formulaStates = new BehaviorSubject<ReadonlyMap<string, TeaLatestState>>(
+  new Map(),
+);
+const formulaRetry = vi.fn();
+const outputs = new Schema([
+  new Field("time", new TimestampMillisecond(), false),
+  new Field("value", new Float64(), true, new Map([["tea:write", "set"]])),
+]);
+const readyFormula = (value: number): TeaLatestState => ({
+  status: "ready",
+  compiled: {
+    declaration: null,
+    definition: {
+      parameters: [],
+      inputs: new Schema([]),
+      outputs,
+      requests: {},
+    },
+  },
+  data: fromRows(outputs, [{ time: 10, value }]),
+});
+const calendar = { isPending: false, data: { days: [] } };
+vi.mock("@openchart/app/hooks/use-calendar", () => ({
+  useCalendar: () => calendar,
+}));
 
 const closes: Record<string, [number, number]> = {
   AAPL: [0.83, 0.8127],
@@ -41,6 +94,12 @@ const daily = {
       adjustment: "raw",
       modes: ["history", "live"],
     },
+    {
+      resolution: "5m",
+      session: "regular",
+      adjustment: "raw",
+      modes: ["history", "live"],
+    },
   ],
 };
 const capabilities = vi.fn<(listing: ProviderListing) => typeof daily>(
@@ -49,6 +108,8 @@ const capabilities = vi.fn<(listing: ProviderListing) => typeof daily>(
 const views = new Map<string, unknown>();
 
 vi.mock("@openchart/app/hooks/use-bars", () => ({
+  useBarsCapabilitiesMany: (listings: ProviderListing[]) =>
+    listings.map((listing) => capabilities(listing)),
   useBarsCapabilities: (listing: ProviderListing) => capabilities(listing),
   // Two daily closes per symbol; quotes derive price, change, and change %.
   useBars: (request: { listing: { symbol: string } }) => {
@@ -62,7 +123,12 @@ vi.mock("@openchart/app/hooks/use-bars", () => ({
       views.set(symbol, {
         status: "ready",
         current: {
-          data: { numRows: 2, get: (i: number) => rows[i] },
+          data: {
+            numRows: 2,
+            get: (i: number) => rows[i],
+            column: (key: keyof (typeof rows)[number]) =>
+              rows.map((row) => row[key]),
+          },
           updates: NEVER,
         },
       });
@@ -84,7 +150,13 @@ function ChartPlacement() {
 }
 
 function setup(
-  options: { empty?: boolean; selectedId?: string; paged?: boolean } = {},
+  options: {
+    empty?: boolean;
+    selectedId?: string;
+    paged?: boolean;
+    formula?: boolean;
+    history?: boolean;
+  } = {},
 ) {
   const watchlist = {
     id: "wtl_test",
@@ -96,6 +168,32 @@ function setup(
       { id: "wcl_price", metric: { kind: "price" } },
       { id: "wcl_change", metric: { kind: "change" } },
       { id: "wcl_percent", metric: { kind: "changePercent" } },
+      ...(options.history
+        ? [
+            {
+              id: "wcl_history",
+              visible: true,
+              metric: { kind: "priceHistory" },
+            },
+          ]
+        : []),
+      ...(options.formula
+        ? [
+            {
+              id: "wcl_formula",
+              visible: true,
+              title: "RSI",
+              metric: {
+                kind: "formula",
+                source: { workspaceId: "wsp_test", path: "rsi.tea" },
+                snapshot: { "rsi.tea": "code" },
+                parameterOverrides: {},
+                output: "value",
+                bars: { resolution: "1d" },
+              },
+            },
+          ]
+        : []),
     ],
     sections: [
       {
@@ -234,6 +332,8 @@ const rows = () =>
 
 beforeEach(() => {
   viewed.mockReset();
+  formulaStates.next(new Map());
+  formulaRetry.mockReset();
   capabilities.mockReset().mockReturnValue(daily);
   daily.refetch.mockClear();
   localStorage.clear();
@@ -250,6 +350,10 @@ test("failed quote capabilities show an explicit retry instead of silent missing
     await screen.findByRole("button", { name: "Retry quote for AAPL" }),
   );
   expect(daily.refetch).toHaveBeenCalledTimes(1);
+  expect(viewed).not.toHaveBeenCalled();
+  await user.keyboard("{Enter}");
+  expect(daily.refetch).toHaveBeenCalledTimes(2);
+  expect(viewed).not.toHaveBeenCalled();
 });
 
 test("shows named sections as headings and rows with live, sign-coloured metrics", async () => {
@@ -468,6 +572,7 @@ test("an empty widget creates and selects its first Watchlist with starter colum
     name: "Energy",
     columns: ["price", "change", "changePercent"].map((kind) => ({
       id: expect.stringMatching(/^wcl_/),
+      visible: true,
       metric: { kind },
     })),
   });
@@ -533,4 +638,90 @@ test("scrolling the menu loads the next cursor page", async () => {
   } finally {
     vi.stubGlobal("IntersectionObserver", original);
   }
+});
+
+test("formula columns use ordinary visibility rows with a separate settings action", async () => {
+  const { user, patch } = setup({ formula: true });
+  await user.click(await screen.findByRole("button", { name: "Columns" }));
+  const checkbox = screen.getByRole("menuitemcheckbox", {
+    name: "RSI Formula",
+  });
+  expect(checkbox).toBeChecked();
+  await user.click(screen.getByRole("menuitem", { name: "Settings for RSI" }));
+  expect(
+    await screen.findByRole("dialog", { name: "Column settings" }),
+  ).toBeInTheDocument();
+  expect(patch).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Open code" })).toHaveAttribute(
+    "data-variant",
+    "outline",
+  );
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  await user.click(screen.getByRole("button", { name: "Columns" }));
+  await user.click(
+    screen.getByRole("menuitemcheckbox", { name: "RSI Formula" }),
+  );
+  await waitFor(() =>
+    expect(patch).toHaveBeenCalledWith({
+      id: "wtl_test",
+      expectedRevision: 3,
+      operations: [{ op: "add", path: "/columns/3/visible", value: false }],
+    }),
+  );
+});
+
+test("Price History hover and sorting coexist with Formula cells and row intents", async () => {
+  formulaStates.next(
+    new Map([
+      ["wit_aapl:wcl_formula", readyFormula(1000)],
+      ["wit_msft:wcl_formula", readyFormula(2000)],
+      ["wit_nvda:wcl_formula", readyFormula(3000)],
+    ]),
+  );
+  const { user } = setup({ history: true, formula: true });
+  const msft = await screen.findByRole("treeitem", { name: "MSFT" });
+  await waitFor(() => expect(msft).toHaveTextContent("2,000.00"));
+  const sparkline = within(msft).getByRole("img", {
+    name: "Price history for MSFT",
+  });
+  // jsdom lacks PointerEvent's coordinate fields; dispatch the native shape React reads.
+  fireEvent(
+    sparkline,
+    new MouseEvent("pointermove", { bubbles: true, clientX: 0 }),
+  );
+  await waitFor(() => expect(msft).toHaveTextContent("400.00"));
+  expect(msft).toHaveTextContent("2,000.00");
+  expect(viewed).not.toHaveBeenCalled();
+  fireEvent.pointerLeave(sparkline);
+  await waitFor(() => expect(msft).toHaveTextContent("396.00"));
+  await user.click(screen.getByRole("columnheader", { name: "Price History" }));
+  await user.click(screen.getByRole("columnheader", { name: "Price History" }));
+  await waitFor(() => expect(rows()).toEqual(["AAPL", "Tech", "NVDA", "MSFT"]));
+  await user.click(msft);
+  expect(viewed).toHaveBeenCalledExactlyOnceWith(
+    { listing: listing("MSFT") },
+    expect.anything(),
+  );
+  await user.keyboard("{Enter}");
+  expect(viewed).toHaveBeenCalledTimes(2);
+});
+
+test("Formula retry works by click and Enter without opening the row in Chart", async () => {
+  formulaStates.next(
+    new Map([
+      [
+        "wit_aapl:wcl_formula",
+        { status: "error", error: new Error("offline") },
+      ],
+    ]),
+  );
+  const { user } = setup({ formula: true });
+  await user.click(
+    await screen.findByRole("button", { name: "Retry formula" }),
+  );
+  expect(formulaRetry).toHaveBeenCalledExactlyOnceWith("wit_aapl:wcl_formula");
+  expect(viewed).not.toHaveBeenCalled();
+  await user.keyboard("{Enter}");
+  expect(formulaRetry).toHaveBeenCalledTimes(2);
+  expect(viewed).not.toHaveBeenCalled();
 });

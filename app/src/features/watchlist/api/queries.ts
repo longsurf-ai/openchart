@@ -3,6 +3,7 @@ import {
   infiniteQueryOptions,
   mutationOptions,
   queryOptions,
+  replaceEqualDeep,
   skipToken,
   type QueryClient,
   type UseMutationResult,
@@ -16,7 +17,7 @@ import type {
   ResourceOutputs,
 } from "@openchart/app/lib/transport/transport";
 
-import { watchlistIds, type Metric } from "../utils/tree";
+import { watchlistIds, type Column, type Metric } from "../utils/tree";
 
 /** One saved Watchlist as every read returns it. */
 export type Watchlist = ResourceOutputs["watchlist"]["get"];
@@ -103,8 +104,8 @@ const STARTER_METRICS: readonly Metric[] = ["price", "change", "changePercent"];
 
 /**
  * Create an empty, independent Watchlist; the caller then places it or
- * switches a placement to it. `metrics` defaults to price, change, and
- * change%. A failure toasts once and creates nothing.
+ * switches a placement to it. Without copied columns it starts with price,
+ * change, and change%. A failure toasts once and creates nothing.
  * @example useMutation({...createWatchlist(transport), onSuccess: (created) => place(created.id)}).mutate({name: "Tech"});
  */
 export function createWatchlist(transport: AppTransport) {
@@ -112,16 +113,19 @@ export function createWatchlist(transport: AppTransport) {
     meta: { errorTitle: "Couldn’t create the watchlist" },
     mutationFn: ({
       name,
-      metrics = STARTER_METRICS,
+      columns = STARTER_METRICS.map((kind) => ({
+        metric: { kind },
+        visible: true,
+      })),
     }: {
       name: string;
-      metrics?: readonly Metric[];
+      columns?: readonly Omit<Column, "id">[];
     }) =>
       transport.rpc.resources.watchlist.create.mutate({
         name,
-        columns: metrics.map((kind) => ({
+        columns: columns.map((column) => ({
+          ...column,
           id: watchlistIds.column.create(),
-          metric: { kind },
         })),
       }),
   });
@@ -159,5 +163,98 @@ export function deleteWatchlist(transport: AppTransport, client: QueryClient) {
         queryKey: watchlistList(transport).queryKey,
       });
     },
+  });
+}
+
+/** A formula column's saved computation configuration, owned by Watchlist. */
+export type FormulaMetric = Extract<Column["metric"], { kind: "formula" }>;
+/** A code location accepted by the creation transition; server validates workspace and relative path. */
+export type FormulaSource =
+  ResourceInputs["watchlist"]["addFormulaColumn"]["source"];
+/** A settings draft; source and snapshot are owned by the creation/reload transition. */
+export type FormulaSettings = Pick<
+  FormulaMetric,
+  "output" | "parameterOverrides" | "bars"
+> & { title?: string };
+
+type FormulaCommand =
+  | {
+      kind: "add";
+      source: FormulaSource;
+      settings: FormulaSettings;
+      expectedRevision: number;
+    }
+  | {
+      kind: "configure";
+      columnId: string;
+      expectedColumn?: Column;
+      settings: FormulaSettings;
+      expectedRevision: number;
+    }
+  | {
+      kind: "reload";
+      columnId: string;
+      expectedRevision: number;
+      expectedColumn?: Column;
+    };
+
+/** Save a formula against the revision the user edited. Unrelated revisions rebase only when the persisted target equals expectedColumn; additions may use the latest revision. Same-column changes reject without overwriting. Writes share the list's queue, never retry, and refresh after conflicts while leaving the caller's draft intact. @example useMutation(formulaColumnMutation(transport, client, id)).mutate({kind: "reload", columnId, expectedRevision}); */
+export function formulaColumnMutation(
+  transport: AppTransport,
+  client: QueryClient,
+  id: string | undefined,
+) {
+  const detail = watchlistDetail(transport, id);
+  return mutationOptions({
+    scope: { id: `watchlist:${id}` },
+    meta: { errorTitle: "Column changes haven’t been saved" },
+    retry: false,
+    mutationFn: async (command: FormulaCommand) => {
+      if (!id) throw new Error("Choose a watchlist first.");
+      const current = await client.fetchQuery({
+        ...detail,
+        staleTime: Infinity,
+      });
+      if (!current) throw new Error("This watchlist no longer exists.");
+      const unchanged =
+        command.kind !== "add" &&
+        command.expectedColumn !== undefined &&
+        replaceEqualDeep(
+          command.expectedColumn,
+          current.columns.find((column) => column.id === command.columnId),
+        ) === command.expectedColumn;
+      const expectedRevision =
+        command.kind === "add" || unchanged
+          ? current.revision
+          : command.expectedRevision;
+      if (expectedRevision !== current.revision)
+        throw new Error(
+          "This column changed while its settings were open. Load its saved settings before trying again.",
+        );
+      const base = { id, expectedRevision };
+      switch (command.kind) {
+        case "add":
+          return transport.rpc.resources.watchlist.addFormulaColumn.mutate({
+            ...base,
+            source: command.source,
+            ...command.settings,
+          });
+        case "configure":
+          return transport.rpc.resources.watchlist.configureFormulaColumn.mutate(
+            { ...base, columnId: command.columnId, ...command.settings },
+          );
+        case "reload":
+          return transport.rpc.resources.watchlist.reloadFormulaColumn.mutate({
+            ...base,
+            columnId: command.columnId,
+          });
+      }
+    },
+    onSuccess: (watchlist) => client.setQueryData(detail.queryKey, watchlist),
+    onError: () =>
+      client.invalidateQueries({
+        queryKey: detail.queryKey,
+        refetchType: "all",
+      }),
   });
 }

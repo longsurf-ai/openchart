@@ -58,6 +58,9 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
     const value = {
       quotes,
       crosshair: new BehaviorSubject<number | null>(null),
+      formulaValues: new BehaviorSubject({}),
+      addFormula: vi.fn(),
+      configureFormula: vi.fn(),
       save: {} as WatchlistSave,
       view: createWatchlistViewStore(crypto.randomUUID()),
       watchlistId: "wtl_test",

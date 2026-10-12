@@ -4,7 +4,7 @@ import { ProviderId, type ProviderListing } from "@openchart/market";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NEVER } from "rxjs";
+import { NEVER, of } from "rxjs";
 import { useRef } from "react";
 import type { GridLayoutProps } from "react-grid-layout";
 
@@ -46,7 +46,12 @@ vi.mock("react-grid-layout", async (original) => ({
 // Rows need quotes to render; their Feed behavior has its own tests.
 vi.mock("@openchart/app/hooks/use-bars", () => ({
   useBarsCapabilities: () => ({ error: null, refetch: vi.fn(), data: [] }),
+  useBarsCapabilitiesMany: () => [],
   useBars: () => ({ status: "loading", current: { updates: NEVER } }),
+}));
+
+vi.mock("@openchart/app/hooks/use-tea", () => ({
+  useTeaGroup: () => ({ states: of(new Map()), retry: vi.fn() }),
 }));
 
 const listing = (symbol: string): ProviderListing => ({

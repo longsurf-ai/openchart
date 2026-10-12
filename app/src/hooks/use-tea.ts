@@ -1,13 +1,73 @@
 // Purpose: The app's only Tea client access: read, describe and run declarative Tea sources.
 import { skipToken, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { defer, scan } from "rxjs";
+import { BehaviorSubject, defer, scan, type Observable } from "rxjs";
 import * as Tea from "@openchart/tea";
 import { mergeByTime, type DataFrame } from "@openchart/timeseries";
 import { writeNodeConfig } from "@openchart/app/lib/tea";
+import {
+  createTeaGroup,
+  teaGroupRequestKey,
+  type TeaGroupRequest,
+  type TeaLatestState,
+} from "@openchart/app/lib/tea/group";
 import { workspaceQueryKeys } from "@openchart/app/lib/workspace/workspace";
 import { useTeaClient } from "./use-tea-client";
+
+export type {
+  TeaGroupRequest,
+  TeaLatestState,
+} from "@openchart/app/lib/tea/group";
+
+/**
+ * Observe saved Tea executions in one mounted consumer scope. Equal snapshots
+ * compile once and equal effective parameters, complete bindings and windows
+ * share one run. Consumer keys stay independent; output selection belongs to
+ * the caller. Each state retains at most the latest complete row, including
+ * provisional updates, and never turns missing/nonfinite values into zero.
+ * Removing a consumer releases its unused runs; unmount also disposes late
+ * compile results. Four startup slots bound compiles/history loading without
+ * limiting ongoing live observations. Failures appear in the relevant state;
+ * `retry(key)` retries that consumer's failed shared operation. Invalid input
+ * configs fail during key encoding before execution. `states` publishes the
+ * current map and live changes without rerendering the hook's owner; subscribe
+ * with `useSubscription` or `useObservableState` for the desired presentation.
+ * @example const { states, retry } = useTeaGroup([{ key: "row:column", node }]);
+ */
+export function useTeaGroup(requests: readonly TeaGroupRequest[]): {
+  states: Observable<ReadonlyMap<string, TeaLatestState>>;
+  retry(key: string): void;
+} {
+  const client = useTeaClient();
+  const key = useMemo(() => teaGroupRequestKey(requests), [requests]);
+  const latest = useRef(requests);
+  latest.current = requests;
+  const group = useRef<ReturnType<typeof createTeaGroup>>();
+  const [states] = useState(
+    () => new BehaviorSubject<ReadonlyMap<string, TeaLatestState>>(new Map()),
+  );
+  useEffect(() => {
+    const owned = createTeaGroup(client, (error) => {
+      toast.error("Couldn’t release formula resources", {
+        description: error.message,
+      });
+    });
+    group.current = owned;
+    const subscription = owned.states.subscribe(states);
+    return () => {
+      subscription.unsubscribe();
+      owned.close();
+      group.current = undefined;
+      states.next(new Map());
+    };
+  }, [client, states]);
+  useEffect(() => {
+    group.current?.reconcile(latest.current);
+  }, [client, key]);
+  const retry = useCallback((key: string) => group.current?.retry(key), []);
+  return { states, retry };
+}
 
 /**
  * A declarative Tea node: what to run, how to bind it, which window to show

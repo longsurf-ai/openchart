@@ -287,7 +287,41 @@ Dashboard page composition is concentrated in `app/dashboard/`: `workspace.tsx` 
 and owns shared selection, save state, and recovery; `dashboard-header.tsx` composes page actions; `dashboard-grid.tsx` handles outer geometry and gestures.
 `widget-gallery.tsx` renders a DropdownMenu from the same widget catalog. Picking an item adds it immediately; DashboardView captures the current layout/revision and owns the mutation, pending, and recovery state in one place. The first widget fills the viewport; the second splits the width evenly with the first, and both rectangles are submitted in the same save; from the third on, widgets are appended at the bottom at their default size without changing the existing layout.
 Chart's `widget.tsx` defines the Provider, Controls and Content. The Provider resolves the Chart by dashboardId and offers symbol selection to create configuration when absent.
-The Watchlist widget has a Provider and Content but no Controls: its card chrome keeps only drag and close, and its own header owns switching, rename, new/delete watchlist, add symbol, new section, and columns. The gallery adds an unbound browser immediately, like Workspace. Selection, collapsed sections and sorting use a placement-scoped Zustand store persisted in localStorage; switching lists never writes Dashboard. Clearing storage forgets the selection. The browser selects the first available list when no selection remains, and shows a creation entry when none exist. A saved selection is read independently of the cursor-paginated menu, so an unloaded page never implies deletion. Successful deletion and confirmed missing details use the same fallback; failed deletes preserve selection. New lists copy the current columns, or use price/change/change% when starting empty. Watchlists remain independent Resources: removing a placement or Dashboard keeps their contents. Sections, rows and columns are edited with JSON Patch (a drag is one `move`); quotes come from each row's daily bars through Feed. Clicking a row, or Enter on it, raises `ViewChart` for its listing.
+The Watchlist widget has a Provider and Content but no Controls: its card chrome keeps only drag and close, and its own header owns switching, rename, new/delete watchlist, add symbol, new section, and columns. The gallery adds an unbound browser immediately, like Workspace. Selection, collapsed sections and sorting use a placement-scoped Zustand store persisted in localStorage; switching lists never writes Dashboard. Clearing storage forgets the selection. The browser selects the first available list when no selection remains, and shows a creation entry when none exist. A saved selection is read independently of the cursor-paginated menu, so an unloaded page never implies deletion. Successful deletion and confirmed missing details use the same fallback; failed deletes preserve selection. New lists copy complete column definitions with fresh IDs, or use price/change/change% when starting empty. Watchlists remain independent Resources: removing a placement or Dashboard keeps their contents. Sections, rows and columns are edited with JSON Patch (a drag is one `move`); quotes come from each row's daily bars through Feed. Clicking a row, or Enter on it, raises `ViewChart` for its listing.
+
+Formula columns use the same flat Columns menu, with a Formula badge and an
+independent settings action. Settings select a numeric or Plot output, explicit
+parameter overrides, and bar settings. Open code uses the existing adjacent
+Workspace widget and preserves the settings draft; unavailable source files can
+be inspected through the saved snapshot. Saving code does not update execution
+until explicit Reload succeeds. Built-in and Formula visibility is persisted
+on the Watchlist; sorting names stable column IDs in local view state, with
+legacy metric sorts resolved after loading their list.
+
+The Watchlist view mounts its own `FormulaRuntime` for every row, including
+collapsed/offscreen sections. Live output flows through observables into the
+placement's transient values without rerendering its request-binding owner.
+`useTeaGroup` owns sharing within one mounted widget: complete snapshots compile
+once; effective parameters, complete inputs/maps/requests, and window/warmup
+identity determine observations. Column IDs and output selectors are consumers,
+not run identities. Ordinary omitted defaults and equal explicit values share;
+chart-dependent defaults that only resolve on the server remain conservative
+separate runs when compared with explicit values. Four startup slots bound
+compilation/history work; the first snapshot releases a slot while its live
+stream continues. Only the latest complete output row is retained. Hiding the
+last consumer stops its observation and releases unused compilation, including
+late results. No computation remains owned by a closed widget.
+
+Each row resolves omitted session/adjustment within the requested interval from
+its provider capabilities. Unsupported explicit choices produce an error with
+Retry; intervals/providers never silently fall back. Loading, no numeric value,
+and failure remain distinct, and missing/nonfinite values never become zero.
+Latest output timestamps accompany cells; sorting samples at 250ms and places
+missing values last. No result or execution status is persisted in a Resource.
+
+Price History retains its intraday sparkline and shared crosshair. Hovering its
+chart changes the built-in quote display; Formula cells continue showing their
+latest evaluated values. Sorting Price History uses percentage change.
 
 ChartGrid and WorkspaceView each own their content. The Workspace widget shows all registered directories and needs no placement reference; DashboardView adds it using the same placement mutation, pending, and recovery state; it does not copy the editor implementation or create a second file store. The shared exit guard reads each Workspace's live Tab flags; when a Host is removed, only the corresponding placement is checked.
 

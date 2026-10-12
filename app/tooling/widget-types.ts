@@ -51,7 +51,12 @@ async function generateWidgetTypes() {
         new URL("../src/app/widgets/custom/sdk.ts", import.meta.url),
       ),
     },
-    external: (id) => id === "react" || id.startsWith("react/"),
+    // The SDK's types never mention the app transport, whose inferred tRPC type
+    // cannot be written as a declaration, so it stays external and uncompiled.
+    external: (id) =>
+      id === "react" ||
+      id.startsWith("react/") ||
+      /\/lib\/transport\/transport(\.ts)?$/.test(id),
     plugins: [
       dts({
         tsconfig: fileURLToPath(

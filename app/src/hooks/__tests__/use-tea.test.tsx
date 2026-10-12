@@ -3,7 +3,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { Field, Float64, Schema } from "apache-arrow";
-import type { ReactNode } from "react";
+import { StrictMode, type ReactNode } from "react";
+import { useObservableState, useSubscription } from "observable-hooks";
 import { ProviderId } from "@openchart/market";
 import * as Tea from "@openchart/tea";
 import { fromPoints, fromRows } from "@openchart/timeseries";
@@ -13,7 +14,10 @@ import {
   useTea,
   useTeaDefinition,
   useTeaSource,
+  useTeaGroup,
   type Node,
+  type TeaGroupRequest,
+  type TeaLatestState,
 } from "@openchart/app/hooks/use-tea";
 import { createQueryClient } from "@openchart/app/lib/react-query/react-query";
 import type {
@@ -110,6 +114,144 @@ function render(node: Node) {
     wrapper,
   });
 }
+
+it("groups independent consumers, preserves shared observations on hide, and clears changed executions", async () => {
+  const f = setup();
+  const node: TeaGroupRequest["node"] = { ...f.node, source: program("close") };
+  const requests: TeaGroupRequest[] = [
+    { key: "histogram", node },
+    { key: "signal", node },
+  ];
+  const view = renderHook(
+    ({ requests }) => {
+      const group = useTeaGroup(requests);
+      return {
+        ...group,
+        states: useObservableState(
+          group.states,
+          new Map<string, TeaLatestState>(),
+        ),
+      };
+    },
+    {
+      initialProps: { requests },
+      wrapper,
+    },
+  );
+  await waitFor(() => expect(f.calls).toHaveLength(1));
+  expect(mocks.compile).toHaveBeenCalledOnce();
+  expect(
+    view.result.current.states.get("signal")?.compiled?.declaration?.title,
+  ).toBe("Test");
+  act(() =>
+    f.calls[0]!.sink.next({
+      type: "snapshot",
+      rid: "run",
+      config: { ...Tea.barsInputs(series), parameters: {}, requests: {} },
+      snapshot: {
+        range: { from: 0, to: 2000 },
+        data: fromPoints({}, [{ time: 1000, value: 7 }]),
+      },
+    }),
+  );
+  expect(view.result.current.states.get("histogram")).toBe(
+    view.result.current.states.get("signal"),
+  );
+  view.rerender({ requests: [{ key: "signal", node }] });
+  expect(f.calls[0]!.stop).not.toHaveBeenCalled();
+  expect(view.result.current.states.get("signal")?.data?.get(0)?.value).toBe(7);
+  view.rerender({
+    requests: [{ key: "signal", node: { ...node, warmupBars: 0 } }],
+  });
+  expect(view.result.current.states.get("signal")?.status).toBe("loading");
+  expect(view.result.current.states.get("signal")?.data).toBeUndefined();
+  expect(f.calls).toHaveLength(2);
+  expect(f.calls[0]!.stop).toHaveBeenCalledOnce();
+  expect(mocks.compile).toHaveBeenCalledOnce();
+  view.unmount();
+  expect(f.calls[1]!.stop).toHaveBeenCalledOnce();
+  expect(mocks.dispose).toHaveBeenCalledExactlyOnceWith({ id: "compiled" });
+});
+
+it("publishes group ticks without rerendering or rebuilding the binding owner", async () => {
+  const f = setup();
+  const requests: TeaGroupRequest[] = [
+    { key: "value", node: { ...f.node, source: program("close") } },
+  ];
+  const updated = vi.fn();
+  let executions = 0;
+  const view = renderHook(
+    () => {
+      executions++;
+      const group = useTeaGroup(requests);
+      useSubscription(group.states, updated);
+      return group;
+    },
+    { wrapper },
+  );
+  await waitFor(() => expect(f.calls).toHaveLength(1));
+  const before = executions;
+  act(() => {
+    f.calls[0]!.sink.next({
+      type: "snapshot",
+      rid: "run",
+      config: { ...Tea.barsInputs(series), parameters: {}, requests: {} },
+      snapshot: {
+        range: { from: 0, to: 2000 },
+        data: fromPoints({}, [{ time: 1000, value: 7 }]),
+      },
+    });
+    f.calls[0]!.sink.next({
+      type: "updates",
+      data: fromPoints({}, [{ time: 1000, value: 9 }]),
+    });
+  });
+  expect(executions).toBe(before);
+  expect(updated.mock.lastCall?.[0].get("value")?.data?.get(0)?.value).toBe(9);
+  expect(mocks.compile).toHaveBeenCalledOnce();
+  expect(f.calls).toHaveLength(1);
+  const external = view.result;
+  // External observation cannot extend the mounted hook's execution lifetime.
+  const observer = vi.fn();
+  const retained = external.current.states.subscribe(observer);
+  view.unmount();
+  expect(f.calls[0]!.stop).toHaveBeenCalledOnce();
+  expect(mocks.dispose).toHaveBeenCalledExactlyOnceWith({ id: "compiled" });
+  expect(observer.mock.lastCall?.[0].size).toBe(0);
+  retained.unsubscribe();
+});
+
+it("creates a fresh group after StrictMode cleanup and disposes late compilations on unmount", async () => {
+  const f = setup();
+  const pending: ((value: Tea.CompileResponse) => void)[] = [];
+  mocks.compile.mockImplementation(
+    () => new Promise((resolve) => pending.push(resolve)),
+  );
+  const requests: TeaGroupRequest[] = [
+    { key: "value", node: { ...f.node, source: program("close") } },
+  ];
+  const view = renderHook(() => useTeaGroup(requests), {
+    wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
+  });
+  await waitFor(() => expect(pending).toHaveLength(2));
+  await act(async () => {
+    pending[0]!({ ...compilation, id: "strict-retired" });
+    await Promise.resolve();
+  });
+  await waitFor(() =>
+    expect(mocks.dispose).toHaveBeenCalledWith({ id: "strict-retired" }),
+  );
+  expect(f.calls).toHaveLength(0);
+  view.unmount();
+  await act(async () => {
+    pending[1]!({ ...compilation, id: "unmounted" });
+    await Promise.resolve();
+  });
+  await waitFor(() =>
+    expect(mocks.dispose).toHaveBeenCalledWith({ id: "unmounted" }),
+  );
+  expect(f.calls).toHaveLength(0);
+});
 
 it("observes on supplied history only when given it", async () => {
   const { node, calls } = setup();

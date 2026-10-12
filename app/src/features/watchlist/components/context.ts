@@ -5,7 +5,7 @@ import type { BehaviorSubject } from "rxjs";
 import type { Quotes } from "../hooks/use-quote";
 
 import type { WatchlistViewStore } from "../stores/view";
-import type { WatchlistSave } from "../api/queries";
+import type { FormulaSource, WatchlistSave } from "../api/queries";
 
 /** The symbol search app composition supplies; features never import each other. */
 export type SymbolPickerProps = {
@@ -26,6 +26,28 @@ export type WatchlistAction =
   | { kind: "delete-watchlist"; name: string }
   | { kind: "delete-section"; sectionId: string; name?: string };
 
+/** One computed cell. An unavailable value is never interpreted as zero. */
+export type FormulaValue = {
+  status: "loading" | "ready" | "empty" | "error";
+  value?: number;
+  /** UTC milliseconds of the latest evaluated bar, when available. */
+  time?: number;
+  error?: string;
+  retry?: () => void;
+};
+/** Widget-local formula results indexed by row identity, then stable column identity. */
+export type FormulaValues = Readonly<
+  Record<string, Readonly<Record<string, FormulaValue>>>
+>;
+/** Script selection belongs to app composition; this feature owns the resulting settings. */
+export type FormulaPickerProps = {
+  onSelect: (source: FormulaSource) => void | Promise<void>;
+  onClose: () => void;
+};
+/** App-supplied code picker, with no dependency on another feature. */
+export const WatchlistFormulaPicker =
+  createContext<ComponentType<FormulaPickerProps> | null>(null);
+
 type WatchlistPlacement = {
   watchlistId: string | undefined;
   view: WatchlistViewStore;
@@ -34,6 +56,9 @@ type WatchlistPlacement = {
   quotes: BehaviorSubject<Quotes>;
   /** The Price History instant under the pointer in Unix ms, shared by every row; null when none. */
   crosshair: BehaviorSubject<number | null>;
+  formulaValues: BehaviorSubject<FormulaValues>;
+  addFormula: () => void;
+  configureFormula: (columnId: string) => void;
   /** Open symbol search; the pick goes to that section or the first one. */
   addSymbol: (sectionId?: string) => void;
   /** Open a naming or deletion dialog for a section or Watchlist. */
