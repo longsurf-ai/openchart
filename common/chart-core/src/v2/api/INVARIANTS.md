@@ -67,3 +67,5 @@ Public entry point for the v2 chart runtime. Wires a canvas element to the chart
   range/card menus consume paint-owned hit regions and never create Drawing
   Resources. Escape, Delete/Backspace, host clearing and disposal must not allow
   a later mouseup to restore a cleared range.
+  Keyboard cancellation belongs to the focused chart or its open measurement
+  menu; Escape in another chart or unrelated popup must preserve this range.

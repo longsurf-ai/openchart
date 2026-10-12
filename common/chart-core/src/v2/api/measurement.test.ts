@@ -34,8 +34,12 @@ function scenario(tool: Drawing.Tool | null = "measurement", log = false) {
   state.drawings.activeTool = tool;
   const canvas = document.createElement("canvas");
   canvas.tabIndex = 0;
-  document.body.append(canvas);
-  cleanups.push(() => canvas.remove());
+  const root = document.createElement("div");
+  const container = document.createElement("div");
+  container.append(canvas);
+  root.append(container);
+  document.body.append(root);
+  cleanups.push(() => root.remove());
   const layout = Chart.computeLayout(state.config);
   const coord = createCartesian2D(
     {
@@ -232,6 +236,56 @@ describe("measurement gestures", () => {
     cleanups.push(() => other.remove());
     other.focus();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete" }));
+    expect(s.state.measurement).toBeDefined();
+  });
+
+  it("Escape clears only the focused chart when two charts have measurements", () => {
+    const first = scenario();
+    first.start();
+    first.mouse("mouseup", 8, 100);
+    const second = scenario();
+    second.start();
+    second.mouse("mouseup", 9, 120);
+    const retained = structuredClone(first.state.measurement);
+    second.canvas.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    expect(first.state.measurement).toEqual(retained);
+    expect(second.state.measurement).toBeUndefined();
+  });
+
+  it.each(["tracking", "complete"] as const)(
+    "Escape in an unrelated popup preserves a %s measurement",
+    (phase) => {
+      const s = scenario();
+      s.start();
+      s.mouse(
+        "mouseup",
+        phase === "tracking" ? 2 : 8,
+        phase === "tracking" ? 40 : 100,
+      );
+      const popupButton = document.createElement("button");
+      document.body.append(popupButton);
+      cleanups.push(() => popupButton.remove());
+      popupButton.focus();
+      popupButton.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      expect(s.state.measurement?.phase).toBe(phase);
+    },
+  );
+
+  it("preserves a measurement when a popup has already handled Escape", () => {
+    const s = scenario();
+    s.start();
+    s.mouse("mouseup", 8, 100);
+    const event = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    event.preventDefault();
+    s.canvas.dispatchEvent(event);
     expect(s.state.measurement).toBeDefined();
   });
 

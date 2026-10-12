@@ -316,6 +316,14 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
                 align="start"
                 sideOffset={8}
                 className="chart-drawing-menu w-52"
+                onCloseAutoFocus={(event) => {
+                  if (
+                    chart.store.getState().drawings.activeTool === "measurement"
+                  ) {
+                    event.preventDefault();
+                    chart.renderer.canvas.focus({ preventScroll: true });
+                  }
+                }}
               >
                 <DropdownMenuLabel className="text-xs text-muted-foreground">
                   {group.label}

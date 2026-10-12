@@ -3764,6 +3764,7 @@ export function setupEvents(config: EventsConfig): EventsController {
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.defaultPrevented) return;
     const deleting = e.key === "Delete" || e.key === "Backspace";
     if (e.key !== "Escape" && !deleting) return;
     const target = e.target as HTMLElement | null;
@@ -3779,15 +3780,14 @@ export function setupEvents(config: EventsConfig): EventsController {
     }
     const state = getState();
     ChartStateModel.assertModelReady(state);
-    if (
-      deleting &&
-      (!state.measurement ||
-        (!state.measurement.contextMenu &&
-          document.activeElement !== canvas &&
-          !(target instanceof Node && root.contains(target))))
-    )
-      return;
+    if (deleting && !state.measurement) return;
     if (state.measurement || state.drawings.activeTool === "measurement") {
+      if (
+        !state.measurement?.contextMenu &&
+        document.activeElement !== canvas &&
+        !(target instanceof Node && root.contains(target))
+      )
+        return;
       e.preventDefault();
       setState((s) => {
         if (s.drawings.activeTool === "measurement")

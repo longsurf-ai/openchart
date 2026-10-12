@@ -30,10 +30,12 @@ it("drags only from the handle, clamps to the parent and leaves drawing controls
   const initial = v2.createState({ id: "ccl_test" });
   initial.drawings.activeTool = "freehand";
   const store = createChartStore(initial);
+  const canvas = document.createElement("canvas");
+  canvas.tabIndex = 0;
   const chart: ChartRuntime = {
     id: initial.id,
     store,
-    renderer: {} as v2.ChartRenderer,
+    renderer: { canvas } as v2.ChartRenderer,
     output$: EMPTY,
     mutate: (recipe) =>
       store.setState((state) => {
@@ -57,6 +59,7 @@ it("drags only from the handle, clamps to the parent and leaves drawing controls
     </StrictMode>,
   );
   const parent = screen.getByRole("region", { name: "Chart widget" });
+  parent.append(canvas);
   const rail = screen.getByRole("toolbar", { name: "Drawing tools" });
   // jsdom has no Tailwind preflight; supply the box edges used by the library.
   Object.assign(rail.style, { margin: "0px", border: "0px" });
@@ -100,6 +103,7 @@ it("drags only from the handle, clamps to the parent and leaves drawing controls
     screen.queryByRole("button", { name: "Volume" }),
   ).not.toBeInTheDocument();
   expect(store.getState().drawings.activeTool).toBe("measurement");
+  expect(canvas).toHaveFocus();
   expect(measure).toHaveAttribute("aria-pressed", "true");
   act(() =>
     chart.mutate((state) => {
