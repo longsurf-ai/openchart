@@ -107,16 +107,18 @@ function decodeTextFile(file: {
  * Read-only view of a non-text read, shared by tabs and Quick Look: media through a
  * Blob URL revoked on change or unmount, Office files through OOXML (a failed parse
  * falls back to the default app until new bytes arrive), anything else an
- * Open in default app prompt.
+ * Open in default app prompt. Audio and video pause while `visible` is false.
  * @example <FilePreview file={read} viewer="xlsx" workspaceId={id} path="book.xlsx" />
  */
 export function FilePreview({
   file,
   viewer,
+  visible = true,
   ...params
 }: FilePanelParams & {
   file: { base64: string; mediaType: string; entry: { hash: string } };
   viewer: Exclude<FileViewer, TextViewer>;
+  visible?: boolean;
 }) {
   if (viewer === "none") return <NoPreview {...params} />;
   if (viewer === "docx" || viewer === "xlsx" || viewer === "pptx")
@@ -128,20 +130,34 @@ export function FilePreview({
         {...params}
       />
     );
-  return <MediaPreview file={file} viewer={viewer} path={params.path} />;
+  return (
+    <MediaPreview
+      file={file}
+      viewer={viewer}
+      path={params.path}
+      visible={visible}
+    />
+  );
 }
 
 function MediaPreview({
   file,
   viewer,
   path,
+  visible,
 }: {
   file: { base64: string; mediaType: string };
   viewer: "pdf" | "image" | "audio" | "video";
   path: string;
+  visible: boolean;
 }) {
   const { dark } = useWorkspaceView();
   const [url, setUrl] = useState<string>();
+  const frame = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!visible)
+      frame.current?.querySelector<HTMLMediaElement>("audio, video")?.pause();
+  }, [visible]);
   useEffect(() => {
     const bytes = decodeBytes(file.base64);
     const next = URL.createObjectURL(
@@ -158,7 +174,10 @@ function MediaPreview({
       </Suspense>
     );
   return (
-    <div className="flex size-full items-center justify-center overflow-auto p-4">
+    <div
+      ref={frame}
+      className="flex size-full items-center justify-center overflow-auto p-4"
+    >
       {viewer === "image" ? (
         <img
           src={url}
@@ -548,6 +567,14 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
   )
     setViewer(latest);
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  // Dockview keeps hidden tabs mounted, so previews learn when to pause media.
+  const [visible, setVisible] = useState(props.api.isVisible);
+  useEffect(() => {
+    const listener = props.api.onDidVisibilityChange(({ isVisible }) =>
+      setVisible(isVisible),
+    );
+    return () => listener.dispose();
+  }, [props.api]);
   return (
     <div className="flex size-full min-h-0 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1 border-b pr-1">
@@ -581,7 +608,12 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
           ) : viewer && isTextViewer(viewer) ? (
             <TextPanel {...props} viewer={viewer} wordWrap={wordWrap} />
           ) : viewer && read.data ? (
-            <FilePreview {...props.params} file={read.data} viewer={viewer} />
+            <FilePreview
+              {...props.params}
+              file={read.data}
+              viewer={viewer}
+              visible={visible}
+            />
           ) : read.isError ? (
             <FileError retry={() => void read.refetch()} />
           ) : (

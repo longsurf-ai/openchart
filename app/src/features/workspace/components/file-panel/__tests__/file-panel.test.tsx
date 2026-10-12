@@ -155,10 +155,18 @@ function setup(
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   const transport = createTransport({ origin: "http://127.0.0.1:41000" });
+  const visibility = new Set<(event: { isVisible: boolean }) => void>();
   const api = {
     id: `${workspaceId}/${file.entry.path}`,
     updateParameters: vi.fn(),
     setTitle: vi.fn(),
+    isVisible: true,
+    onDidVisibilityChange: (
+      listener: (event: { isVisible: boolean }) => void,
+    ) => {
+      visibility.add(listener);
+      return { dispose: () => visibility.delete(listener) };
+    },
   };
   const containerApi = { getPanel: vi.fn(), addPanel: vi.fn() };
   const saves = new Map<string, () => Promise<void>>();
@@ -200,6 +208,10 @@ function setup(
     client,
     transport,
     api,
+    hide: () =>
+      act(() =>
+        visibility.forEach((listener) => listener({ isVisible: false })),
+      ),
     containerApi,
     saves,
     host,
@@ -319,6 +331,24 @@ test.each([
     expect(blobs.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
   },
 );
+
+test("audio pauses when its tab is hidden", async () => {
+  const pause = vi
+    .spyOn(HTMLMediaElement.prototype, "pause")
+    .mockImplementation(() => {});
+  const { hide, cleanup } = setup({
+    entry: { path: "fed-presser.mp3", hash: "binary-hash" },
+    mediaType: "audio/mpeg",
+    readOnly: false,
+    base64: "AP8=",
+  });
+  await screen.findByLabelText("fed-presser.mp3");
+  expect(pause).not.toHaveBeenCalled();
+  hide();
+  expect(pause).toHaveBeenCalledOnce();
+  cleanup();
+  pause.mockRestore();
+});
 
 test.each(["main.tea", "notes.md"])(
   "external changes preserve %s draft; Save focuses the banner and discard loads disk",
