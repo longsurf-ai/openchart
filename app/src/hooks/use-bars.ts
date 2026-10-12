@@ -6,7 +6,13 @@ import type {
   FeedError,
 } from "@openchart/feed";
 import type { ProviderListing } from "@openchart/market";
-import { hashKey, useQuery } from "@tanstack/react-query";
+import {
+  hashKey,
+  queryOptions,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   useObservable,
   useObservableCallback,
@@ -257,7 +263,16 @@ export function useBarsCapabilities(
 ) {
   const client = useDatafeed();
   const version = useFeedVersion();
-  return useQuery<BarsCapabilities, FeedError | ClientFailure>({
+  return useQuery(barsCapabilitiesOptions(client, version, request, options));
+}
+
+function barsCapabilitiesOptions(
+  client: ReturnType<typeof useDatafeed>,
+  version: ReturnType<typeof useFeedVersion>,
+  request: ProviderListing,
+  options: QueryOptions,
+) {
+  return queryOptions<BarsCapabilities, FeedError | ClientFailure>({
     queryKey: [version, "bars", "capabilities", request],
     // Let old queries settle in their old cache entry when the version changes.
     queryFn: () => client.bars.getCapabilities(request),
@@ -268,5 +283,40 @@ export function useBarsCapabilities(
         : undefined,
     enabled: version !== undefined && options.enabled !== false,
     meta: options.silent ? { silent: true } : undefined,
+  });
+}
+
+/**
+ * Read capabilities for a changing collection of listings in request order.
+ * Uses the same versioned Query cache as `useBarsCapabilities`; equal listings
+ * share their finite query. Requires FeedProvider and QueryClientProvider.
+ * Each result owns its loading/error/refetch state; removing a listing removes
+ * its observer. During a Feed-version refresh, the same listing retains its
+ * preceding cached capabilities. Query owns pending reads, retention and retries.
+ * @example const markets = useBarsCapabilitiesMany(rows, { silent: true });
+ */
+export function useBarsCapabilitiesMany(
+  requests: readonly ProviderListing[],
+  options: QueryOptions = {},
+) {
+  const client = useDatafeed();
+  const version = useFeedVersion();
+  const queries = useQueryClient();
+  return useQueries({
+    queries: requests.map((request) => ({
+      ...barsCapabilitiesOptions(client, version, request, options),
+      // useQueries does not pass a previous observer to placeholderData. Read
+      // the same listing's last successful version directly from Query's cache.
+      placeholderData: () =>
+        queries
+          .getQueriesData<BarsCapabilities>({
+            predicate: (query) =>
+              query.queryKey[1] === "bars" &&
+              query.queryKey[2] === "capabilities" &&
+              hashKey([query.queryKey[3]]) === hashKey([request]),
+          })
+          .reverse()
+          .find(([, data]) => data !== undefined)?.[1],
+    })),
   });
 }

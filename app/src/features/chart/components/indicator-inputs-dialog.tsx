@@ -1,5 +1,6 @@
 // Purpose: Edit only explicit choices; declarations/defaults always belong to the compiled Tea program.
-import * as Tea from "@openchart/tea";
+import type * as Tea from "@openchart/tea";
+import { parseTeaParameterOverrides } from "@openchart/app/components/ui/tea-parameter-fields/parse-parameter-overrides";
 import { useState, type ComponentProps } from "react";
 import { TeaParameterFields } from "@openchart/app/components/ui/tea-parameter-fields/tea-parameter-fields";
 import { Button } from "@openchart/app/components/ui/button";
@@ -16,24 +17,6 @@ interface IndicatorInputsProps {
   compiled: Pick<Tea.CompileResponse, "definition" | "declaration">;
   overrides: Tea.ParameterOverrides;
   onSave: (values: Tea.ParameterOverrides) => Promise<void>;
-}
-
-/** Parse editable text while retaining only explicit choices; Tea owns defaults and constraints. @example parseIndicatorOverrides(compiled.definition, { length: "20" }); */
-export function parseIndicatorOverrides(
-  definition: Pick<Tea.CompileResponse["definition"], "parameters">,
-  draft: Tea.ParameterOverrides,
-): Tea.ParameterOverrides {
-  const values = { ...draft };
-  for (const parameter of definition.parameters) {
-    const value = values[parameter.name];
-    if (
-      (parameter.type === "int" || parameter.type === "float") &&
-      typeof value === "string"
-    )
-      values[parameter.name] = value.trim() === "" ? NaN : Number(value);
-  }
-  Tea.teaParameters(definition, values);
-  return values;
 }
 
 /** Edit explicit inputs in either the picker or series settings. @example <IndicatorInputsForm compiled={compiled} overrides={{}} onSave={save} /> */
@@ -82,7 +65,7 @@ export function IndicatorInputsForm({
         setError(undefined);
         void (async () => {
           try {
-            const values = parseIndicatorOverrides(definition, draft);
+            const values = parseTeaParameterOverrides(definition, draft);
             // The mutation owner reports save failures; retain this draft for another attempt.
             await onSave(values).catch(() => {});
           } catch (cause) {

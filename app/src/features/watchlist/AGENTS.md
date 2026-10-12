@@ -1,24 +1,22 @@
 # watchlist
 
-Owns Watchlist browsing, sections, and metric columns.
+Owns Watchlist browsing, sections, quote columns and Formula columns.
 
 - Card chrome owns drag and close. `header.tsx` owns switching, naming, adding,
-  and columns. `widget.tsx` owns placement-local selection, the shared save
-  mutation, picker, and dialogs. App composition injects SymbolPicker.
-- Deletion selects another list or leaves creation available. New lists
-  copy current columns, else a price/change/change% starter.
-  `watchlist-menu.tsx` scrolls React Query cursor pages; only confirmed missing
-  details invalidate selection. Deletions require confirmation; failed writes
-  keep dialogs and drafts.
-- `utils/tree.ts` alone maps the nested entity to tree nodes.
-  Every edit is JSON Patch built from the last saved revision; a drop
-  is one RFC 6902 `move` whose path is computed after removal.
+  and the flat column menu. `widget.tsx` owns selection, writes and dialogs.
+  App composition injects symbol/code pickers and Workspace navigation.
+- New watchlists copy complete columns with fresh IDs. Hiding preserves
+  configuration; removal deletes only the column, never its code.
+  Failed writes retain drafts. Open code preserves Formula drafts;
+  Reload explicitly replaces snapshots.
+- `utils/tree.ts` maps entities to tree nodes and JSON Patch. Edits use the last
+  saved revision; a drop is one `move` resolved after removal. Formula settings
+  submit their edited revision.
 - Headless Tree owns expansion, keyboard, drops, and drag lines. Unnamed sections
-  stay open, indent nothing, and anchor drag lines. Row clicks and Enter raise
-  ViewChart.
-- Quotes come from each row's two latest daily bars; `sparkline.tsx` draws
-  session days with a shared crosshair. Send Feed only `{provider, listing}`.
-  A session-local RxJS subject feeds cells and samples sorting at 250 ms. Rows
-  release quotes on unmount; failures offer Retry.
-- Selection, collapse and sort are placement-local. Sorting orders rows within
-  sections; sorted rows drop only onto sections.
+  stay open and indent nothing. Row clicks and Enter raise ViewChart.
+- Quotes use two latest daily bars; `sparkline.tsx` draws session days with a
+  shared crosshair. Feed receives only `{provider, listing}`.
+  Formula execution includes collapsed/offscreen rows. Results stay outside
+  Resources; sorting samples at 250 ms with missing values last.
+- Selection, collapse and stable-column-ID sorting are placement-local.
+  Version 1 metric sorts resolve after the selected list loads.

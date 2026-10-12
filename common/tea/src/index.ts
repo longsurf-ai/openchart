@@ -6,4 +6,5 @@ export * from "./visuals";
 export * from "./alerts";
 export * from "./parameters";
 export * from "./indicator-outputs";
+export * from "./formula-outputs";
 export * from "./timeframes";

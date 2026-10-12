@@ -36,7 +36,11 @@ import {
   type FeedClient,
   type UseBarsOptions,
 } from "@openchart/app/feed";
-import { useBars, useBarsCapabilities } from "@openchart/app/hooks/use-bars";
+import {
+  useBars,
+  useBarsCapabilities,
+  useBarsCapabilitiesMany,
+} from "@openchart/app/hooks/use-bars";
 import { useCalendar } from "@openchart/app/hooks/use-calendar";
 import { useDatafeed, useFeedVersion } from "@openchart/app/hooks/use-datafeed";
 import { useSymbology } from "@openchart/app/hooks/use-symbology";
@@ -129,6 +133,94 @@ function setup(automatic = true) {
   );
   return { client, calls, wrapper };
 }
+
+it("batch capabilities share single-listing cache entries and track dynamic listings and Feed versions", async () => {
+  const { client } = setup();
+  const options = [
+    {
+      resolution: "1m",
+      session: "24h",
+      adjustment: "raw",
+      modes: ["history", "live"],
+    },
+  ] as const;
+  const getCapabilities = vi
+    .spyOn(client.bars, "getCapabilities")
+    .mockResolvedValue(options);
+  const queries = createQueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 60_000 } },
+  });
+  let version = FeedVersion.make("batch-one");
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queries}>
+      <FeedReactContext.Provider value={client}>
+        <FeedVersionContext.Provider value={version}>
+          {children}
+        </FeedVersionContext.Provider>
+      </FeedReactContext.Provider>
+    </QueryClientProvider>
+  );
+  const first = { provider: request.provider, listing: request.listing };
+  const second = { ...first, listing: { ...first.listing, symbol: "ETHUSDT" } };
+  const view = renderHook(
+    ({ requests }) => ({
+      single: useBarsCapabilities(first),
+      batch: useBarsCapabilitiesMany(requests, { silent: true }),
+    }),
+    { wrapper, initialProps: { requests: [first] } },
+  );
+  await waitFor(() =>
+    expect(view.result.current.batch[0]?.isSuccess).toBe(true),
+  );
+  expect(getCapabilities).toHaveBeenCalledOnce();
+  expect(view.result.current.batch[0]?.data).toBe(
+    view.result.current.single.data,
+  );
+  view.rerender({ requests: [first, second] });
+  await waitFor(() =>
+    expect(view.result.current.batch[1]?.isSuccess).toBe(true),
+  );
+  expect(getCapabilities).toHaveBeenCalledTimes(2);
+  view.rerender({ requests: [second] });
+  expect(view.result.current.batch).toHaveLength(1);
+  expect(getCapabilities).toHaveBeenCalledTimes(2);
+  const finish: (() => void)[] = [];
+  getCapabilities.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish.push(() => resolve(options));
+      }),
+  );
+  version = FeedVersion.make("batch-two");
+  view.rerender({ requests: [second] });
+  await waitFor(() => expect(getCapabilities).toHaveBeenCalledTimes(4));
+  // A version refresh must not remove all Formula consumers while reads settle.
+  expect(view.result.current.batch[0]?.data).toBe(options);
+  expect(view.result.current.batch[0]?.isPlaceholderData).toBe(true);
+  const third = { ...first, listing: { ...first.listing, symbol: "SOLUSDT" } };
+  view.rerender({ requests: [third, second] });
+  expect(view.result.current.batch[0]?.data).toBeUndefined();
+  expect(view.result.current.batch[1]?.data).toBe(options);
+  const otherProvider = {
+    ...second,
+    provider: first.provider === "binance" ? "other" : "binance",
+  } as typeof second;
+  view.rerender({ requests: [otherProvider, second] });
+  expect(view.result.current.batch[0]?.data).toBeUndefined();
+  expect(view.result.current.batch[1]?.data).toBe(options);
+  await act(async () => {
+    for (const resolve of finish) resolve();
+  });
+  await waitFor(() =>
+    expect(
+      view.result.current.batch.every(
+        (query) => query.isSuccess && !query.isPlaceholderData,
+      ),
+    ).toBe(true),
+  );
+  view.unmount();
+  queries.clear();
+});
 
 it("explicit live search refetches a recently cached key on every selection", async () => {
   const { client } = setup();

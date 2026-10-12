@@ -657,3 +657,39 @@ it("opens personal files from library search without preparing a preview", async
   expect(mocks.compile).not.toHaveBeenCalled();
   expect(rpc.resources.macro.addIndicator.mutate).not.toHaveBeenCalled();
 });
+
+it.each([
+  [
+    "unavailable",
+    "Some Workspaces are unavailable. Available scripts are shown below.",
+  ],
+  ["read error", "Couldn’t load these studies."],
+])(
+  "keeps readable scripts available during a workspace %s and supports retry",
+  async (failure, message) => {
+    const path = "research/helper.tea";
+    const { rpc } = setupLibrary([], [path]);
+    rpc.workspace.listTree.query.mockImplementation(
+      async ({ workspaceId }: { workspaceId: string }) => {
+        if (workspaceId === "wsp_other")
+          return { status: "ready", entries: [{ path }], directories: [] };
+        if (failure === "read error") throw new Error("Read failed");
+        return { status: "unavailable", entries: [], directories: [] };
+      },
+    );
+    navigate("My scripts");
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /^helper\.tea/ }),
+    ).toBeInTheDocument();
+    rpc.workspace.listTree.query.mockResolvedValue({
+      status: "ready",
+      entries: [{ path }],
+      directories: [],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(screen.queryByText(message)).not.toBeInTheDocument(),
+    );
+  },
+);

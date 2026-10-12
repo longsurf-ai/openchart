@@ -13,6 +13,8 @@ import {
   renameSection,
   ROOT_ID,
   toggleColumn,
+  toggleColumnVisibility,
+  removeColumn,
 } from "../utils/tree";
 
 const listing = (symbol: string) =>
@@ -169,7 +171,7 @@ test("edits sections and columns by path", () => {
     columns: [{ id: "wcl_price", metric: { kind: "price" } }],
   } as unknown as Watchlist;
   expect(toggleColumn(columns, "price")).toEqual([
-    { op: "remove", path: "/columns/0" },
+    { op: "add", path: "/columns/0/visible", value: false },
   ]);
   expect(toggleColumn(columns, "volume")[0]).toMatchObject({
     op: "add",
@@ -194,4 +196,42 @@ test("column drops resolve ids after earlier reorders and ignore removed targets
   expect(moveColumn(columns, "wcl_price", "wcl_price")).toEqual([]);
   expect(moveColumn(columns, "wcl_removed", "wcl_price")).toEqual([]);
   expect(moveColumn(columns, "wcl_price", "wcl_removed")).toEqual([]);
+});
+
+test("hiding a formula retains its id, code, overrides and position", () => {
+  const source = {
+    columns: [
+      {
+        id: "wcl_formula",
+        visible: true,
+        title: "Momentum",
+        metric: {
+          kind: "formula",
+          source: { workspaceId: "wsp_test", path: "macd.tea" },
+          snapshot: { "macd.tea": "code" },
+          parameterOverrides: { fast: 8 },
+          output: "histogram",
+          bars: { resolution: "1d" },
+        },
+      },
+    ],
+  } as unknown as Watchlist;
+  const hidden = fastJsonPatch.applyPatch(
+    source,
+    toggleColumnVisibility(source, "wcl_formula"),
+    true,
+    false,
+  ).newDocument;
+  expect(hidden.columns[0]).toEqual({ ...source.columns[0], visible: false });
+  const restored = fastJsonPatch.applyPatch(
+    hidden,
+    toggleColumnVisibility(hidden, "wcl_formula"),
+    true,
+    false,
+  ).newDocument;
+  expect(restored).toEqual(source);
+  expect(removeColumn(source, "wcl_formula")).toEqual([
+    { op: "remove", path: "/columns/0" },
+  ]);
+  expect(toggleColumnVisibility(source, "wcl_removed")).toEqual([]);
 });

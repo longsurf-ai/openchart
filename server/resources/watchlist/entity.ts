@@ -19,7 +19,13 @@ import {
   watchlistTable,
 } from "./schema";
 
-export { WatchlistColumn, WatchlistColumnId, WatchlistMetric } from "./column";
+export {
+  WatchlistColumn,
+  WatchlistColumnId,
+  WatchlistFormulaBars,
+  WatchlistFormulaMetric,
+  WatchlistMetric,
+} from "./column";
 
 /** Identifier of a watchlist, with the `wtl_` prefix. */
 export const WatchlistId = defineId("wtl", "Watchlist.ID");
@@ -183,10 +189,11 @@ export const WatchlistEntity = withInvariants(
       { code: "watchlist.unique_ids" },
     ),
     invariant(
-      "Each metric may appear at most once per watchlist",
+      "Each built-in metric may appear at most once per watchlist",
       (watchlist, { expect }) => {
         const shown = new Set<string>();
         watchlist.columns.forEach((column, c) => {
+          if (column.metric.kind === "formula") return;
           expect(shown.has(column.metric.kind), {
             path: ["columns", c, "metric", "kind"],
           }).toBe(false);

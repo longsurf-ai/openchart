@@ -4,7 +4,7 @@
 // each one (bind.ts), which reads Sources (source.ts) through its Wiring
 // (wiring.ts); run.ts (Run) then opens the Sources and pushes their rows.
 import { randomUUID } from "node:crypto";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import {
   Context,
   Effect,
@@ -32,6 +32,7 @@ import {
   type NodeGraph,
 } from "./node-graph";
 import { run } from "./run";
+import { snapshotSources } from "./snapshot";
 
 export * from "@openchart/tea";
 
@@ -229,14 +230,7 @@ export const layer = Layer.effect(
         fromWorkspace && request.includeSources
           ? yield* Schema.decodeUnknownEffect(
               Tea.SnapshotSources.fields.sources,
-            )(
-              Object.fromEntries(
-                Object.entries(compiled.sources).map(([path, text]) => [
-                  relative(root!, path),
-                  text,
-                ]),
-              ),
-            ).pipe(
+            )(snapshotSources(root!, compiled.sources)).pipe(
               Effect.mapError(
                 compileFailed(
                   "Tea script and its imports exceed the snapshot limits: at most 32 files of 65,536 characters",

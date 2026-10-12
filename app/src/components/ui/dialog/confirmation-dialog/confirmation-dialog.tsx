@@ -11,6 +11,7 @@ import { Icon } from "@openchart/app/components/ui/icon";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -25,8 +26,16 @@ export type ConfirmationDialogProps = {
   cancelButtonText?: string;
   icon?: "danger" | "info";
   isDone?: boolean;
+  /** Prevent dismissal while the caller's confirmation is pending. */
+  pending?: boolean;
 };
 
+/**
+ * Confirm a caller-owned action without dismissing its pending write. The caller
+ * owns failures and the draft; `isDone` closes after success, while Cancel or
+ * dismissal closes only when idle. No work runs until the confirm button acts.
+ * @example <ConfirmationDialog title="Remove column" triggerButton={trigger} confirmButton={remove} pending={saving} />
+ */
 export const ConfirmationDialog = ({
   triggerButton,
   confirmButton,
@@ -35,6 +44,7 @@ export const ConfirmationDialog = ({
   cancelButtonText = "Cancel",
   icon = "danger",
   isDone = false,
+  pending = false,
 }: ConfirmationDialogProps) => {
   const { close, open, isOpen } = useDisclosure();
   const cancelButtonRef = React.useRef(null);
@@ -49,6 +59,7 @@ export const ConfirmationDialog = ({
     <Dialog
       open={isOpen}
       onOpenChange={(isOpen) => {
+        if (pending) return;
         if (!isOpen) {
           close();
         } else {
@@ -82,14 +93,21 @@ export const ConfirmationDialog = ({
         <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
           {body && (
             <div className="mt-2">
-              <p>{body}</p>
+              <DialogDescription className="text-foreground">
+                {body}
+              </DialogDescription>
             </div>
           )}
         </div>
 
         <DialogFooter>
           {confirmButton}
-          <Button ref={cancelButtonRef} variant="outline" onClick={close}>
+          <Button
+            ref={cancelButtonRef}
+            variant="outline"
+            disabled={pending}
+            onClick={close}
+          >
             {cancelButtonText}
           </Button>
         </DialogFooter>

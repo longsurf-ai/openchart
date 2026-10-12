@@ -1,6 +1,6 @@
 // Purpose: Own how each metric column is labelled, sized, formatted, and coloured.
 import type { Quote } from "../hooks/use-quote";
-import type { Metric } from "./tree";
+import type { Column, Metric } from "./tree";
 
 /** Header label and fixed track width per metric. */
 export const COLUMNS: Readonly<
@@ -21,10 +21,49 @@ export const COLUMNS: Readonly<
 export type ScalarMetric = Exclude<Metric, "priceHistory">;
 
 /** One CSS grid template shared by the header and every row. */
-export function gridTemplate(metrics: readonly Metric[]): string {
-  return ["minmax(6rem, 1fr)", ...metrics.map((m) => COLUMNS[m].width)].join(
-    " ",
+export function gridTemplate(columns: readonly Column[]): string {
+  return ["minmax(6rem, 1fr)", ...columns.map(columnWidth)].join(" ");
+}
+
+function columnWidth(column: Column): string {
+  return column.metric.kind === "formula"
+    ? "7rem"
+    : COLUMNS[column.metric.kind].width;
+}
+
+/** Minimum shared width for the header and rows; narrow widgets scroll both together. Pure CSS projection with no lifecycle or failures. @example minimumGridWidth(columns) */
+export function minimumGridWidth(columns: readonly Column[]): string {
+  return `calc(${["6rem", ...columns.map(columnWidth)].join(" + ")})`;
+}
+
+/** User titles take precedence; formula labels fall back to the script filename and chosen output. @example columnTitle(column) */
+export function columnTitle(column: Column): string {
+  if (column.title) return column.title;
+  if (column.metric.kind !== "formula")
+    return COLUMNS[column.metric.kind].title;
+  const name =
+    column.metric.source.path
+      .split("/")
+      .at(-1)
+      ?.replace(/\.tea$/, "") ?? "Formula";
+  return `${name} · ${column.metric.output}`;
+}
+
+/** Compact headers retain built-in abbreviations; formulas show their full user-defined label. @example columnLabel(column) */
+export function columnLabel(column: Column): string {
+  return (
+    column.title ??
+    (column.metric.kind === "formula"
+      ? columnTitle(column)
+      : COLUMNS[column.metric.kind].label)
   );
+}
+
+/** Format a finite formula result without treating missing data as zero. @example formatFormula(1.25) */
+export function formatFormula(value: number | undefined): string {
+  return value === undefined || !Number.isFinite(value)
+    ? "—"
+    : smallPrice.format(value);
 }
 
 const compact = new Intl.NumberFormat(undefined, {
