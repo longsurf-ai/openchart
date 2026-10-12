@@ -62,6 +62,8 @@ export const ChartPreferences = z.object({
     .default(null),
   barSpacing: z.number().min(0.5).max(50).default(6),
   rightOffset: z.number().nonnegative().default(0),
+  /** Output binding IDs own styles; an Indicator ID uses only visible to hide
+   * its whole group without overwriting individual output choices. */
   series: z.record(z.string(), SeriesStyle.partial()).default({}),
   axisMode: z
     .enum(["normal", "logarithmic", "percentage", "indexed"])

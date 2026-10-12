@@ -1,7 +1,7 @@
-// Purpose: Share the existing series style dialog between legends and canvas menus.
+// Purpose: Edit chart display preferences through the shared series settings dialog.
 import { v2 } from "@openchart/chart-core";
 import { Color } from "@openchart/chart-core/util";
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import {
   Tabs,
   TabsList,
@@ -23,6 +23,7 @@ import { CardItem } from "@openchart/app/components/ui/settings/card";
 import { DropdownControl } from "@openchart/app/components/ui/settings/dropdown-control";
 import { useChart } from "@openchart/app/hooks/use-chart";
 import { useWidgetControls } from "@openchart/app/hooks/use-widget";
+import { cn } from "@openchart/app/utils/cn";
 import {
   defaultSeriesPreferences,
   updateSeriesStyles,
@@ -36,41 +37,245 @@ const lineStyles = ["solid", "dashed", "dotted"].map((value) => ({
   name: value,
 }));
 
-/** Edit one captured display using its existing persisted preferences. @example <SeriesStyleDialog seriesId={id} localStore={preferences} onClose={close} /> */
+/** Edit display preferences in this chart. The output list controls visibility
+ * independently of the selected output's appearance. Selection is local to the
+ * dialog; style choices persist by binding ID and never restart Tea.
+ * @example <SeriesStyleDialog seriesId={id} localStore={preferences} onClose={close} />
+ */
 export function SeriesStyleDialog({
   seriesId,
-  selection,
   inputs,
+  outputs,
   profileIds = [],
   localStore,
   onClose,
 }: {
   seriesId?: string;
   inputs?: ReactNode;
-  /** Bindings that draw vertical profiles; Style lists their parts' colors. */
+  /** Bound indicator outputs. Checkboxes suppress an output or restore its script
+   * visibility; choices persist locally and never change the Tea execution. */
+  outputs?: readonly { id: string; name: string }[];
+  /** Bindings that draw vertical profiles; their appearance panel lists part colors. */
   profileIds?: readonly string[];
-  selection?: {
-    options: { value: string; name: string }[];
-    onChange: (id: string) => void;
-  };
   localStore: ChartPreferencesStore;
   onClose: () => void;
 }) {
   const chart = useChart();
-  const editedSeries = useStore(chart.store, (state) =>
-    seriesId ? v2.ChartStateUtils.getSeries(state, seriesId) : undefined,
+  const hasSeries = useStore(chart.store, (state) =>
+    Boolean(seriesId && v2.ChartStateUtils.getSeries(state, seriesId)),
   );
-  const saved = useStore(localStore, (state) =>
-    seriesId ? state.series[seriesId] : undefined,
-  );
+  const [selectedId, setSelectedId] = useState(seriesId ?? outputs?.[0]?.id);
+  const selectedOutput =
+    outputs?.find(({ id }) => id === selectedId) ?? outputs?.[0];
+  const appearanceId = useId();
   useWidgetControls(true);
-  if (!editedSeries && !inputs && !profileIds.length) return null;
+  const hasStyle = hasSeries || Boolean(outputs?.length || profileIds.length);
+  if (!hasStyle && !inputs) return null;
+  const style = selectedOutput ? (
+    <div className="grid gap-5 text-sm md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <ul
+        aria-label="Indicator outputs"
+        className="min-w-0 space-y-1 border-b border-border pb-4 md:border-b-0 md:border-r md:pb-0 md:pr-5"
+      >
+        {outputs?.map((output) => (
+          <IndicatorOutputRow
+            key={output.id}
+            output={output}
+            selected={selectedOutput.id === output.id}
+            onSelect={() => setSelectedId(output.id)}
+            appearanceId={appearanceId}
+            localStore={localStore}
+          />
+        ))}
+      </ul>
+      <section
+        id={appearanceId}
+        aria-label={`${selectedOutput.name} style settings`}
+        className="min-w-0"
+      >
+        <h3 className="mb-4 font-medium">Appearance</h3>
+        <IndicatorOutputAppearance
+          seriesId={selectedOutput.id}
+          profile={profileIds.includes(selectedOutput.id)}
+          localStore={localStore}
+        />
+      </section>
+    </div>
+  ) : (
+    <div className="space-y-3 text-sm">
+      {seriesId ? (
+        <SeriesStyleFields seriesId={seriesId} localStore={localStore} />
+      ) : null}
+      {profileIds.length ? (
+        <ProfilePartColors bindingIds={profileIds} localStore={localStore} />
+      ) : null}
+    </div>
+  );
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        className={cn(
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto",
+          outputs?.length ? "sm:max-w-xl lg:max-w-3xl" : "sm:max-w-md",
+        )}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          chart.renderer.canvas.focus();
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Series settings</DialogTitle>
+          <DialogDescription>
+            {outputs?.length
+              ? "Select an output to edit its appearance."
+              : "Changes apply to this series in this chart."}
+          </DialogDescription>
+        </DialogHeader>
+        {inputs ? (
+          <Tabs defaultValue="inputs">
+            <TabsList aria-label="Series settings sections">
+              <TabsTrigger value="inputs">Inputs</TabsTrigger>
+              <TabsTrigger value="style" disabled={!hasStyle}>
+                {outputs ? "Outputs & style" : "Style"}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent
+              value="inputs"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
+              {inputs}
+            </TabsContent>
+            <TabsContent value="style">{style}</TabsContent>
+          </Tabs>
+        ) : (
+          style
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Visibility and selection are sibling controls. Toggling a checkbox never
+// changes which output the appearance panel is editing.
+function IndicatorOutputRow({
+  output,
+  selected,
+  onSelect,
+  appearanceId,
+  localStore,
+}: {
+  output: { id: string; name: string };
+  selected: boolean;
+  onSelect: () => void;
+  appearanceId: string;
+  localStore: ChartPreferencesStore;
+}) {
+  const chart = useChart();
+  const color = useStore(chart.store, (state) => {
+    const options = v2.ChartStateUtils.getSeries(state, output.id)?.options as
+      Record<string, unknown> | undefined;
+    const value = options?.color ?? options?.lineColor ?? options?.upColor;
+    return typeof value === "string" ? value : undefined;
+  });
+  const saved = useStore(localStore, (state) => state.series[output.id]);
+  return (
+    <li
+      className={cn(
+        "flex min-h-11 items-center gap-2 rounded-md border-l-2 px-2",
+        selected ? "border-foreground bg-muted" : "border-transparent",
+      )}
+    >
+      <input
+        type="checkbox"
+        aria-label={`Show ${output.name}`}
+        className="size-4 shrink-0 cursor-pointer accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        checked={saved?.visible !== false}
+        onChange={(event) =>
+          updateSeriesStyles(localStore, [output.id], {
+            visible: event.target.checked ? undefined : false,
+          })
+        }
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        className="min-w-0 flex-1 justify-start gap-2 px-1 text-left"
+        aria-label={`${output.name} style`}
+        aria-pressed={selected}
+        aria-controls={appearanceId}
+        onClick={onSelect}
+      >
+        <span
+          aria-hidden="true"
+          className="size-3 shrink-0 rounded-full bg-muted-foreground/40"
+          style={{ backgroundColor: saved?.color ?? color }}
+        />
+        <span className="truncate">{output.name}</span>
+      </Button>
+    </li>
+  );
+}
+
+function IndicatorOutputAppearance({
+  seriesId,
+  profile,
+  localStore,
+}: {
+  seriesId: string;
+  profile: boolean;
+  localStore: ChartPreferencesStore;
+}) {
+  const chart = useChart();
+  const hasSeries = useStore(chart.store, (state) =>
+    Boolean(v2.ChartStateUtils.getSeries(state, seriesId)),
+  );
+  if (profile)
+    return (
+      <ProfilePartColors bindingIds={[seriesId]} localStore={localStore} />
+    );
+  if (hasSeries)
+    return (
+      <SeriesStyleFields
+        seriesId={seriesId}
+        colorFirst
+        localStore={localStore}
+      />
+    );
+  return (
+    <p className="text-muted-foreground">
+      This output uses the indicator’s default style.
+    </p>
+  );
+}
+
+// Shared style fields for a market series or the selected indicator output.
+function SeriesStyleFields({
+  seriesId,
+  colorFirst = false,
+  localStore,
+}: {
+  seriesId: string;
+  colorFirst?: boolean;
+  localStore: ChartPreferencesStore;
+}) {
+  const chart = useChart();
+  const editedSeries = useStore(chart.store, (state) =>
+    v2.ChartStateUtils.getSeries(state, seriesId),
+  );
+  const saved = useStore(localStore, (state) => state.series[seriesId]);
+  if (!editedSeries) return null;
   const editedStyle = {
     ...defaultSeriesPreferences,
-    ...editedSeries?.options,
+    ...editedSeries.options,
     ...saved,
     type: (saved?.type ??
-      editedSeries?.type ??
+      editedSeries.type ??
       defaultSeriesPreferences.type) as SeriesPreferences["type"],
   };
   const candle = editedStyle.type === "Candlestick";
@@ -93,43 +298,24 @@ export function SeriesStyleDialog({
   ];
   const setStyle = (id: string, change: Partial<SeriesPreferences>) =>
     updateSeriesStyles(localStore, [id], change);
-  const parts = profileIds.length ? (
-    <ProfilePartColors bindingIds={profileIds} localStore={localStore} />
-  ) : null;
-  const style = editedSeries ? (
+  const color = (
+    <SeriesColorSetting
+      seriesId={seriesId}
+      label="Color"
+      localStore={localStore}
+    />
+  );
+  return (
     <div className="text-sm">
-      {selection?.options.map((output) => (
-        <SeriesColorSetting
-          key={output.value}
-          seriesId={output.value}
-          label={output.name}
-          localStore={localStore}
-        />
-      ))}
-      {selection ? (
-        <CardItem
-          title="Output"
-          htmlFor="series-output"
-          actions={
-            <div className="w-40">
-              <DropdownControl
-                id="series-output"
-                value={editedSeries.id}
-                options={selection.options}
-                onChange={(value) => selection.onChange(String(value))}
-              />
-            </div>
-          }
-        />
-      ) : null}
+      {colorFirst ? color : null}
       {editedSeries.type !== "Histogram" ? (
         <CardItem
           title="Type"
-          htmlFor="series-type"
+          htmlFor={`series-type-${seriesId}`}
           actions={
             <div className="w-40">
               <DropdownControl
-                id="series-type"
+                id={`series-type-${seriesId}`}
                 value={editedStyle.type}
                 options={PriceType.options
                   .filter(
@@ -151,13 +337,7 @@ export function SeriesStyleDialog({
           }
         />
       ) : null}
-      {!selection ? (
-        <SeriesColorSetting
-          seriesId={editedSeries.id}
-          label="Color"
-          localStore={localStore}
-        />
-      ) : null}
+      {!colorFirst ? color : null}
       {colorFields.map(([field, label]) => (
         <SeriesColorSetting
           key={field}
@@ -177,10 +357,10 @@ export function SeriesStyleDialog({
             <CardItem
               key={field}
               title={label}
-              htmlFor={`series-${field}`}
+              htmlFor={`series-${field}-${seriesId}`}
               actions={
                 <Switch
-                  id={`series-${field}`}
+                  id={`series-${field}-${seriesId}`}
                   checked={editedStyle[field]}
                   onCheckedChange={(checked) =>
                     setStyle(editedSeries.id, { [field]: checked })
@@ -194,10 +374,10 @@ export function SeriesStyleDialog({
         <>
           <CardItem
             title="Line width"
-            htmlFor="series-line-width"
+            htmlFor={`series-line-width-${seriesId}`}
             actions={
               <Input
-                id="series-line-width"
+                id={`series-line-width-${seriesId}`}
                 type="number"
                 className="h-8 w-20"
                 min={0.5}
@@ -216,11 +396,11 @@ export function SeriesStyleDialog({
           />
           <CardItem
             title="Line style"
-            htmlFor="series-line-style"
+            htmlFor={`series-line-style-${seriesId}`}
             actions={
               <div className="w-32">
                 <DropdownControl
-                  id="series-line-style"
+                  id={`series-line-style-${seriesId}`}
                   value={editedStyle.lineStyle}
                   options={lineStyles}
                   onChange={(value) =>
@@ -238,10 +418,10 @@ export function SeriesStyleDialog({
       ) : null}
       <CardItem
         title="Last value label"
-        htmlFor="series-last-value"
+        htmlFor={`series-last-value-${seriesId}`}
         actions={
           <Switch
-            id="series-last-value"
+            id={`series-last-value-${seriesId}`}
             checked={editedStyle.lastValueVisible}
             onCheckedChange={(checked) =>
               setStyle(editedSeries.id, {
@@ -253,10 +433,10 @@ export function SeriesStyleDialog({
       />
       <CardItem
         title="Last value line"
-        htmlFor="series-value-line"
+        htmlFor={`series-value-line-${seriesId}`}
         actions={
           <Switch
-            id="series-value-line"
+            id={`series-value-line-${seriesId}`}
             checked={editedStyle.valueLineVisible}
             onCheckedChange={(checked) =>
               setStyle(editedSeries.id, {
@@ -266,59 +446,11 @@ export function SeriesStyleDialog({
           />
         }
       />
-      {parts}
     </div>
-  ) : (
-    parts
-  );
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md"
-        onCloseAutoFocus={(event) => {
-          event.preventDefault();
-          chart.renderer.canvas.focus();
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Series settings</DialogTitle>
-          <DialogDescription>
-            {selection
-              ? "Set each output’s color; select an output below for its other style settings."
-              : "Changes apply to this series in this chart."}
-          </DialogDescription>
-        </DialogHeader>
-        {inputs ? (
-          <Tabs defaultValue="inputs">
-            <TabsList aria-label="Series settings sections">
-              <TabsTrigger value="inputs">Inputs</TabsTrigger>
-              <TabsTrigger value="style" disabled={!editedSeries && !parts}>
-                Style
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent
-              value="inputs"
-              forceMount
-              className="data-[state=inactive]:hidden"
-            >
-              {inputs}
-            </TabsContent>
-            <TabsContent value="style">{style}</TabsContent>
-          </Tabs>
-        ) : (
-          style
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 
-// Every output reads the same effective options as its renderer; only an explicit choice is saved.
+// Colors follow the renderer; only an explicit choice is saved.
 function SeriesColorSetting({
   seriesId,
   label,
@@ -357,11 +489,10 @@ function SeriesColorSetting({
       "#000000",
   );
   const { r, g, b } = Color.toRGB(color);
-  const id = `series-${field}-${seriesId}`;
   return (
     <CardItem
       title={label}
-      htmlFor={id}
+      htmlFor={`series-${field}-${seriesId}`}
       actions={
         <div className="flex items-center gap-2">
           {override !== undefined ? (
@@ -383,7 +514,7 @@ function SeriesColorSetting({
           <Input
             type="color"
             className="size-8 cursor-pointer p-0.5"
-            id={id}
+            id={`series-${field}-${seriesId}`}
             value={Color.toHex(r, g, b)}
             onChange={(event) =>
               updateSeriesStyles(localStore, [seriesId], {

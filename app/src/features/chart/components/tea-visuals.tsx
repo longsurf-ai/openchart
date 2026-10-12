@@ -136,6 +136,8 @@ export const TeaVisuals = memo(function TeaVisuals({
     }
   }, [compiled, frame, bindings]);
   const seriesPrefs = prefs.series;
+  // The legend hides the whole study without changing individual output choices.
+  const sourceVisible = seriesPrefs[sourceId]?.visible !== false;
   const drawn = useMemo(
     () =>
       decoded.profiles.map(({ binding, profiles }) => ({
@@ -145,12 +147,14 @@ export const TeaVisuals = memo(function TeaVisuals({
           seriesPrefs[binding.id]?.partColors,
         ).map((profile) => ({
           ...profile,
-          // Hidden profiles stay placed, so Style still lists their parts.
+          // Hidden profiles stay placed so their part colors remain editable.
           visible:
-            profile.visible && seriesPrefs[binding.id]?.visible !== false,
+            sourceVisible &&
+            profile.visible &&
+            seriesPrefs[binding.id]?.visible !== false,
         })),
       })),
-    [decoded, seriesPrefs],
+    [decoded, seriesPrefs, sourceVisible],
   );
   const projection = useMemo(() => {
     const series: ProjectedSeries[] = [];
@@ -297,6 +301,7 @@ export const TeaVisuals = memo(function TeaVisuals({
             fieldMap: output.kind === "candles" ? candleFields : valueFields,
             options: {
               ...options,
+              visible: sourceVisible && options.visible,
               lineColor: color,
               topLineColor: color,
               bottomLineColor: color,
@@ -328,7 +333,16 @@ export const TeaVisuals = memo(function TeaVisuals({
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  }, [compiled, frame, bindings, mainData, chart, prefs, sourceId]);
+  }, [
+    compiled,
+    frame,
+    bindings,
+    mainData,
+    chart,
+    prefs,
+    sourceId,
+    sourceVisible,
+  ]);
   useErrorToast(projection.error ?? decoded.error, {
     id: `indicator-visuals:${chart.id}:${sourceId}`,
     title: "Couldn’t display indicator",
@@ -336,7 +350,11 @@ export const TeaVisuals = memo(function TeaVisuals({
   useLayoutEffect(() => {
     const groups = new Map<string, Primitive.SeriesPrimitive[]>();
     for (const decoration of projection.decorations) {
-      if (prefs.series[decoration.binding.id]?.visible === false) continue;
+      if (
+        !sourceVisible ||
+        prefs.series[decoration.binding.id]?.visible === false
+      )
+        continue;
       for (const onPrice of [false, true]) {
         const rows = decoration.rows.filter(
           ({ value }) =>
@@ -379,7 +397,7 @@ export const TeaVisuals = memo(function TeaVisuals({
       for (const target of groups.keys())
         chart.renderer.setSeriesPrimitives(target, sourceId, []);
     };
-  }, [chart, sourceId, projection, prefs, mainId, background]);
+  }, [chart, sourceId, projection, prefs, mainId, background, sourceVisible]);
   const [hoverState, setHover] = useState<{
     x: number;
     y: number;

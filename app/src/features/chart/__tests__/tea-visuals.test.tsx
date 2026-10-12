@@ -646,13 +646,24 @@ it("removing one indicator clears only its own decorations on the shared price s
   expect(contributions.get("price")!.size).toBe(0);
 });
 
-it("source Hide then Show restores an authored hidden fill anchor without restarting Tea", async () => {
+it("toggles bound outputs and preserves their choices through source Hide and Show without restarting Tea", async () => {
   const { chart, contributions } = visualChart("hidden-anchor");
-  const preferences = createChartPreferences("hidden-anchor");
   const bindings = mixedBindings("study-a");
+  // The shipped version saved source Hide as false on every output binding.
+  localStorage.setItem(
+    "local:chart:hidden-anchor",
+    JSON.stringify({
+      version: 1,
+      state: {
+        series: Object.fromEntries(
+          bindings.map(({ id }) => [id, { visible: false }]),
+        ),
+      },
+    }),
+  );
+  const preferences = createChartPreferences("hidden-anchor");
   const frame = mixedFrame(true, true);
   const seriesIds = bindings.slice(0, 3).map(({ id }) => id);
-  const visibilityIds = bindings.map(({ id }) => id);
   const input: Node = {
     source: { entry: "cloud.tea", sources: { "cloud.tea": "cloud source" } },
     parameters: {},
@@ -691,7 +702,7 @@ it("source Hide then Show restores an authored hidden fill anchor without restar
         <SeriesLegend
           sourceId="study-a"
           seriesIds={seriesIds}
-          visibilityIds={visibilityIds}
+          outputs={bindings}
           order={0}
           localStore={preferences}
           disabled={false}
@@ -718,16 +729,27 @@ it("source Hide then Show restores an authored hidden fill anchor without restar
   const lower = () =>
     v2.ChartStateUtils.getSeries(chart.store.getState(), "study-a:lower");
   const band = () =>
-    contributions
-      .get("study-a:lower")
-      ?.get("study-a")
-      ?.some((primitive) => primitive.id === "study-a:study-a:band:false");
+    [...contributions.values()].some((owners) =>
+      owners
+        .get("study-a")
+        ?.some((primitive) => primitive.id === "study-a:study-a:band:false"),
+    );
+  // Both settings entry points work from saved bindings before compilation finishes.
+  expect(lower()).toBeUndefined();
+  expect(screen.getByRole("button", { name: "Series settings" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "Series settings for Cloud" }),
+  ).toBeEnabled();
   await waitFor(() => expect(upper()?.options.visible).toBe(false));
+  expect(lower()?.options.visible).toBe(false);
+  expect(band()).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Show series" }));
+  expect(upper()?.options.visible).toBe(false);
   expect(lower()?.options.visible).toBe(true);
   expect(band()).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Hide series" }));
   expect(lower()?.options.visible).toBe(false);
-  expect(band()).toBeUndefined();
+  expect(band()).toBe(false);
   expect(contributions.get("price")?.has("study-a")).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Show series" }));
   expect(upper()?.options.visible).toBe(false);
@@ -737,6 +759,63 @@ it("source Hide then Show restores an authored hidden fill anchor without restar
   expect(
     preferences.getState().series["study-a:upper"]?.visible,
   ).toBeUndefined();
+  fireEvent.click(screen.getByRole("button", { name: "Series settings" }));
+  expect(screen.getAllByRole("checkbox")).toHaveLength(bindings.length);
+  fireEvent.click(screen.getByRole("button", { name: "band style" }));
+  expect(
+    screen.getByText("This output uses the indicator’s default style."),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Show band" })).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "lower style" }));
+  expect(screen.getByLabelText("Color")).toHaveValue("#46aa96");
+  // A hidden curve keeps supplying the data used by its fill.
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show upper" }));
+  expect(band()).toBe(true);
+  // Separate-pane decorations currently need a visible curve to host them.
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show lower" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show raw" }));
+  expect(screen.getByRole("checkbox", { name: "Show band" })).toBeChecked();
+  expect(band()).toBe(false);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show lower" }));
+  expect(band()).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show raw" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show band" }));
+  expect(band()).toBe(false);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show price_signal" }));
+  expect(contributions.get("price")?.has("study-a")).toBe(false);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show lower" }));
+  expect(lower()?.options.visible).toBe(false);
+  // Closing and reopening settings retains the choices.
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  fireEvent.click(screen.getByRole("button", { name: "Hide series" }));
+  fireEvent.click(screen.getByRole("button", { name: "Show series" }));
+  expect(lower()?.options.visible).toBe(false);
+  expect(preferences.getState().series["study-a:band"]?.visible).toBe(false);
+  expect(contributions.get("price")?.has("study-a")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Series settings" }));
+  expect(
+    screen.getByRole("checkbox", { name: "Show lower" }),
+  ).not.toBeChecked();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show lower" }));
+  expect(lower()?.options.visible).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show band" }));
+  expect(band()).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show upper" }));
+  expect(upper()?.options.visible).toBe(false); // Restore the authored display=none.
+  const restored = createChartPreferences("hidden-anchor");
+  expect(restored.getState().series["study-a:price_signal"]?.visible).toBe(
+    false,
+  );
+  expect(restored.getState().series["study-a:lower"]?.visible).toBeUndefined();
+  // Show also recovers an intentional all-off selection by restoring script defaults.
+  for (const checkbox of screen.getAllByRole("checkbox")) {
+    if ((checkbox as HTMLInputElement).checked) fireEvent.click(checkbox);
+  }
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  fireEvent.click(screen.getByRole("button", { name: "Show series" }));
+  expect(lower()?.options.visible).toBe(true);
+  expect(upper()?.options.visible).toBe(false);
+  expect(band()).toBe(true);
   expect(mocks.compile).toHaveBeenCalledOnce();
   expect(mocks.observe).toHaveBeenCalledOnce();
   view.unmount();
@@ -747,7 +826,7 @@ it("draws the last profile written for each box start and follows visibility", (
   const chart: ChartRuntime = {
     id: "profiles",
     store,
-    renderer: {} as v2.ChartRenderer,
+    renderer: { canvas: document.createElement("canvas") } as v2.ChartRenderer,
     output$: EMPTY,
     mutate: (recipe) =>
       store.setState((state) => {
@@ -849,6 +928,18 @@ it("draws the last profile written for each box start and follows visibility", (
         ]}
         preferences={preferences}
       />
+      <TooltipProvider>
+        <SeriesLegend
+          sourceId="indicator"
+          seriesIds={[]}
+          outputs={[{ id: "output", output: "profile" }]}
+          profileIds={["output"]}
+          order={0}
+          localStore={preferences}
+          disabled={false}
+          describe={() => ({ title: "Volume profile", content: null })}
+        />
+      </TooltipProvider>
     </ChartContext.Provider>,
   );
   const profiles = () =>
@@ -902,13 +993,20 @@ it("draws the last profile written for each box start and follows visibility", (
     "#ffa500",
     "#ffa500",
   ]);
-  // Hidden profiles stay placed, so Style still lists their parts.
-  act(() => updateSeriesStyles(preferences, ["output"], { visible: false }));
+  fireEvent.click(screen.getByRole("button", { name: "Hide series" }));
+  expect(profiles().every(({ profile }) => !profile.visible)).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Show series" }));
+  expect(profiles().every(({ profile }) => profile.visible)).toBe(true);
+  // A profile-only indicator still exposes its output and keeps its part colors.
+  fireEvent.click(screen.getByRole("button", { name: "Series settings" }));
+  expect(screen.getByRole("checkbox", { name: "Show profile" })).toBeChecked();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show profile" }));
   expect(profiles().map(({ profile }) => profile.visible)).toEqual([
     false,
     false,
   ]);
-  act(() => updateSeriesStyles(preferences, ["output"], { visible: true }));
+  expect(screen.getByLabelText("Point of control")).toHaveValue("#ffa500");
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show profile" }));
   expect(profiles().map(({ profile }) => profile.visible)).toEqual([
     true,
     true,

@@ -219,7 +219,7 @@ export function IndicatorSource({
     );
     return outputs.filter(({ output }) => !decorations.has(output));
   }, [compiled, outputs]);
-  // Outputs drawn as vertical profiles, whose part colors Style lists.
+  // Outputs drawn as vertical profiles, whose part colors are editable.
   const profileIds = useMemo(() => {
     const profiles = new Set(
       compiled?.definition.outputs.fields
@@ -296,7 +296,7 @@ export function IndicatorSource({
             >
               <SeriesLegend
                 seriesIds={legendOutputs.map((output) => output.id)}
-                visibilityIds={outputs.map((output) => output.id)}
+                outputs={outputs}
                 profileIds={profileIds}
                 showMarker={false}
                 readOnly={readOnly}

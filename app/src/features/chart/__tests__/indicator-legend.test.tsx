@@ -339,8 +339,7 @@ it("shows colored crosshair values in one row, toggles all outputs, edits each o
     fireEvent.click(
       within(legend).getByRole("button", { name: "Hide series" }),
     );
-    for (const binding of bindings)
-      expect(preferences.getState().series[binding.id]?.visible).toBe(false);
+    expect(preferences.getState().series[indicator.id]?.visible).toBe(false);
     fireEvent.click(
       within(legend).getByRole("button", { name: "Show series" }),
     );
@@ -366,23 +365,58 @@ it("shows colored crosshair values in one row, toggles all outputs, edits each o
     fireEvent.change(screen.getByLabelText("Length"), {
       target: { value: "25" },
     });
-    await user.click(screen.getByRole("tab", { name: "Style" }));
-    expect(screen.getByLabelText("Basis")).toHaveValue("#0000ff");
-    expect(screen.getByLabelText("Upper")).toHaveValue("#00ff00");
-    expect(screen.getByLabelText("Lower")).toHaveValue("#ffff00");
+    await user.click(screen.getByRole("tab", { name: "Outputs & style" }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(
+      screen.queryByRole("button", { name: "Output" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Basis style" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByLabelText("Color")).toHaveValue("#0000ff");
     expect(screen.getByLabelText("Line width")).toHaveValue(2.5);
-    fireEvent.change(screen.getByLabelText("Upper"), {
+    // Visibility changes neither select an output nor discard the current input draft.
+    await user.click(screen.getByRole("checkbox", { name: "Show Upper" }));
+    expect(preferences.getState().series[upper!.id]?.visible).toBe(false);
+    expect(preferences.getState().series[basis!.id]?.visible).toBeUndefined();
+    expect(screen.getByRole("button", { name: "Basis style" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // Hidden outputs remain editable; selecting one does not show it again.
+    await user.click(screen.getByRole("button", { name: "Upper style" }));
+    expect(
+      screen.getByRole("checkbox", { name: "Show Upper" }),
+    ).not.toBeChecked();
+    expect(screen.getByLabelText("Color")).toHaveValue("#00ff00");
+    fireEvent.change(screen.getByLabelText("Color"), {
       target: { value: "#123456" },
     });
     expect(preferences.getState().series[upper!.id]).toEqual({
+      visible: false,
       color: "#123456",
     });
-    await user.click(screen.getByRole("button", { name: "Reset Upper color" }));
-    expect(screen.getByLabelText("Upper")).toHaveValue("#00ff00");
+    await user.click(screen.getByRole("button", { name: "Reset color" }));
+    expect(screen.getByLabelText("Color")).toHaveValue("#00ff00");
+    expect(preferences.getState().series[upper!.id]).toEqual({
+      visible: false,
+    });
+    await user.click(screen.getByRole("checkbox", { name: "Show Upper" }));
+    expect(screen.getByRole("button", { name: "Upper style" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(preferences.getState().series[upper!.id]).toEqual({});
-    await user.click(screen.getByRole("button", { name: "Output" }));
-    await user.click(screen.getByRole("menuitem", { name: "Lower" }));
-    fireEvent.change(screen.getByLabelText("Line width"), {
+    await user.click(screen.getByRole("button", { name: "Lower style" }));
+    expect(screen.getByRole("button", { name: "Basis style" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    const lowerStyle = screen.getByRole("region", {
+      name: "Lower style settings",
+    });
+    fireEvent.change(within(lowerStyle).getByLabelText("Line width"), {
       target: { value: "3" },
     });
     expect(preferences.getState().series[lower!.id]?.lineWidth).toBe(3);
@@ -458,7 +492,7 @@ it("shows colored crosshair values in one row, toggles all outputs, edits each o
       }),
     );
     expect(screen.getByLabelText("Length")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Style" })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: "Outputs & style" })).toBeDisabled();
     await user.keyboard("{Escape}");
     // The saved Indicator arrives at a new revision: Tea re-observes its same snapshot, Reload expects it.
     indicator = await mocks.patch.mock.results[0]!.value;

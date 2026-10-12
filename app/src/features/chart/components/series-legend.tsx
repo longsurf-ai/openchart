@@ -33,8 +33,9 @@ export interface SeriesLegendValue {
 /** Source-provided content; chart controls and readout selection remain shared. */
 export interface SeriesLegendProps {
   seriesIds: readonly string[];
-  /** Include nonnumeric visual outputs in source-level show/hide controls. */
-  visibilityIds?: readonly string[];
+  /** All indicator bindings, including nonnumeric visuals. Settings toggle each
+   * output; the source's visibility preference hides the group independently. */
+  outputs?: readonly { id: string; output: string }[];
   showMarker?: boolean;
   sourceId: string;
   main?: boolean;
@@ -54,7 +55,7 @@ export interface SeriesLegendProps {
   /** Rendered after the shared actions, before Series placement. */
   trailingActions?: ReactNode;
   settingsInputs?: ReactNode;
-  /** Bindings that draw vertical profiles, whose part colors Style lists. */
+  /** Bindings that draw vertical profiles, with editable part colors. */
   profileIds?: readonly string[];
   status?: ReactNode;
 }
@@ -63,7 +64,7 @@ export interface SeriesLegendProps {
  */
 export function SeriesLegend({
   seriesIds,
-  visibilityIds = seriesIds,
+  outputs,
   showMarker = true,
   sourceId,
   main = false,
@@ -82,11 +83,19 @@ export function SeriesLegend({
   status,
 }: SeriesLegendProps) {
   const chart = useChart();
+  // Capture the target when opening; a source update must not retarget an open dialog.
   const [editing, setEditing] = useState<{ seriesId?: string }>();
   const seriesId = seriesIds[0];
   const saved = useStore(
     localStore,
-    useShallow((state) => visibilityIds.map((id) => state.series[id])),
+    useShallow((state) => seriesIds.map((id) => state.series[id])),
+  );
+  const sourceVisible = useStore(
+    localStore,
+    (state) => state.series[sourceId]?.visible !== false,
+  );
+  const outputVisible = useStore(localStore, (state) =>
+    Boolean(outputs?.some(({ id }) => state.series[id]?.visible !== false)),
   );
   const rendered = useStore(
     chart.store,
@@ -126,13 +135,25 @@ export function SeriesLegend({
           options?.upColor ??
           "inherit",
       ),
-      label: String(row?.title || last?.title || id),
+      label: String(
+        row?.title ||
+          last?.title ||
+          outputs?.find((output) => output.id === id)?.output ||
+          id,
+      ),
     };
   });
-  const visible = visibilityIds.some(
-    (id, index) =>
-      saved[index]?.visible ??
-      rendered.find((series) => series?.id === id)?.options.visible !== false,
+  const visible = outputs
+    ? sourceVisible && outputVisible
+    : seriesIds.some(
+        (_, index) =>
+          saved[index]?.visible ?? rendered[index]?.options.visible !== false,
+      );
+  const canEdit = Boolean(
+    settingsInputs ||
+    outputs?.length ||
+    profileIds.length ||
+    rendered.some(Boolean),
   );
   const { title, content } = describe(values);
   const focus = (hovered: boolean) =>
@@ -178,19 +199,25 @@ export function SeriesLegend({
       id: "visibility",
       label: visible ? "Hide series" : "Show series",
       Icon: visible ? Eye : EyeOff,
-      disabled: !visibilityIds.length,
-      run: () =>
-        updateSeriesStyles(localStore, visibilityIds, {
+      disabled: !(outputs ?? seriesIds).length,
+      run: () => {
+        // Older Hide saved false on every output. Show also restores defaults
+        // when no output is enabled, including after unchecking them all.
+        const ids = outputs
+          ? outputVisible
+            ? [sourceId]
+            : [sourceId, ...outputs.map(({ id }) => id)]
+          : seriesIds;
+        updateSeriesStyles(localStore, ids, {
           visible: visible ? false : undefined,
-        }),
+        });
+      },
     },
     {
       id: "settings",
       label: "Series settings",
       Icon: Settings2,
-      disabled:
-        disabled ||
-        (!settingsInputs && !profileIds.length && !rendered.some(Boolean)),
+      disabled: disabled || !canEdit,
       run: () => setEditing({ seriesId }),
     },
     ...(onRemove
@@ -269,13 +296,7 @@ export function SeriesLegend({
               main ? "text-sm" : "text-xs",
             )}
             aria-label={titleActionLabel ?? `Series settings for ${title}`}
-            disabled={
-              disabled ||
-              (!onTitleClick &&
-                !settingsInputs &&
-                !profileIds.length &&
-                !rendered.some(Boolean))
-            }
+            disabled={disabled || (!onTitleClick && !canEdit)}
             onClick={onTitleClick ?? (() => setEditing({ seriesId }))}
           >
             {title}
@@ -349,17 +370,10 @@ export function SeriesLegend({
           seriesId={editing.seriesId}
           inputs={settingsInputs}
           profileIds={profileIds}
-          selection={
-            values.length > 1
-              ? {
-                  options: values.map((value) => ({
-                    value: value.id,
-                    name: value.label,
-                  })),
-                  onChange: (seriesId) => setEditing({ seriesId }),
-                }
-              : undefined
-          }
+          outputs={outputs?.map(({ id, output }) => ({
+            id,
+            name: values.find((value) => value.id === id)?.label ?? output,
+          }))}
           localStore={localStore}
           onClose={() => setEditing(undefined)}
         />

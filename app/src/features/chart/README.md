@@ -56,13 +56,19 @@ Price and volume legends share one Feed subscription; a binding's Resource
 `output` decides which it is, and new cells start with volume over price. Styles apply immediately;
 each indicator has one legend, anchored to its first declared output’s pane.
 All output values appear inline with their current colors, including values from
-other panes. Hide/show affects the whole indicator; the shared style dialog’s
-Output selector edits individual outputs. One Series settings dialog contains Inputs
-and Style tabs, using the same settings rows and shared form controls.
+other panes. Hide/show affects the whole indicator while preserving a partial
+output selection. If every output is disabled (including indicators hidden by older
+versions), Show restores the outputs' script defaults. Series settings separates Inputs from Outputs & style:
+the left list has independent visibility checkboxes and output selection, while
+the right Appearance panel edits the selected output through shared form controls.
+Hidden outputs remain editable. Narrow windows stack the list above the panel.
+Fills and markers in a separate pane currently need at least one visible curve in
+that pane; hiding every curve also removes those decorations even if their own
+outputs remain enabled.
 Placement moves the whole indicator to a pane or shared axis. Reload and removal
 stay grouped. Market price tags reuse the core ticker badge with the displayed
 listing symbol; volume tags stay numeric.
-Style shows all output colors together and reads effective renderer values.
+The output list shows color markers; Appearance reads effective renderer values.
 Only explicit edits are persisted; reset removes the override. Tea visual colors
 take precedence over V1's theme-owned indicator palette, which supplies omitted
 colors. Script `input.color` declarations remain computation inputs.
