@@ -132,7 +132,7 @@ function setup(widgets: Dashboard["widgets"]) {
         <DashboardView
           id={dashboard.id}
           transport={transport}
-          registry={registry}
+          registry={(kind) => registry[kind]}
           renderHeader={() => null}
         />
       </TooltipProvider>

@@ -3,7 +3,13 @@ import { useContext, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DockviewApi, IDockviewPanel } from "dockview-react";
-import { BookOpenIcon, CopyIcon, CopyPlusIcon, SaveIcon } from "lucide-react";
+import {
+  BookOpenIcon,
+  CopyIcon,
+  CopyPlusIcon,
+  SaveIcon,
+  UploadIcon,
+} from "lucide-react";
 import { TooltipIconButton } from "@openchart/app/components/ui/tooltip-icon-button/tooltip-icon-button";
 import {
   WorkspaceFileActions,
@@ -54,6 +60,9 @@ export function FileActions({
       {path.endsWith(".tea")
         ? extraActions?.({ workspaceId, path }, save)
         : null}
+      {path.endsWith(".widget.tsx") ? (
+        <PublishWidgetButton file={{ workspaceId, path }} save={save} />
+      ) : null}
       {path.endsWith(".tea") ? (
         <TooltipIconButton
           className="size-8"
@@ -119,6 +128,42 @@ function DuplicateButton({
       onClick={() => duplicate.mutate()}
     >
       <CopyPlusIcon />
+    </TooltipIconButton>
+  );
+}
+
+/** Saves the draft, then checks the file and makes it the live widget its kind names. Failures toast the check's diagnostics. */
+function PublishWidgetButton({
+  file,
+  save,
+}: {
+  file: { workspaceId: string; path: string };
+  save: () => Promise<unknown>;
+}) {
+  const { transport } = useWorkspaceView();
+  const publish = useMutation({
+    meta: { errorTitle: "Couldn’t publish this widget" },
+    mutationFn: (input: typeof file) =>
+      transport.rpc.resources.custom_widget.save.mutate(input),
+    onSuccess: (widget) =>
+      toast.success(`Published ${widget.title}`, {
+        description: "Add it from a dashboard’s Widgets menu.",
+      }),
+  });
+  return (
+    <TooltipIconButton
+      className="size-8"
+      tooltip="Publish widget"
+      disabled={publish.isPending}
+      // A failed draft save is already reported and keeps the draft.
+      onClick={() =>
+        void save().then(
+          () => publish.mutate(file),
+          () => {},
+        )
+      }
+    >
+      <UploadIcon />
     </TooltipIconButton>
   );
 }

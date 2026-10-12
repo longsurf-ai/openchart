@@ -45,11 +45,14 @@ test("the third widget lands below existing placements without moving them", () 
   expect(result[2]!.layout).toEqual({ x: 0, y: 24, w: 6, h: 8 });
 });
 
-const registry = {
+const definitions: Record<string, { minSize: { w: number; h: number } }> = {
   chart: { minSize: { w: 4, h: 6 } },
   workspace: { minSize: { w: 3, h: 6 } },
   other: { minSize: { w: 2, h: 2 } },
-} as unknown as Parameters<typeof placeWidgetBeside>[1];
+};
+const registry = ((kind: string) => definitions[kind]) as unknown as Parameters<
+  typeof placeWidgetBeside
+>[1];
 const workspace = { kind: "workspace", minSize: { w: 3, h: 6 } };
 type Rectangle = Dashboard["widgets"][number]["layout"];
 const placementId = defineId("wdg", "WidgetPlacement.ID");
@@ -328,7 +331,7 @@ function dockAgainstOracle(widgets: Dashboard["widgets"], anchorIndex: number) {
   };
   const { left, right } = run(y);
   const span = right - left;
-  const anchorMinW = registry[anchor.kind]!.minSize.w;
+  const anchorMinW = definitions[anchor.kind]!.minSize.w;
   const [placed, docked] = [saved[anchorIndex]!, saved.at(-1)!];
   const unmoved = (layouts: Rectangle[]) =>
     layouts.filter((_, index) => index !== anchorIndex);
@@ -391,7 +394,7 @@ test(`random compacted dashboards dock beside any anchor (seed ${seed}, ${dashbo
       { length: int(1, 9) },
       (_, index) => {
         const kind = kinds[int(0, kinds.length - 1)]!;
-        const min = registry[kind]!.minSize;
+        const min = definitions[kind]!.minSize;
         // Narrow widths are drawn more often so crowded rows (case 4) come up.
         const w = int(min.w, int(min.w, 12));
         return {

@@ -18,10 +18,8 @@ Owns resolved profiles and scoped registration. See
   key; permission precedence is built-in, global, then profile configuration.
 - `builtin.ts` alone registers analyst/title/compaction. Compile owned manifests/assets;
   Resource guidance stays generic and catalog-derived; domain guidance uses named segments.
-  Analyst allows Echo, workflows,
-  Resource read/search/mutate, transcript read/search, create_schedule, save_alert_rule,
-  symbology_search, market_data, tea_check, tea_run, publish_post, and task, so
-  OpenChart tools need no approval by default; title/compaction deny tools.
+  Analyst allows every built-in tool (`../tool/registry.ts`), so OpenChart tools
+  need no approval by default; title/compaction deny tools.
 - Construction performs no discovery or execution. Prompt owns model/variant
   resolution and invocation snapshots.
 - Profiles contain no executable plugins. Catalog selection remains independent;

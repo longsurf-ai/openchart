@@ -11,9 +11,8 @@ scoped observations and file APIs.
 - Effect owns scopes, queues, retries and caches; Chokidar owns watching.
   RcMap shares shallow directory watchers by active consumer; no eager root watch.
   Directory/tree queries read metadata only; never cache text.
-- Index non-hidden directories, including empty ones, separately from `.tea`,
-  `.workflow.ts`, PDF and supported images/audio/video. `mkdir` stays within
-  the registered root; existing directories succeed.
+- Index non-hidden directories, including empty ones, separately from `RelPath`
+  files. `mkdir` stays within the registered root; existing directories succeed.
 - Read Base64 bytes, MIME and hash. Media reads
   cap at 32 MiB, including concurrent growth. Scans omit oversized media;
   explicit reads fail with `WorkspaceMediaTooLarge`.

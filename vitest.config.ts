@@ -10,7 +10,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "v2",
-          globalSetup: ["./server/agent/workflow/generate-workflow-types.ts"],
+          globalSetup: [
+            "./server/agent/workflow/generate-workflow-types.ts",
+            "./app/tooling/widget-types.ts",
+          ],
           exclude: [
             ...configDefaults.exclude,
             "common/chart-core/**",

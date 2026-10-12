@@ -28,12 +28,7 @@ vi.mock("@openchart/app/app/dashboard/dashboard-header", () => ({
   DashboardHeader: () => null,
 }));
 vi.mock("@openchart/app/app/widgets/widget-registry", () => ({
-  widgetCatalog: {
-    workspace: { definition: {} },
-    chart: { definition: {} },
-    alerts: { definition: {} },
-  },
-  widgetRegistry: {},
+  resolveWidget: () => undefined,
 }));
 
 test("page context follows Schedule, Dashboard ID changes, and route exit", async () => {

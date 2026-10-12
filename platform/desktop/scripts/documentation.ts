@@ -1,11 +1,12 @@
 // Purpose: Stage version-matched, ordinary documentation files for native Agent readers.
-import { cp, mkdir, rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Copies Tea-owned Markdown and OpenChart-owned integration guidance into one
- * host asset directory from the installed package used by the compiler.
+ * Copies Tea-owned Markdown and OpenChart-owned integration guidance (with the
+ * widget example) into one host asset directory from the installed package
+ * used by the compiler.
  * Tea commits its generated reference, and its package build owns the compiled
  * library sources.
  * Replaces old assets so removed documentation cannot survive a rebuild.
@@ -21,9 +22,9 @@ export async function copyDocumentation(teaDirectory: string, target: string) {
   await cp(join(teaDirectory, "dist/tea-lib"), join(target, "tea-lib"), {
     recursive: true,
   });
-  await mkdir(join(target, "openchart"), { recursive: true });
   await cp(
-    fileURLToPath(new URL("../../../docs/agent/tea.md", import.meta.url)),
-    join(target, "openchart/tea.md"),
+    fileURLToPath(new URL("../../../docs/agent/", import.meta.url)),
+    join(target, "openchart"),
+    { recursive: true },
   );
 }

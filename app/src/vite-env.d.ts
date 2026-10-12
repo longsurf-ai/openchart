@@ -7,3 +7,11 @@ declare module "virtual:workflow-types" {
   };
   export default declarations;
 }
+
+declare module "virtual:widget-types" {
+  const declarations: {
+    paths: Record<string, string[]>;
+    files: { filePath: string; content: string }[];
+  };
+  export default declarations;
+}

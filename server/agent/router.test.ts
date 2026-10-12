@@ -255,6 +255,7 @@ test("runs tRPC prompts through tools, continuation, snapshots, and durable comp
             "search_transcript",
             "create_schedule",
             "save_alert_rule",
+            "save_widget",
             "symbology_search",
             "publish_post",
             "market_data",

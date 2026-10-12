@@ -350,9 +350,9 @@ so compilation needs no native executable or ASAR unpacking rule.
 Tea's compiler-shipped sources live in `dist/tea-lib`, beside the backend's parent directory.
 Tea's package build generates its reference. Desktop stages Markdown and library
 sources from the same installed Tea package as its compiler, together with
-OpenChart's binding guide from `docs/agent/tea.md`. Tea documentation changes require
+OpenChart's guides from `docs/agent/`. Tea documentation changes require
 rebuilding and reinstalling that package. Packaging copies the guides to
-`Contents/Resources/docs/tea/` and `Contents/Resources/docs/openchart/tea.md`,
+`Contents/Resources/docs/tea/` and `Contents/Resources/docs/openchart/`,
 with a readable copy of the standard-library `.tea` sources in `docs/tea-lib/`,
 outside ASAR, where native Agent file readers can open them. Main passes the
 actual `process.resourcesPath/docs` through the host protocol to the Agent

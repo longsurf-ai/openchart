@@ -7,7 +7,15 @@ import { chartWidget } from "@openchart/app/features/chart/components/widget";
 import { WatchlistSymbolPicker } from "@openchart/app/features/watchlist/components/context";
 import { watchlistWidget } from "@openchart/app/features/watchlist/components/widget";
 import { workspaceWidget } from "@openchart/app/features/workspace/components/widget";
-import type { WidgetDefinition } from "@openchart/app/lib/widget/widget";
+import type {
+  WidgetDefinition,
+  WidgetResolver,
+} from "@openchart/app/lib/widget/widget";
+
+import {
+  CUSTOM_WIDGET_PREFIX,
+  customWidgetDefinition,
+} from "./custom/custom-widget";
 
 import { WorkspaceChartActions } from "./workspace-chart-actions";
 import { WorkspaceFileBeside } from "./workspace-file-beside";
@@ -57,3 +65,10 @@ export const widgetRegistry: Readonly<
     definition,
   ]),
 );
+
+/** Built-in kinds first; any `custom:<kind>` resolves to its saved widget, loaded inside its card. */
+export const resolveWidget: WidgetResolver = (kind) =>
+  widgetRegistry[kind] ??
+  (kind.startsWith(CUSTOM_WIDGET_PREFIX)
+    ? customWidgetDefinition(kind.slice(CUSTOM_WIDGET_PREFIX.length))
+    : undefined);

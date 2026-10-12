@@ -14,7 +14,10 @@ import {
 } from "react-grid-layout/core";
 
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
-import type { WidgetDefinition } from "@openchart/app/lib/widget/widget";
+import type {
+  WidgetDefinition,
+  WidgetResolver,
+} from "@openchart/app/lib/widget/widget";
 
 type Placement = Dashboard["widgets"][number];
 
@@ -24,13 +27,13 @@ export const dashboardRows = 24;
 /** Attach display constraints without storing library-specific fields. @example const layout = widgetLayout(dashboard.widgets, registry); */
 export function widgetLayout(
   widgets: Dashboard["widgets"],
-  registry: Readonly<Record<string, WidgetDefinition | undefined>>,
+  registry: WidgetResolver,
 ): Layout {
   return widgets.map((widget) => ({
     i: widget.id,
     ...widget.layout,
-    minW: registry[widget.kind]?.minSize.w ?? 1,
-    minH: registry[widget.kind]?.minSize.h ?? 1,
+    minW: registry(widget.kind)?.minSize.w ?? 1,
+    minH: registry(widget.kind)?.minSize.h ?? 1,
   }));
 }
 
@@ -128,7 +131,7 @@ export function appendWidget(
  */
 export function placeWidgetBeside(
   widgets: Dashboard["widgets"],
-  registry: Readonly<Record<string, WidgetDefinition | undefined>>,
+  registry: WidgetResolver,
   anchorId: string,
   definition: Pick<WidgetDefinition, "kind" | "minSize">,
 ): { id: string; widgets: Dashboard["widgets"] } {

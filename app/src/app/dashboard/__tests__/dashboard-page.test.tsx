@@ -38,6 +38,7 @@ import {
   type Dashboard,
 } from "@openchart/app/features/dashboard/api/queries";
 import { useWidget, useWidgetControls } from "@openchart/app/hooks/use-widget";
+import type { WidgetDefinition } from "@openchart/app/lib/widget/widget";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import {
   UnsavedChangesProvider,
@@ -83,32 +84,43 @@ vi.mock("@openchart/app/app/page-header", () => ({
 vi.mock("@openchart/app/features/chart/components/symbol-control", () => ({
   SymbolControl: () => null,
 }));
-vi.mock("@openchart/app/app/widgets/widget-gallery", () => ({
-  WidgetGallery: ({
-    disabled,
-    onAdd,
-  }: {
-    disabled: boolean;
-    onAdd: (kind: string) => void;
-  }) => (
-    <>
-      <button disabled={disabled} onClick={() => onAdd("workspace")}>
-        Widgets
-      </button>
-      <button disabled={disabled} onClick={() => onAdd("chart")}>
-        Chart fixture
-      </button>
-      <button disabled={disabled} onClick={() => onAdd("watchlist")}>
-        Watchlist fixture
-      </button>
-    </>
-  ),
-}));
-vi.mock("@openchart/app/app/widgets/widget-registry", async (original) => {
-  const actual =
-    await original<
-      typeof import("@openchart/app/app/widgets/widget-registry")
-    >();
+vi.mock("@openchart/app/app/widgets/widget-gallery", async () => {
+  // The gallery passes real definitions; rendering uses the fixture registry below.
+  const { widgetCatalog } = await vi.importActual<
+    typeof import("@openchart/app/app/widgets/widget-registry")
+  >("@openchart/app/app/widgets/widget-registry");
+  return {
+    WidgetGallery: ({
+      disabled,
+      onAdd,
+    }: {
+      disabled: boolean;
+      onAdd: (definition: WidgetDefinition) => void;
+    }) => (
+      <>
+        <button
+          disabled={disabled}
+          onClick={() => onAdd(widgetCatalog.workspace.definition)}
+        >
+          Widgets
+        </button>
+        <button
+          disabled={disabled}
+          onClick={() => onAdd(widgetCatalog.chart.definition)}
+        >
+          Chart fixture
+        </button>
+        <button
+          disabled={disabled}
+          onClick={() => onAdd(widgetCatalog.watchlist.definition)}
+        >
+          Watchlist fixture
+        </button>
+      </>
+    ),
+  };
+});
+vi.mock("@openchart/app/app/widgets/widget-registry", () => {
   const fixture = {
     kind: "fixture",
     title: "Fixture",
@@ -118,15 +130,12 @@ vi.mock("@openchart/app/app/widgets/widget-registry", async (original) => {
     Content: FixtureContent,
     Controls: FixtureControls,
   };
-  return {
-    ...actual,
-    widgetRegistry: {
-      chart: fixture,
-      fixture,
-      second: fixture,
-      workspace: fixture,
-    },
+  const registry: Record<string, typeof fixture> = {
+    fixture,
+    second: fixture,
+    workspace: fixture,
   };
+  return { resolveWidget: (kind: string) => registry[kind] };
 });
 
 function FixtureContent() {

@@ -19,6 +19,9 @@ export interface WidgetDefinition {
   readonly Provider?: ComponentType<PropsWithChildren>;
 }
 
+/** Finds the definition for a placement's kind; undefined shows the unsupported card. */
+export type WidgetResolver = (kind: string) => WidgetDefinition | undefined;
+
 /** Placement identity, card interaction and the one Host placement capability; Resources remain in React Query. */
 export interface WidgetContextValue {
   readonly placementId: string;

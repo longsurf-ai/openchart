@@ -6,10 +6,7 @@ import type { AppRouteContext } from "@openchart/app/app/route-context";
 import { DashboardView } from "@openchart/app/features/dashboard/components/dashboard-view";
 import { ChartSelectionProvider } from "@openchart/app/features/chart/components/selection-provider";
 import { DashboardHeader } from "./dashboard-header";
-import {
-  widgetCatalog,
-  widgetRegistry,
-} from "@openchart/app/app/widgets/widget-registry";
+import { resolveWidget } from "@openchart/app/app/widgets/widget-registry";
 
 /** Compose the URL-selected Dashboard without creating content on mount. @example <DashboardPage /> */
 export function DashboardPage() {
@@ -24,7 +21,7 @@ export function DashboardPage() {
       <DashboardView
         id={dashboardId}
         transport={transport}
-        registry={widgetRegistry}
+        registry={resolveWidget}
         missingAction={
           <Button variant="outline" asChild>
             <Link to="/app" replace>
@@ -37,10 +34,7 @@ export function DashboardPage() {
             dashboard={dashboard}
             transport={transport}
             disabled={disabled}
-            onAdd={(kind) => {
-              const { definition } = widgetCatalog[kind];
-              addWidget(definition);
-            }}
+            onAdd={addWidget}
           />
         )}
       />

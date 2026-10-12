@@ -37,7 +37,10 @@ const PdfPreview = lazy(() => import("./pdf-preview"));
 const isMarkdown = (path: string) => /\.(md|markdown)$/i.test(path);
 /** True for Workspace files edited as UTF-8 text; other files preview as bytes. Library (`tea-lib:`) paths are checked first by callers. @example isTextFile("rsi.tea"); */
 export const isTextFile = (path: string) =>
-  path.endsWith(".tea") || path.endsWith(".workflow.ts") || isMarkdown(path);
+  path.endsWith(".tea") ||
+  path.endsWith(".workflow.ts") ||
+  path.endsWith(".widget.tsx") ||
+  isMarkdown(path);
 export type FilePanelParams = {
   workspaceId: string;
   path: string;

@@ -35,6 +35,7 @@ export const assetMediaType = (path: string) => {
 const isTextPath = (value: string) =>
   value.endsWith(".tea") ||
   value.endsWith(".workflow.ts") ||
+  value.endsWith(".widget.tsx") ||
   /\.(md|markdown)$/i.test(value);
 
 /** Non-hidden relative path inside one registered directory, for files or folders. */
@@ -62,7 +63,7 @@ export const RelPath = RelativePath.check(
     (value) => isTextPath(value) || assetMediaType(value) !== undefined,
     {
       message:
-        "Expected a .tea, .workflow.ts, Markdown, PDF, image, audio or video path",
+        "Expected a .tea, .workflow.ts, .widget.tsx, Markdown, PDF, image, audio or video path",
     },
   ),
 ).pipe(Schema.brand("Workspace.RelPath"));

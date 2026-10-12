@@ -48,6 +48,7 @@ import {
   ProviderInit,
   QuotaUnavailable,
 } from "@openchart/server/models/errors";
+import { WidgetInvalid } from "@openchart/server/widget/errors";
 import {
   PatchRejected,
   ResourceNotFound,
@@ -314,6 +315,8 @@ export function failureFor(
       "workspace.io_failed",
       "Unable to access the workspace file.",
     );
+  if (cause instanceof WidgetInvalid)
+    return failure("BAD_REQUEST", "widget.invalid", cause.message);
   if (cause instanceof FeedError) {
     // The server-only cause (DatasetError, upstream response) is logged once here, never encoded.
     console.warn("Feed request failed", cause);

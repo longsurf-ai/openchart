@@ -32,6 +32,9 @@ test("copies generated Tea and host docs, removes stale files, and survives relo
   expect(await readFile(join(docs, "openchart/tea.md"), "utf8")).toContain(
     "resource_mutate",
   );
+  expect(await readFile(join(docs, "openchart/widget.md"), "utf8")).toContain(
+    "save_widget",
+  );
   expect(await readFile(join(docs, "tea-lib/ta.tea"), "utf8")).toBe(
     await readFile(join(source, "dist/tea-lib/ta.tea"), "utf8"),
   );

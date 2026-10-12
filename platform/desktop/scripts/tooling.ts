@@ -13,6 +13,7 @@ import { build, createServer, loadEnv, type Plugin, type Rollup } from "vite";
 import { z } from "zod";
 
 import { generateWorkflowTypes } from "@openchart/server/agent/workflow/generate-workflow-types";
+import { generateWidgetTypesInChild } from "@openchart/app/tooling/widget-types";
 import metadata from "@openchart/desktop/package.json" with { type: "json" };
 import { createRelease, releaseBaseUrl, signingIdentity } from "./release.ts";
 import { copyDocumentation } from "./documentation.ts";
@@ -162,6 +163,14 @@ async function buildBackend() {
           fileName: `.artifacts/workflow-types/${fileName}`,
           source: content,
         });
+      // The widget compiler reads these beside the bundle, like workflow types.
+      const widgets = await generateWidgetTypesInChild();
+      for (const { fileName, content } of widgets.files)
+        this.emitFile({
+          type: "asset",
+          fileName: `.artifacts/widget-types/${fileName}`,
+          source: content,
+        });
       for await (const file of glob("indicators/builtins/*.tea", {
         cwd: serverDirectory,
       }))
@@ -303,6 +312,9 @@ async function buildRenderer() {
     build: {
       outDir: join(staging, "renderer"),
       emptyOutDir: true,
+      // Gzip sizes mean nothing for a packaged app, and computing them after
+      // the bundle is written pushes the build past the default heap.
+      reportCompressedSize: false,
       rollupOptions: { onwarn },
     },
   });

@@ -1130,10 +1130,14 @@ const writableCases: Array<{
   },
 ];
 
-// Alert Rule uses its dedicated save tool tests because alertable is server-managed.
+// Alert Rule and Custom Widget use their dedicated save tool tests because their definitions are server-managed.
 test("every writable Resource has an Agent mutation rejection and recovery case", () => {
   expect(
-    [...writableCases.map(({ resource }) => resource), "alert_rule"].sort(),
+    [
+      ...writableCases.map(({ resource }) => resource),
+      "alert_rule",
+      "custom_widget",
+    ].sort(),
   ).toEqual(
     resources
       .filter((resource) => !resource.readOnly)

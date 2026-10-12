@@ -36,8 +36,10 @@ and it has no Resource envelope of its own. Each placement has one `wdg_` ID and
 
 The frontend `WidgetDefinition` statically declares the type, controls, components, and size constraints; the Host mounts that definition by placement ID.
 A widget can read several Resources and can also read workspace data through the backend; the two need not map one to one.
-We add no Widget Resource, generic Card Resource, second chart configuration, or arbitrary `settings: JSON`.
+We add no per-placement Widget Resource, generic Card Resource, second chart configuration, or arbitrary `settings: JSON`.
+The one widget-shaped Resource is `custom_widget`: like an Indicator, it stores checked code (a `.widget.tsx` snapshot), not placement settings.
 `kind` stays a non-empty string, and existing unknown kinds show an unsupported card; adding a new frontend presentation does not require changing a backend enum.
+Built-in kinds resolve from the static registry; `custom:<kind>` resolves to a saved custom widget whose code loads inside its card. See [custom widgets](custom-widget.md).
 
 Each Dashboard contains at most one widget of each kind. Placements carry no Resource reference.
 The Chart adapter queries the unique Chart by `dashboardId`; an absent Chart offers symbol selection and creates configuration only after that action. Watchlist selection remains local to its component.
@@ -197,6 +199,7 @@ It keeps the existing backend write and invalidation path, and for now adds no o
 
 Following the default behavior stated at implementation time, the page symbol entry point modifies the focused cell of the currently selected Chart widget and keeps that Chart's existing symbol linking rules.
 The Dashboard uses `ChartSelectionContext` to provide the current chart ID and the cell ID each chart remembers; it updates when a chart or its controls are clicked/focused, and hover does not switch the target.
+A custom widget that calls `useSymbol` becomes the target when clicked or focused, and focusing a chart cell clears it; with no Chart and no focus, the first placed one is the target; see [custom widgets](custom-widget.md#canonical-controls).
 The header and Grid read this single piece of frontend selection state, derive the first visible target on first display, and neither store a separate entity nor save focus to the backend.
 When the search dialog opens it captures the full `{chartId, cellId}`, and submit uses the captured chartId; later focus changes do not change the target of this operation.
 If the target is deleted, the Dashboard switches, the dialog closes; it does not fall back to another Chart or the first cell.

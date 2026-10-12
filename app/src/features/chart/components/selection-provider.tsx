@@ -10,15 +10,18 @@ export function ChartSelectionProvider({ children }: PropsWithChildren) {
   const [selection, setSelection] = useState<
     Pick<ChartSelectionContextValue, "activeChartId" | "focusedCells">
   >({ activeChartId: undefined, focusedCells: {} });
-  const focus = useCallback(
-    (chartId: string, cellId: string) =>
-      setSelection((previous) => ({
-        activeChartId: chartId,
-        focusedCells: { ...previous.focusedCells, [chartId]: cellId },
-      })),
-    [],
+  const [activeWidgetId, focusWidget] = useState<string>();
+  const focus = useCallback((chartId: string, cellId: string) => {
+    focusWidget(undefined);
+    setSelection((previous) => ({
+      activeChartId: chartId,
+      focusedCells: { ...previous.focusedCells, [chartId]: cellId },
+    }));
+  }, []);
+  const value = useMemo(
+    () => ({ ...selection, focus, activeWidgetId, focusWidget }),
+    [selection, focus, activeWidgetId],
   );
-  const value = useMemo(() => ({ ...selection, focus }), [selection, focus]);
   return (
     <ChartSelectionContext.Provider value={value}>
       {children}

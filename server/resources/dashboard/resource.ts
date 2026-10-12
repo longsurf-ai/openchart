@@ -27,7 +27,7 @@ export {
 export const dashboardResource = defineResource({
   name: "dashboard",
   description:
-    "A saved dashboard with a name, favorite status, and widget placements. Each placement specifies a widget kind, an optional Resource reference, and its position and size on the dashboard. Chart contents are stored in separate Chart Resources.",
+    "A saved dashboard with a name, favorite status, and widget placements. Each placement is {id: 'wdg_…', kind, layout: {x, y, w, h}} in a 12-column grid, and each kind appears at most once. Built-in kinds are chart, workspace and watchlist; saved custom widgets use custom:<kind>. Chart contents are stored in separate Chart Resources.",
   entity: DashboardEntity,
   store: dashboardStore,
 });

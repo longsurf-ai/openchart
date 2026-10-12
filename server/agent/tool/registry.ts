@@ -10,6 +10,7 @@ import { ReadTranscriptTool } from "@openchart/server/agent/tool/tools/read-tran
 import { SearchTranscriptTool } from "@openchart/server/agent/tool/tools/search-transcript";
 import { CreateScheduleTool } from "@openchart/server/agent/tool/tools/create-schedule";
 import { SaveAlertRuleTool } from "@openchart/server/agent/tool/tools/save-alert-rule";
+import { SaveWidgetTool } from "@openchart/server/agent/tool/tools/save-widget";
 import { SymbologySearchTool } from "@openchart/server/agent/tool/tools/symbology-search";
 import { PublishPostTool } from "@openchart/server/agent/tool/tools/publish-post";
 import { MarketDataTool } from "@openchart/server/agent/tool/tools/market-data";
@@ -30,6 +31,7 @@ const builtin = {
   search_transcript: SearchTranscriptTool,
   create_schedule: CreateScheduleTool,
   save_alert_rule: SaveAlertRuleTool,
+  save_widget: SaveWidgetTool,
   symbology_search: SymbologySearchTool,
   publish_post: PublishPostTool,
   market_data: MarketDataTool,

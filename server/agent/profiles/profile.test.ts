@@ -75,6 +75,9 @@ test("provides the three OpenChart profiles without models, tools, or Permission
         expect(
           evaluate("save_alert_rule", "alert_rule", info.permission).decision,
         ).toBe(info.name === "analyst" ? "allow" : "deny");
+        expect(
+          evaluate("save_widget", "custom_widget", info.permission).decision,
+        ).toBe(info.name === "analyst" ? "allow" : "deny");
         expect(evaluate("run_command", "*", info.permission).decision).toBe(
           "deny",
         );

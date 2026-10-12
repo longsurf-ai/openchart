@@ -9,6 +9,7 @@ import "@codingame/monaco-vscode-standalone-languages";
 import * as typescript from "@codingame/monaco-vscode-standalone-typescript-language-features";
 import { whenReady as typescriptGrammarReady } from "@codingame/monaco-vscode-typescript-basics-default-extension";
 import grammar from "@openchart/tea-editor/syntaxes/tea.tmLanguage.json?url";
+import widgetTypes from "virtual:widget-types";
 import workflowTypes from "virtual:workflow-types";
 import configuration from "@openchart/tea-editor/language-configuration.json?url";
 import { toast } from "sonner";
@@ -80,9 +81,17 @@ export const monacoReady = new MonacoVscodeApiWrapper({
       moduleResolution: typescript.ModuleResolutionKind.NodeJs,
       strict: true,
       noEmit: true,
-      paths: { "@openchart/workflow": [workflowTypes.entry] },
+      // `.widget.tsx` files use the React JSX runtime and the widget SDK's modules.
+      jsx: typescript.JsxEmit.ReactJSX,
+      paths: {
+        "@openchart/workflow": [workflowTypes.entry],
+        ...widgetTypes.paths,
+      },
     });
-    typescript.typescriptDefaults.setExtraLibs(workflowTypes.files);
+    typescript.typescriptDefaults.setExtraLibs([
+      ...workflowTypes.files,
+      ...widgetTypes.files,
+    ]);
   });
 
 void monacoReady.catch((cause: unknown) => {

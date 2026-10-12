@@ -2,7 +2,7 @@
 
 - `dashboard-page.tsx` binds route ID and transport to the Dashboard feature,
   ChartSelectionProvider and registry. Mounting creates no Resources.
-- `dashboard-header.tsx` composes PageHeader, the selected Chart symbol and one
+- `dashboard-header.tsx` composes PageHeader, the symbol of the selected Chart or `useSymbol` custom widget and one
   Widgets dropdown from `app/widgets`. The widget catalog and render registry live
   there; feature grid/host components receive the registry through props.
   `selected-chart.ts` queries the unique Chart by dashboardId while its widget is placed

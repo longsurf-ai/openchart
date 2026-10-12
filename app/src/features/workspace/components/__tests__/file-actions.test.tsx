@@ -20,7 +20,10 @@ import {
 } from "@openchart/app/features/workspace/components/file-panel/file-panel";
 
 const rpc = vi.hoisted(() => ({
-  resources: { workspace: { get: { query: vi.fn() } } },
+  resources: {
+    workspace: { get: { query: vi.fn() } },
+    custom_widget: { save: { mutate: vi.fn() } },
+  },
   workspace: {
     read: { query: vi.fn() },
     write: { mutate: vi.fn() },
@@ -331,5 +334,26 @@ test("only a .tea tab offers the Tea reference", async () => {
   expect(
     screen.queryByRole("button", { name: "Tea reference" }),
   ).not.toBeInTheDocument();
+  cleanup();
+});
+
+test("Publish saves the draft, then makes the widget file live", async () => {
+  const path = "widgets/rates.widget.tsx";
+  const { cleanup } = setup(path);
+  fireEvent.change(await screen.findByRole("textbox", { name: "Code" }), {
+    target: { value: "draft" },
+  });
+  rpc.workspace.write.mutate.mockResolvedValue(disk("draft", path).entry);
+  rpc.workspace.read.query.mockResolvedValue(disk("draft", path));
+  rpc.resources.custom_widget.save.mutate.mockResolvedValue({ title: "Rates" });
+  fireEvent.click(screen.getByRole("button", { name: "Publish widget" }));
+  expect(await screen.findByText("Published Rates")).toBeInTheDocument();
+  expect(rpc.workspace.write.mutate).toHaveBeenCalledOnce();
+  expect(
+    rpc.resources.custom_widget.save.mutate,
+  ).toHaveBeenCalledExactlyOnceWith({ workspaceId: "wsp_test", path });
+  expect(rpc.workspace.write.mutate.mock.invocationCallOrder[0]).toBeLessThan(
+    rpc.resources.custom_widget.save.mutate.mock.invocationCallOrder[0]!,
+  );
   cleanup();
 });

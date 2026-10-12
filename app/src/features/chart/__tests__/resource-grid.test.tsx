@@ -178,6 +178,8 @@ function TestGrid({
           activeChartId: resource.id,
           focusedCells,
           focus: (chartId, cellId) => setFocusedCells({ [chartId]: cellId }),
+          activeWidgetId: undefined,
+          focusWidget: () => {},
         }}
       >
         <ChartGridProvider chartId={resource.id} transport={transport}>

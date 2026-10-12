@@ -122,7 +122,13 @@ function setup() {
   ) => (
     <QueryClientProvider client={client}>
       <ChartSelectionContext.Provider
-        value={{ activeChartId: undefined, focusedCells: {}, focus }}
+        value={{
+          activeChartId: undefined,
+          focusedCells: {},
+          focus,
+          activeWidgetId: undefined,
+          focusWidget: vi.fn(),
+        }}
       >
         <WidgetContext.Provider
           value={{

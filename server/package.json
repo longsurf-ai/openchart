@@ -89,6 +89,8 @@
     "./resources/alert-event/*": "./resources/alert-event/*.ts",
     "./resources/trigger/*": "./resources/trigger/*.ts",
     "./resources/post/*": "./resources/post/*.ts",
+    "./resources/custom-widget/*": "./resources/custom-widget/*.ts",
+    "./widget/*": "./widget/*.ts",
     "./notification/config": "./notification/config.ts",
     "./data/dataset": "./data/dataset/index.ts",
     "./data/providers/local": "./data/providers/local/index.ts",

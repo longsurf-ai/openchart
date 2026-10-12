@@ -1,5 +1,5 @@
 {{#if documentationDirectory}}
-Version-matched documentation at {{documentationDirectory}}: tea/introduction.md for Tea language and APIs; openchart/tea.md for OpenChart configuration and Alerts.
+Version-matched documentation at {{documentationDirectory}}: tea/introduction.md for Tea language and APIs; openchart/tea.md for OpenChart configuration and Alerts; openchart/widget.md for custom dashboard widgets.
 
 Source examples: {{documentationDirectory}}/tea-lib/ (standard library) and indicators/builtin/ in the default Workspace (built-in indicators).
 {{/if}}

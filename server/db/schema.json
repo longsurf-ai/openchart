@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "c085b3d1-bb61-43b3-b572-3e4bc606b4de",
-  "prevIds": ["075f6a43-7fc1-4954-91ea-e03f767adefc"],
+  "id": "d454657d-b98f-4625-96bb-69372f09447e",
+  "prevIds": ["c085b3d1-bb61-43b3-b572-3e4bc606b4de"],
   "ddl": [
     {
       "name": "agent_permission_grants",
@@ -78,6 +78,10 @@
     },
     {
       "name": "chart",
+      "entityType": "tables"
+    },
+    {
+      "name": "custom_widget",
       "entityType": "tables"
     },
     {
@@ -1426,6 +1430,96 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "(CAST(unixepoch('subsec') * 1000 AS INTEGER))",
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "workspace_id",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "path",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snapshot",
+      "entityType": "columns",
+      "table": "custom_widget"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
       "table": "dashboard"
     },
     {
@@ -2672,6 +2766,13 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
+      "name": "custom_widget_pk",
+      "table": "custom_widget",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
       "name": "dashboard_pk",
       "table": "dashboard",
       "entityType": "pks"
@@ -3430,6 +3531,13 @@
       "table": "chart_series"
     },
     {
+      "columns": ["kind"],
+      "nameExplicit": true,
+      "name": "custom_widget_kind_unique",
+      "entityType": "uniques",
+      "table": "custom_widget"
+    },
+    {
       "columns": ["dashboard_id", "position"],
       "nameExplicit": true,
       "name": "dashboard_widget_position_unique",
@@ -3823,6 +3931,54 @@
       "name": "chart_preset_check",
       "entityType": "checks",
       "table": "chart"
+    },
+    {
+      "value": "\"id\" IS NOT NULL",
+      "name": "custom_widget_id_check",
+      "entityType": "checks",
+      "table": "custom_widget"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "custom_widget_revision_check",
+      "entityType": "checks",
+      "table": "custom_widget"
+    },
+    {
+      "value": "\"created_at\" >= 0",
+      "name": "custom_widget_created_at_check",
+      "entityType": "checks",
+      "table": "custom_widget"
+    },
+    {
+      "value": "\"updated_at\" >= 0",
+      "name": "custom_widget_updated_at_check",
+      "entityType": "checks",
+      "table": "custom_widget"
+    },
+    {
+      "value": "length(\"kind\") BETWEEN 1 AND 64 AND \"kind\" GLOB '[a-z]*' AND \"kind\" NOT GLOB '*[^a-z0-9-]*'",
+      "name": "custom_widget_kind_check",
+      "entityType": "checks",
+      "table": "custom_widget"
+    },
+    {
+      "value": "length(trim(\"title\")) > 0 AND length(\"title\") <= 80",
+      "name": "custom_widget_title_check",
+      "entityType": "checks",
+      "table": "custom_widget"
+    },
+    {
+      "value": "length(\"workspace_id\") > 0",
+      "name": "custom_widget_workspace_check",
+      "entityType": "checks",
+      "table": "custom_widget"
+    },
+    {
+      "value": "substr(\"path\", -11) = '.widget.tsx'",
+      "name": "custom_widget_path_check",
+      "entityType": "checks",
+      "table": "custom_widget"
     },
     {
       "value": "\"id\" IS NOT NULL",

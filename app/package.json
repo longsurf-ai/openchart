@@ -29,7 +29,8 @@
     "./hooks/use-datafeed": "./src/hooks/use-datafeed.ts",
     "./hooks/use-symbology": "./src/hooks/use-symbology.ts",
     "./hooks/use-calendar": "./src/hooks/use-calendar.ts",
-    "./chart": "./src/lib/chart/core.tsx"
+    "./chart": "./src/lib/chart/core.tsx",
+    "./tooling/widget-types": "./tooling/widget-types.ts"
   },
   "scripts": {
     "check": "npm run lint && npm run format && npm run check-types && npm test",
@@ -150,7 +151,10 @@
     "unist-util-visit-parents": "6.0.2",
     "@headless-tree/core": "1.7.0",
     "@headless-tree/react": "1.7.0",
-    "fast-json-patch": "^3.1.1"
+    "fast-json-patch": "^3.1.1",
+    "vega": "6.4.0",
+    "vega-lite": "6.4.3",
+    "vega-embed": "7.3.0"
   },
   "devDependencies": {
     "apache-arrow": "21.2.0",

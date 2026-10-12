@@ -98,6 +98,8 @@ it("lets the empty grid retry a failed save and closes its picker only after com
               activeChartId: resource.id,
               focusedCells: {},
               focus: vi.fn(),
+              activeWidgetId: undefined,
+              focusWidget: vi.fn(),
             }}
           >
             <ChartGridProvider chartId={resource.id} transport={transport}>

@@ -53,6 +53,7 @@ openchart/
     trigger/                  subscribes to bus events, renders templates, invokes notification or agent targets
     notification/             host-supplied notify capability; no Resource and no state
     proactive/                offers before the user asks (prompt suggestions); not Agent-specific
+    widget/                   custom widget checks and transpiling
     access/                   account and provider access services
       router.ts               aggregate accessRouter mounted under access
       auth/                   local account login and session

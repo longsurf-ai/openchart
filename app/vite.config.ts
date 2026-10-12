@@ -7,6 +7,7 @@ import importMetaUrlPlugin from "@codingame/esbuild-import-meta-url-plugin";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import viteTsconfigPaths from "vite-tsconfig-paths";
+import { widgetTypes } from "./tooling/widget-types";
 import { workflowTypes } from "./tooling/workflow-types";
 
 export default defineConfig({
@@ -16,6 +17,7 @@ export default defineConfig({
     react(),
     viteTsconfigPaths({ projects: ["../tsconfig.json"] }),
     workflowTypes(),
+    widgetTypes(),
   ],
   worker: { format: "es" },
   resolve: {

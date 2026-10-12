@@ -5,6 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import type { ProviderListing } from "@openchart/market";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -31,6 +32,42 @@ import { SymbolPicker } from "./symbol-picker";
 export function targetCell(chart: ChartResource, cellId?: string) {
   const visible = chart.cells.slice(0, getGridPreset(chart.preset).capacity);
   return visible.find((cell) => cell.id === cellId) ?? visible[0];
+}
+
+/** The page header's one symbol entry, shared by charts and custom widgets so every target looks the same. `label` names the action when no listing is chosen. @example <SymbolButton listing={source} label="Choose a chart symbol" onClick={open} /> */
+export function SymbolButton({
+  listing,
+  label,
+  disabled,
+  onClick,
+}: {
+  listing: ProviderListing | undefined;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="min-w-0 max-w-64 shrink rounded-md px-2.5"
+      disabled={disabled}
+      aria-label={
+        listing ? `Symbol ${listing.listing.symbol}. Change symbol` : label
+      }
+      onClick={onClick}
+    >
+      <Search className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="truncate font-semibold">
+        {listing?.listing.symbol ?? "Symbol"}
+      </span>
+      {listing?.listing.name ? (
+        <span className="hidden truncate font-normal text-muted-foreground md:inline">
+          {listing.listing.name}
+        </span>
+      ) : null}
+    </Button>
+  );
 }
 
 /** Save a captured chart/cell target; changing focus never retargets an open picker. @example <SymbolControl dashboardId={dashboardId} chartId={chartId} cellId={cellId} transport={transport} /> */
@@ -62,30 +99,14 @@ export function SymbolControl({
   }, [target, dashboard.isSuccess, charts.isSuccess, targetStillPlaced]);
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        className="min-w-0 max-w-64 shrink rounded-md px-2.5"
+      <SymbolButton
+        listing={source}
         disabled={!cell || busy}
-        aria-label={
-          source
-            ? `Symbol ${source.listing.symbol}. Change symbol`
-            : "Choose a chart symbol"
-        }
+        label="Choose a chart symbol"
         onClick={() => {
           if (cell) setTarget({ chartId, cellId: cell.id });
         }}
-      >
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate font-semibold">
-          {source?.listing.symbol ?? "Symbol"}
-        </span>
-        {source?.listing.name ? (
-          <span className="hidden truncate font-normal text-muted-foreground md:inline">
-            {source.listing.name}
-          </span>
-        ) : null}
-      </Button>
+      />
       <ResourceNotice error={query.error} />
       {target && targetStillPlaced ? (
         <CapturedSymbolPicker

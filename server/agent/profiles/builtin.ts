@@ -49,6 +49,7 @@ export function registerBuiltins(
       { action: "search_transcript", resource: "*", decision: "allow" },
       { action: "create_schedule", resource: "*", decision: "allow" },
       { action: "save_alert_rule", resource: "alert_rule", decision: "allow" },
+      { action: "save_widget", resource: "custom_widget", decision: "allow" },
       { action: "symbology_search", resource: "*", decision: "allow" },
       { action: "publish_post", resource: "post", decision: "allow" },
       { action: "market_data", resource: "*", decision: "allow" },

@@ -35,7 +35,7 @@ export default function CodeEditor({
           language={
             path.endsWith(".tea")
               ? "tea"
-              : path.endsWith(".ts")
+              : /\.tsx?$/.test(path)
                 ? "typescript"
                 : /\.(md|markdown)$/i.test(path)
                   ? "markdown"

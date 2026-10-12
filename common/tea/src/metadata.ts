@@ -122,7 +122,8 @@ const ArrowTypeJson = Schema.Union([
 // One Arrow field as JSON, written out by hand because a field contains fields
 // (through `children`). The JSON shapes here are `type`s, not `interface`s, so
 // they pass where `Schema.Json` is expected, such as a stored Resource.
-type ArrowFieldJson = {
+// Exported so declaration bundles (the widget SDK) can name it.
+export type ArrowFieldJson = {
   readonly name: string;
   readonly nullable: boolean;
   readonly type: typeof ArrowTypeJson.Type;

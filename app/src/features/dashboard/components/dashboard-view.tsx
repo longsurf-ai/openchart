@@ -23,7 +23,10 @@ import {
 
 import { DashboardGrid } from "./dashboard-grid";
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
-import type { WidgetDefinition } from "@openchart/app/lib/widget/widget";
+import type {
+  WidgetDefinition,
+  WidgetResolver,
+} from "@openchart/app/lib/widget/widget";
 
 /** Own Dashboard reads, placement edits and recovery; app supplies only feature composition. @example <DashboardView id={id} transport={transport} registry={registry} renderHeader={header} /> */
 export function DashboardView({
@@ -35,7 +38,7 @@ export function DashboardView({
 }: {
   id: string;
   transport: AppTransport;
-  registry: Readonly<Record<string, WidgetDefinition | undefined>>;
+  registry: WidgetResolver;
   /** App-owned navigation shown when the Dashboard no longer exists. */
   missingAction?: ReactNode;
   renderHeader: (
