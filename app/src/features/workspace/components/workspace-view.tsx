@@ -367,19 +367,24 @@ function WorkspaceContents({
   const move = (entry: TreeEntry, to: string) => {
     if (!workspace || !canMove(entry)) return;
     const owner = workspace.id;
+    // Tabs under the entry stay read-only while it moves, so no draft starts
+    // at a path that is about to disappear; then each follows its file.
+    for (const panel of tabsWithin(owner, entry))
+      panel.api.updateParameters({ moving: true });
     mutations.move.mutate(
       { from: entry.path, to },
       {
-        // Clean tabs follow their file to its new path; one edited while the
-        // move ran keeps its draft open at the old path.
         onSuccess: () => {
           for (const panel of tabsWithin(owner, entry)) {
-            const { path, dirty, saving } = panel.params as FilePanelParams;
-            if (dirty || saving) continue;
+            const { path } = panel.params as FilePanelParams;
             panel.api.close();
             if (api)
               openWorkspaceFile(api, owner, to + path.slice(entry.path.length));
           }
+        },
+        onError: () => {
+          for (const panel of tabsWithin(owner, entry))
+            panel.api.updateParameters({ moving: false });
         },
       },
     );

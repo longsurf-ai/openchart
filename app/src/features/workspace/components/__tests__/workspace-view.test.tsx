@@ -55,7 +55,11 @@ type Panel = {
     dirty?: boolean;
     saving?: boolean;
   };
-  api: { close: () => void; setActive: () => void };
+  api: {
+    close: () => void;
+    setActive: () => void;
+    updateParameters: (next: { moving: boolean }) => void;
+  };
 };
 const api = vi.hoisted(() => ({
   panels: [] as Panel[],
@@ -229,6 +233,7 @@ function openPanel(workspaceId: string, path: string, dirty = true) {
         api.panels.splice(api.panels.indexOf(panel), 1);
       }),
       setActive: vi.fn(),
+      updateParameters: vi.fn(),
     },
   };
   api.panels.push(panel);
@@ -727,10 +732,10 @@ test("renaming moves a file and its clean tab follows; dirty tabs block it", asy
   ).toHaveAttribute("aria-disabled", "true");
 });
 
-test("a tab edited while its move runs stays at the old path; clean tabs follow", async () => {
+test("tabs under a moving folder are read-only until it moves, then reopen at the new path", async () => {
   const { user } = setup(["src"]);
-  const edited = openPanel(defaultWorkspace.id, "src/main.tea", false);
-  const clean = openPanel(defaultWorkspace.id, "src/other.tea", false);
+  const inside = openPanel(defaultWorkspace.id, "src/main.tea", false);
+  const outside = openPanel(defaultWorkspace.id, "other.tea", false);
   let finish!: () => void;
   rpc.workspace.rename.mutate.mockReturnValue(
     new Promise<void>((resolve) => {
@@ -745,15 +750,19 @@ test("a tab edited while its move runs stays at the old path; clean tabs follow"
   await user.clear(input);
   await user.type(input, "lib{Enter}");
   await waitFor(() => expect(rpc.workspace.rename.mutate).toHaveBeenCalled());
-  edited.params.dirty = true;
+  expect(inside.api.updateParameters).toHaveBeenCalledExactlyOnceWith({
+    moving: true,
+  });
+  expect(inside.api.close).not.toHaveBeenCalled();
+  expect(outside.api.updateParameters).not.toHaveBeenCalled();
   await act(async () => finish());
-  await waitFor(() => expect(clean.api.close).toHaveBeenCalledOnce());
-  expect(edited.api.close).not.toHaveBeenCalled();
+  await waitFor(() => expect(inside.api.close).toHaveBeenCalledOnce());
   expect(api.addPanel).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
-      params: { workspaceId: defaultWorkspace.id, path: "lib/other.tea" },
+      params: { workspaceId: defaultWorkspace.id, path: "lib/main.tea" },
     }),
   );
+  expect(outside.api.close).not.toHaveBeenCalled();
 });
 
 test("the switcher reveals the workspace folder in Finder", async () => {

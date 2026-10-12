@@ -64,6 +64,8 @@ export type FilePanelParams = {
   path: string;
   dirty?: boolean;
   saving?: boolean;
+  /** True while the view moves this file; the editor is read-only until the tab reopens at its new path. */
+  moving?: boolean;
 };
 
 /** Opens or activates a file in the containing view's existing Dockview group. @example openWorkspaceFile(api, "wsp_test", "rsi.tea"); */
@@ -296,7 +298,7 @@ function TextPanel({
     },
   });
   const { write } = useWorkspaceFileMutations(transport, workspaceId);
-  const readOnly = query.data?.readOnly ?? true;
+  const readOnly = (query.data?.readOnly ?? true) || !!params.moving;
   const [buffer, setBuffer] = useState<{
     text: string;
     base: { text: string; hash: string };
