@@ -32,8 +32,16 @@ export default function CodeEditor({
           height="100%"
           path={path}
           keepCurrentModel={path.endsWith(".tea")}
-          // Monaco infers every other language from the model path's extension.
-          language={path.endsWith(".tea") ? "tea" : undefined}
+          // Monaco infers every other language from the model path's extension,
+          // but `.tsx` infers typescriptreact, which its TypeScript service never
+          // checks; custom widgets need that service for their SDK types.
+          language={
+            path.endsWith(".tea")
+              ? "tea"
+              : path.endsWith(".widget.tsx")
+                ? "typescript"
+                : undefined
+          }
           value={value}
           onMount={(editor) => {
             editor.focus();

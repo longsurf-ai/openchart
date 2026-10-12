@@ -20,7 +20,7 @@ const compactionPrompt = compilePrompt({
 /**
  * Contributes OpenChart's built-in definitions to the registry draft.
  * Analyst describes the implemented V2 tools and shared Resource catalog.
- * Analyst allows the listed tools except Task, which requires approval.
+ * Analyst allows every listed built-in tool, Task included.
  * Other profiles deny tools.
  * Per-request tool execution bindings remain caller-owned.
  * @example

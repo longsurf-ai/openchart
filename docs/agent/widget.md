@@ -51,7 +51,8 @@ Use the app's theme variables so light and dark themes both work, for example
 `var(--foreground)`, `var(--muted-foreground)`, `var(--border)`, `var(--card)`,
 `var(--up)`, `var(--down)` and `var(--chart-1)` to `var(--chart-5)`. Canvas
 renderers such as Vega need resolved colors: read them with
-`getComputedStyle(element).getPropertyValue("--foreground")`.
+`getComputedStyle(element).getPropertyValue("--foreground")`. A canvas keeps
+the colors it was drawn with, so a theme switch shows once the widget redraws.
 
 ## SDK (`@openchart/widget`)
 
@@ -59,7 +60,8 @@ renderers such as Vega need resolved colors: read them with
 - `useSymbol()`: a widget that shows one listing calls this for the listing the
   user chose with the dashboard's symbol control (top left of the page;
   clicking the widget makes it the control's target). It returns undefined
-  until then, so show a short hint pointing there. Never render a symbol picker
+  until then, so show a short hint: click this widget, then choose a symbol at
+  the top left. Never render a symbol picker
   or search of your own. Other controls, such as a timeframe toggle, may live
   inside the widget.
 - `useBarsCapabilities(listing)`: a query whose `data` lists the
@@ -97,9 +99,11 @@ what your own effects create.
    per dashboard.
 3. Saving the same file again updates every placement of that widget. Saving a
    different file with the same `kind` is refused; to move the kind to that
-   file, delete the old `custom_widget`, then save again. Changing a file's
+   file, including after renaming or moving it, delete the old
+   `custom_widget`, then save again. Changing a file's
    `kind` saves a new widget; delete the old `custom_widget` when it is no
    longer needed.
 
 Removing a placement keeps the widget. Deleting the `custom_widget` Resource
-removes it everywhere and keeps its file.
+stops it everywhere and keeps its file; its placements show a notice until you
+remove them from each dashboard's `widgets` or save the kind again.

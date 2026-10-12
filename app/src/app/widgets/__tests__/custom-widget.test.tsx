@@ -1,4 +1,4 @@
-// Purpose: Verify saved widget code runs against the module table, remounts per revision, keeps failures in its card and takes its symbol from the Dashboard header.
+// Purpose: Verify saved widget code runs against the module table, remounts per revision, keeps failures in its card and takes its symbol from the Dashboard header, which it shares with the chart.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,6 +12,7 @@ import {
 } from "@openchart/app/app/widgets/custom/custom-widget";
 import * as sdk from "@openchart/app/app/widgets/custom/sdk";
 import { ChartSelectionProvider } from "@openchart/app/features/chart/components/selection-provider";
+import { useChartSelection } from "@openchart/app/hooks/use-chart-selection";
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { WidgetContext } from "@openchart/app/lib/widget/widget";
@@ -22,6 +23,18 @@ vi.mock("@openchart/app/app/page-header", () => ({
   PageHeader: ({ children }: PropsWithChildren) => <header>{children}</header>,
 }));
 vi.mock("vega-embed", () => ({ default: vi.fn() }));
+// The chart's own control reads Chart Resources; these tests only need to see it is the target.
+vi.mock(
+  "@openchart/app/features/chart/components/symbol-control",
+  async (original) => ({
+    ...(await original<
+      typeof import("@openchart/app/features/chart/components/symbol-control")
+    >()),
+    SymbolControl: ({ chartId }: { chartId: string }) => (
+      <button>Chart {chartId}</button>
+    ),
+  }),
+);
 // The real picker searches Feed; this one offers one listing.
 vi.mock("@openchart/app/features/chart/components/symbol-picker", () => ({
   SymbolPicker: ({
@@ -62,7 +75,7 @@ test("serves exactly the specifiers the server checks against, all documented", 
   const undocumented = [
     ...Object.keys(widgetModules),
     ...Object.keys(sdk),
-  ].filter((name) => !guide.includes(`\`${name}`));
+  ].filter((name) => !new RegExp(`\`${name}[\`(]`).test(guide));
   expect(undocumented).toEqual([]);
 });
 
@@ -75,7 +88,19 @@ test("rejects modules outside the module table and exports that are not widgets"
   ).rejects.toThrow("default-export defineWidget");
 });
 
-function setup(code: string | null = counter("Clicks"), dashboard?: Dashboard) {
+// Stands in for a chart cell taking focus, which hands the header back to the chart.
+function FocusChart() {
+  const { focus } = useChartSelection();
+  return (
+    <button onClick={() => focus("cht_test", "ccl_test")}>Focus chart</button>
+  );
+}
+
+function setup(
+  code: string | null = counter("Clicks"),
+  dashboard?: Dashboard,
+  charts: { id: string }[] = [],
+) {
   let compiled = code === null ? null : { revision: 1, code };
   // The header's Widgets menu lists saved widgets on mount and its rows read
   // `source.path`, while the card reads only `compiled`.
@@ -87,6 +112,9 @@ function setup(code: string | null = counter("Clicks"), dashboard?: Dashboard) {
           list: { query: vi.fn(async () => ({ items: [], cursor: null })) },
           compiled: { query: vi.fn(async () => compiled) },
         },
+        chart: {
+          list: { query: vi.fn(async () => ({ items: charts, cursor: null })) },
+        },
       },
     },
   } as unknown as AppTransport;
@@ -97,6 +125,7 @@ function setup(code: string | null = counter("Clicks"), dashboard?: Dashboard) {
   render(
     <QueryClientProvider client={client}>
       <ChartSelectionProvider>
+        <FocusChart />
         {dashboard ? (
           <DashboardHeader
             dashboard={dashboard}
@@ -197,5 +226,44 @@ test("the Dashboard header's symbol control chooses a custom widget's symbol", a
   expect(await screen.findByText("Showing AAPL")).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "Symbol AAPL. Change symbol" }),
+  ).toBeInTheDocument();
+});
+
+test("the header targets the chart until a symbol widget is clicked, and a focused chart cell takes it back", async () => {
+  const user = userEvent.setup();
+  setup(
+    symbolReader,
+    {
+      id: "dsh_test" as Dashboard["id"],
+      name: "Research",
+      favorite: false,
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      widgets: [
+        {
+          id: "wdg_chart" as Dashboard["widgets"][number]["id"],
+          kind: "chart",
+          layout: { x: 0, y: 0, w: 6, h: 12 },
+        },
+        {
+          id: "wdg_custom" as Dashboard["widgets"][number]["id"],
+          kind: "custom:counter",
+          layout: { x: 6, y: 0, w: 6, h: 12 },
+        },
+      ],
+    },
+    [{ id: "cht_test" }],
+  );
+  expect(
+    await screen.findByRole("button", { name: "Chart cht_test" }),
+  ).toBeInTheDocument();
+  await user.click(await screen.findByText("No symbol yet"));
+  expect(
+    await screen.findByRole("button", { name: "Choose a widget symbol" }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Focus chart" }));
+  expect(
+    await screen.findByRole("button", { name: "Chart cht_test" }),
   ).toBeInTheDocument();
 });

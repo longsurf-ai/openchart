@@ -38,7 +38,7 @@ function countReader(placementId: string, delta: 1 | -1) {
  * at the top left of the page, never a picker inside the widget. Clicking or
  * focusing a widget that calls this makes it the control's target, as clicking
  * a chart does. Undefined until the user chooses one; remembered per placement.
- * @example const listing = useSymbol(); if (!listing) return <p>Choose a symbol at the top left.</p>;
+ * @example const listing = useSymbol(); if (!listing) return <p>Click here, then choose a symbol at the top left.</p>;
  */
 export function useSymbol(): ProviderListing | undefined {
   const { placementId } = useWidget();

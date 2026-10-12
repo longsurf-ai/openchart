@@ -33,14 +33,14 @@ SQLite, settings.json, and credential.key all belong to the OpenChart home, and 
 
 ## 2. Concepts and reused implementation
 
-| Term               | Definition                                                                               | Owner                                       |
-| ------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Home               | The profile directory of one backend. Also holds workspaces created without a given root | `home` option of `runtime.ts`               |
-| Workspace Resource | `{id, root}` plus the existing Resource envelope                                         | `server/resources/workspace/`               |
-| Workspaces         | Observes registrations, and gets and releases runtime instances by ID                    | `server/workspace/workspace.ts`             |
-| Workspace instance | On-demand queries, observation, and file operations under a fixed `{workspaceId, root}`  | `server/workspace/instance.ts`              |
-| Entry              | `{path, hash}`. File contents are not cached                                             | Workspace instance                          |
-| Artifact           | Text source or previewable media file                                                    | `RelPath` in `server/workspace/contract.ts` |
+| Term               | Definition                                                                                    | Owner                                       |
+| ------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Home               | The profile directory of one backend. Also holds workspaces created without a given root      | `home` option of `runtime.ts`               |
+| Workspace Resource | `{id, root}` plus the existing Resource envelope                                              | `server/resources/workspace/`               |
+| Workspaces         | Observes registrations, and gets and releases runtime instances by ID                         | `server/workspace/workspace.ts`             |
+| Workspace instance | On-demand queries, observation, and file operations under a fixed `{workspaceId, root}`       | `server/workspace/instance.ts`              |
+| Entry              | `{path, hash}`. File contents are not cached                                                  | Workspace instance                          |
+| Artifact           | `.tea` / `.workflow.ts` / `.md` / `.markdown` text, plus PDF, PNG, JPEG, GIF, WebP, AVIF, SVG | `RelPath` in `server/workspace/contract.ts` |
 
 Reuses the current Effect `4.0.0-rc.112` and existing OpenChart mechanisms:
 
@@ -148,7 +148,7 @@ type Snapshot =
 - `listDirectory(path)` enumerates only the direct children of that directory; `""` means root. File entries have only `{path}`. Directories include empty ones. It reads no file bodies and computes no hashes.
 - `listTree` is a bounded recursive metadata query. It returns a flat list of file and directory paths, including unexpanded directories. Consumers that need a global list or file name search filter on the frontend. It sets up no watching, and keeps no persistent or background index.
 - `read(path)` always reads disk, computes SHA-256 over the same bytes, and returns `{entry, mediaType, base64, readOnly}`. Only body reads and CAS need the hash. mtime/size never replaces the hash.
-- `write` accepts only the text paths `WriteInput` allows; Markdown extensions are case-insensitive. Media keeps a 32 MiB limit.
+- `write` accepts only `.tea` / `.workflow.ts` / `.md` / `.markdown` text. Markdown extensions are case-insensitive. Media keeps a 32 MiB limit.
 - A missing directory returns missing. Enumeration or permission errors return unavailable. One unreadable file does not block the directory from showing, and does not make saving other files fail.
 
 ### 5.2 Observation and recovery

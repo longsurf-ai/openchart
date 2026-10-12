@@ -5,6 +5,7 @@ import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { ErrorBoundary } from "react-error-boundary";
 
+import { ResourceNotice } from "@openchart/app/features/chart/components/resource-notice";
 import { useWidget } from "@openchart/app/hooks/use-widget";
 import { ChartSelectionContext } from "@openchart/app/lib/chart/selection";
 import { customWidgetCode } from "@openchart/app/lib/resource/custom-widget";
@@ -108,8 +109,19 @@ function CustomWidgetContent({ kind }: { kind: string }) {
         placement.
       </Status>
     );
-  if (code.error ?? widget.error)
-    return <Failure error={code.error ?? widget.error} />;
+  // Query toasts load failures; a failed refetch keeps the last good revision.
+  if (code.data === undefined)
+    return code.error ? (
+      <div className="p-4">
+        <ResourceNotice
+          error={code.error}
+          onRetry={() => void code.refetch()}
+        />
+      </div>
+    ) : (
+      <Status>Loading widget…</Status>
+    );
+  if (widget.error) return <Failure error={widget.error} />;
   if (!widget.data) return <Status>Loading widget…</Status>;
   const { Component } = widget.data;
   return (

@@ -36,7 +36,8 @@ function PriceChart() {
         </>
       ) : (
         <p style={{ color: "var(--muted-foreground)" }}>
-          Choose a symbol at the top left of the dashboard.
+          Click this widget, then choose a symbol at the top left of the
+          dashboard.
         </p>
       )}
     </div>

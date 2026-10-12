@@ -4,7 +4,7 @@ See [README.md](README.md) and [architecture](../../../../docs/architecture/char
 
 - Query caches Resources; Dashboard owns placements/focus; ChartGridContext owns
   identity/interactions/mounted handles; cells own preferences. A mounted grid
-  answers ViewChart (`hooks/use-view-chart.ts`) at the header's target cell.
+  answers ViewChart (`hooks/use-view-chart.ts`) at its target cell.
 - No cell-delete UI. Presets/maximization retain sibling renderers.
 - Serialize writes against cached revisions. Capture IDs; await saves before dialog close.
 - ChartCell composes sources; ChartPanes owns panes; ChartLegend positions targets.

@@ -571,7 +571,7 @@ app/src/
     agent/                    FullPageAgent and Copilot placement
     dashboard/
       dashboard-page.tsx      route ID/transport, chart selection, registry and header wiring
-      dashboard-header.tsx    PageHeader + Chart symbol + widget gallery composition
+      dashboard-header.tsx    PageHeader + Chart or custom-widget symbol + widget gallery
       selected-chart.ts       Dashboard Chart lookup and focused cell selection
       use-dashboard-actions.ts sidebar/shortcut creation, dialog navigation
     widgets/
@@ -622,7 +622,8 @@ without persisting a second layout. Inner ChartGrid still uses its existing CSS
 Grid; changing that preset patches Chart, not Dashboard.
 
 The app-composed symbol control shares only target Chart/cell IDs with widgets and
-reads/writes Chart through Query. `ChartGridProvider` stays inside the Card for
+reads/writes Chart through Query, or targets the last focused `useSymbol` custom
+widget, whose symbol stays per placement. `ChartGridProvider` stays inside the Card for
 controls and cells that need runtime handles. Drawing tools remain floating and
 always available; Auto/Log and vertical-axis settings stay on each axis. Interval,
 session, timezone and internal grid layout belong to the widget's floating

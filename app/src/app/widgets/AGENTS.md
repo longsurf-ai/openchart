@@ -18,5 +18,5 @@
 - `workspace-file-beside.tsx` docks a chart's file in the Workspace widget via
   `placeBeside`, requesting it before the save so Retry still opens it.
 - `workspace-chart-actions.tsx` gives Workspace widgets the chart's
-  `AddToChartAction` for the header's target.
+  `AddToChartAction` for the Chart's focused cell.
 - Cross-feature widget integration tests live here.

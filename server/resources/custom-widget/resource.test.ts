@@ -73,7 +73,7 @@ test("another file cannot take a saved kind", async () => {
   await expect(
     caller.resources.custom_widget.save({ workspaceId, path: copy }),
   ).rejects.toThrow(
-    /Widget kind "price-chart" is saved from widgets\/price-chart\.widget\.tsx\. Declare another kind, or delete custom_widget/,
+    /Widget kind "price-chart" is saved from widgets\/price-chart\.widget\.tsx\. Save from that path, declare another kind, or delete custom_widget/,
   );
 });
 

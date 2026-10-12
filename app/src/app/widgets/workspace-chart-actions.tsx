@@ -8,7 +8,7 @@ import { useWidget } from "@openchart/app/hooks/use-widget";
 import { dashboardQueryOptions } from "@openchart/app/lib/resource/dashboard";
 import { WorkspaceFileActions } from "@openchart/app/lib/workspace/workspace";
 
-/** `.tea` tabs add to, or reload on, the chart the header targets: the active chart and its focused cell. A Dashboard without charts adds nothing. Requires ChartSelectionContext. @example <WorkspaceChartActions><WorkspaceContent /></WorkspaceChartActions> */
+/** `.tea` tabs add to, or reload on, the Dashboard's chart at its focused cell, even while the header targets a custom widget. A Dashboard without charts adds nothing. Requires ChartSelectionContext. @example <WorkspaceChartActions><WorkspaceContent /></WorkspaceChartActions> */
 export function WorkspaceChartActions({ children }: PropsWithChildren) {
   const { dashboardId, transport } = useWidget();
   const dashboard = useQuery(dashboardQueryOptions(transport, dashboardId));

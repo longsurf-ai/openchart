@@ -312,8 +312,10 @@ async function buildRenderer() {
     build: {
       outDir: join(staging, "renderer"),
       emptyOutDir: true,
-      // Gzip sizes mean nothing for a packaged app, and computing them after
-      // the bundle is written pushes the build past the default heap.
+      // Gzip sizes mean nothing for a packaged app and cost heap after the
+      // bundle is written. Bundling itself needs more than Node's default
+      // heap (about 5.7 GB RSS), so package.json runs build, package and
+      // release with --max-old-space-size=8192.
       reportCompressedSize: false,
       rollupOptions: { onwarn },
     },

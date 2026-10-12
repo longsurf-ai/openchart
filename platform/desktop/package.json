@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "node --experimental-strip-types scripts/tooling.ts dev",
-    "build": "node --experimental-strip-types scripts/tooling.ts build",
-    "package": "node --experimental-strip-types scripts/tooling.ts package",
-    "release": "node --experimental-strip-types scripts/tooling.ts release production",
+    "build": "node --max-old-space-size=8192 --experimental-strip-types scripts/tooling.ts build",
+    "package": "node --max-old-space-size=8192 --experimental-strip-types scripts/tooling.ts package",
+    "release": "node --max-old-space-size=8192 --experimental-strip-types scripts/tooling.ts release production",
     "smoke": "node --experimental-strip-types tests/smoke.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"

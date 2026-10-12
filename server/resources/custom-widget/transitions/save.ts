@@ -74,7 +74,7 @@ export const save = Transition.make({
       }
       const current = yield* toEntity("custom_widget", CustomWidgetEntity, row);
       if (!isDeepStrictEqual(current.source, body.source)) {
-        const reason = `Widget kind "${resolved.kind}" is saved from ${current.source.path}. Declare another kind, or delete custom_widget ${row.id} first.`;
+        const reason = `Widget kind "${resolved.kind}" is saved from ${current.source.path}. Save from that path, declare another kind, or delete custom_widget ${row.id} first; the Agent can delete it.`;
         return yield* new ResourceStateInvalid({
           resource: "custom_widget",
           reason,

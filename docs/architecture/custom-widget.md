@@ -101,6 +101,12 @@ documentation directory with the example `price-chart.widget.tsx` beside it.
 - Tailwind classes exist only when the app uses them; widgets style with inline
   styles, theme variables and SDK components.
 - The Widgets menu lists the first page of saved widgets.
+- Custom widgets take no part in widget intents yet. Watchlist rows (ViewChart)
+  and Add to chart still reach the Chart's target cell while the header targets
+  a custom widget, which keeps showing its own symbol until a chart cell is
+  focused.
+- Renaming or moving a saved file keeps its kind on the old path, so saving
+  from the new path is refused until the old `custom_widget` is deleted.
 - Generating the declarations adds about 15 seconds to Vitest setup and builds.
 - The source-run Agent demo does not write widget declarations, so saving a
   widget there fails until it does.

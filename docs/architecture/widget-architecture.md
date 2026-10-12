@@ -1,6 +1,6 @@
 # Dashboard and Widget Architecture
 
-Status: as of 2026-10-11, Dashboard placements, the Chart widget, the Workspace file widget, the Watchlist widget, and cross-widget intents (Watchlist rows raise ViewChart) are implemented. This document records the implementation boundaries and verification scope.
+Status: as of 2026-10-11, Dashboard placements, the Chart widget, the Workspace file widget, the Watchlist widget, cross-widget intents (Watchlist rows raise ViewChart) and agent-authored [custom widgets](custom-widget.md) are implemented. This document records the implementation boundaries and verification scope.
 Metabase serves only as a reference for responsibility boundaries; controls, typography, theme, and interaction styling follow the [app design guidelines](../../app/DESIGN.md).
 
 ## 1. Data model: separate user data from frontend presentation
@@ -276,7 +276,7 @@ flowchart LR
   Raising never rejects: outcomes are `handled`, `unavailable`, `superseded` or `failed`, and handlers report their own failures.
 - `DashboardPage` mounts one `WidgetIntentProvider` per Dashboard beside `ChartSelectionProvider`; `WidgetHost` activates a placement on pointer or focus inside its card.
   `hooks/use-intent.ts` gives sources `useIntent` (availability plus `raise`) and handlers `useIntentHandler`, registered for the containing placement only.
-- The Chart answers `ViewChart` while a saved Chart's grid is mounted: it fetches capabilities, then saves through the Chart's serialized mutation into the header's target cell (focused while visible, else first visible), re-read when the write applies. A listing already shown saves nothing.
+- The Chart answers `ViewChart` while a saved Chart's grid is mounted: it fetches capabilities, then saves through the Chart's serialized mutation into the Chart's target cell (focused while visible, else first visible), re-read when the write applies, even while the header targets a custom widget. A listing already shown saves nothing.
 - Placing no Chart leaves `ViewChart` unavailable, and a row click changes nothing. Link groups (colour channels) would later replace only the resolver: sources and handlers stay unchanged.
 
 Main owners: `lib/widget/intent/` owns intent declarations and routing (see Cross-widget intents); `app/widgets/` composes the cross-feature widget catalog and gallery; within it, `widget-registry.ts` is the only place that imports each feature's widget definition. The Dashboard route/header uses this catalog, while placement writes stay owned by the Dashboard. `features/dashboard/components/widget-host.tsx`
