@@ -110,7 +110,7 @@ export function DashboardGrid({
   const previewLayout = (next: Layout) => {
     setPreview({
       layout: verticalCompactor.compact(next, 12),
-      revision: dashboard!.revision,
+      revision: gesture.current?.revision ?? dashboard!.revision,
       resetKey,
     });
   };
@@ -241,6 +241,7 @@ export function DashboardGrid({
               }}
               onCancel={() => {
                 gesture.current = undefined;
+                setPreview(undefined);
                 setInteraction(undefined);
               }}
             />

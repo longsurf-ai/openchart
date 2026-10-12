@@ -599,6 +599,37 @@ it("cancels a shared-edge drag when the container switches to a single column", 
   expect(harness.mounted).toHaveBeenCalledTimes(2);
 });
 
+it("keeps a concurrent saved layout visible when a separator gesture is canceled", async () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  const { patch, client, key, resource } = setup();
+  const separator = screen.getByRole("separator", {
+    name: "Resize adjacent widgets horizontally",
+  });
+  fireEvent.pointerDown(separator, { button: 0, clientX: 600 });
+  fireEvent.pointerMove(separator, { clientX: 702 });
+  act(() => {
+    client.setQueryData(key, () => ({
+      ...resource,
+      revision: 2,
+      widgets: resource.widgets.map((widget, index) =>
+        index === 0
+          ? { ...widget, layout: { ...widget.layout, w: 8 } }
+          : index === 1
+            ? { ...widget, layout: { ...widget.layout, x: 8, w: 4 } }
+            : widget,
+      ),
+    }));
+  });
+  await waitFor(() => expect(harness.grid!.layout![0]!.w).toBe(8));
+  fireEvent.pointerMove(separator, { clientX: 501 });
+  expect(harness.grid!.layout![0]!.w).toBe(8);
+  expect(harness.grid!.layout![1]!.x).toBe(8);
+  fireEvent.pointerCancel(separator);
+  expect(harness.grid!.layout![0]!.w).toBe(8);
+  expect(harness.grid!.layout![1]!.w).toBe(4);
+  expect(patch).not.toHaveBeenCalled();
+});
+
 it("keeps failed mutation variables for retry even after a newer revision arrives", async () => {
   const { resource, patch, client, key, user } = setup();
   patch
