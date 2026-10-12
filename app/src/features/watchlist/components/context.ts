@@ -31,6 +31,8 @@ export type WatchlistAction =
 export type FormulaValue = {
   status: "loading" | "ready" | "empty" | "error";
   value?: number;
+  /** Execution and output that produced this value; changes reset presentation. */
+  identity?: string;
   /** UTC milliseconds of the latest evaluated bar, when available. */
   time?: number;
   error?: string;

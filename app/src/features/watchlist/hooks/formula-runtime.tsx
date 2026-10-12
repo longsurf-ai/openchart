@@ -56,7 +56,12 @@ function project(
         : undefined;
   }
   return typeof value === "number" && Number.isFinite(value)
-    ? { status: "ready", value, time: state.time }
+    ? {
+        status: "ready",
+        value,
+        time: state.time,
+        identity: state.executionKey && `${state.executionKey}:${output}`,
+      }
     : { status: "empty", time: state.time };
 }
 
