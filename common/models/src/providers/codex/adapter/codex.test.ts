@@ -832,6 +832,181 @@ describe("Codex adapter", () => {
     },
   );
 
+  it.each([false, true])(
+    "projects a followed-up child into a fresh delegate (finished parent: %s)",
+    async (nested) => {
+      const { fake, model } = setup();
+      const outcome = { output: "verified", attachments: [], title: "Lookup" };
+      const execute = vi.fn(async () => outcome);
+      const tools = {
+        lookup: {
+          description: "Lookup",
+          inputSchema: z.object({}),
+          execute,
+          toModelOutput: () => "verified",
+        },
+      };
+      onTurn(fake, async (thread, turn) => {
+        const root = { threadId: thread, turnId: turn };
+        const parent = nested
+          ? { threadId: "parent", turnId: "parent_turn" }
+          : root;
+        const child = { threadId: "child", turnId: "first_turn" };
+        const resumed = { ...child, turnId: "second_turn" };
+        const activity = (
+          scope: typeof root,
+          target: string,
+          id: string,
+          kind: string,
+        ) =>
+          fake.notify("item/completed", {
+            ...scope,
+            item: {
+              type: "subAgentActivity",
+              id,
+              kind,
+              agentThreadId: target,
+              agentPath: `/root/${target}`,
+            },
+          });
+        const start = (scope: typeof root) =>
+          fake.notify("turn/started", {
+            threadId: scope.threadId,
+            turn: { id: scope.turnId, status: "inProgress" },
+          });
+        if (nested) {
+          activity(root, parent.threadId, "spawn_parent", "started");
+          start(parent);
+        }
+        activity(parent, child.threadId, "spawn_child", "started");
+        start(child);
+        fake.notify("item/completed", {
+          ...child,
+          item: agentMessage("first_answer", "first answer"),
+        });
+        fake.notify("turn/completed", completed(child.threadId, child.turnId));
+        if (nested)
+          fake.notify(
+            "turn/completed",
+            completed(parent.threadId, parent.turnId),
+          );
+        // An interaction alone is not evidence that another child turn began.
+        activity(root, child.threadId, "message_only", "interacted");
+        fake.notify("item/completed", {
+          ...root,
+          item: agentMessage("after_message", "after message"),
+        });
+        start(resumed);
+        start(resumed);
+        // Old completion notifications must not seal the new invocation.
+        fake.notify("turn/completed", completed(child.threadId, child.turnId));
+        activity(root, child.threadId, "late_terminal", "completed");
+        fake.notify("item/completed", {
+          ...child,
+          item: agentMessage("late_answer", "stale answer"),
+        });
+        expect(
+          await fake.ask("item/tool/call", {
+            ...child,
+            callId: "stale_call",
+            tool: "lookup",
+            arguments: {},
+          }),
+        ).toMatchObject({ result: { success: false } });
+        fake.notify("item/completed", {
+          ...resumed,
+          item: agentMessage("second_start", "second turn working"),
+        });
+        await fake.ask("item/tool/call", {
+          ...resumed,
+          callId: "lookup_call",
+          tool: "lookup",
+          arguments: {},
+        });
+        fake.notify("item/completed", {
+          ...resumed,
+          item: {
+            type: "dynamicToolCall",
+            id: "lookup_call",
+            tool: "lookup",
+            arguments: {},
+            status: "completed",
+            success: true,
+          },
+        });
+        fake.notify("item/completed", {
+          ...resumed,
+          item: agentMessage("second_answer", "second answer"),
+        });
+        fake.notify(
+          "turn/completed",
+          completed(resumed.threadId, resumed.turnId),
+        );
+        fake.notify("turn/completed", completed(thread, turn));
+      });
+      const events = await collect(
+        conformProviderStream(
+          streamText({
+            model,
+            messages: [{ role: "user", content: "follow up" }],
+            providerOptions: { "codex-app-server": { tools } } as never,
+            maxRetries: 0,
+          }).fullStream,
+        ),
+      );
+      const delegates = events.filter(
+        (event) =>
+          event.type === "tool-call" &&
+          event.providerMetadata?.openchart?.openDelegate,
+      );
+      expect(delegates).toHaveLength(nested ? 3 : 2);
+      const resumed = delegates.at(-1)!;
+      expect(resumed.type).toBe("tool-call");
+      if (resumed.type !== "tool-call")
+        throw new Error("Missing resumed delegate");
+      expect(resumed.toolCallId).not.toBe("spawn_child");
+      expect(owner(resumed)).toBe("root");
+      expect(events.indexOf(resumed)).toBeGreaterThan(
+        events.findIndex(
+          (event) =>
+            event.type === "text-delta" && event.text === "after message",
+        ),
+      );
+      expect(
+        compact(events.filter((event) => owner(event) === resumed.toolCallId)),
+      ).toEqual([
+        `start-step:${resumed.toolCallId}`,
+        `text-delta:${resumed.toolCallId}:second turn working`,
+        `tool-call:${resumed.toolCallId}:lookup`,
+        `tool-result:${resumed.toolCallId}:lookup`,
+        `text-delta:${resumed.toolCallId}:second answer`,
+        `finish-step:${resumed.toolCallId}`,
+      ]);
+      expect(execute).toHaveBeenCalledOnce();
+      expect(
+        events.find(
+          (event) =>
+            event.type === "tool-result" && event.toolCallId === "lookup_call",
+        ),
+      ).toMatchObject({ output: outcome });
+      const active = new Set<string>();
+      for (const event of events) {
+        if (event.type === "start" || event.type === "finish") continue;
+        if (event.type === "start-step") {
+          expect(active.has(owner(event))).toBe(false);
+          active.add(owner(event));
+        } else {
+          expect(
+            active.has(owner(event)),
+            `${event.type} in ${owner(event)}`,
+          ).toBe(true);
+          if (event.type === "finish-step") active.delete(owner(event));
+        }
+      }
+      expect(active.size).toBe(0);
+    },
+  );
+
   it("keeps nested activity identities and finishes descendants before their parents", async () => {
     const { fake, model } = setup();
     onTurn(fake, (thread, turn) => {

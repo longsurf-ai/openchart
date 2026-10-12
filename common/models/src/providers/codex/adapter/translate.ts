@@ -46,7 +46,10 @@ type Json = NonNullable<JSONValue>;
 interface Delegate {
   proxyId: string;
   parent: Scope;
+  description: string;
   threadId?: string;
+  turnId?: string;
+  followup?: true;
   /** Child turn's terminal status once known; the root's completion forces it. */
   outcome?: Turn["status"];
   /** Result text the parent's collaboration item reported for this child. */
@@ -181,37 +184,94 @@ export class TurnTranslator {
     return this.threads.get(threadId) ?? undefined;
   }
 
-  /** Emits the call for an OpenChart tool before it runs, in the calling thread's scope. */
+  private scopeForTurn(threadId: string, turnId: string): Scope | undefined {
+    const scope = this.scopeOf(threadId);
+    if (scope === null || scope === undefined) return scope;
+    const previous = [...this.delegates.values()].find(
+      (delegate) =>
+        delegate.threadId === threadId && delegate.turnId === turnId,
+    );
+    if (previous) return previous.proxyId;
+    const delegate = this.delegates.get(scope)!;
+    if (delegate.turnId === undefined) {
+      delegate.turnId = turnId;
+      return scope;
+    }
+    // Native threads survive follow-ups; each projected delegate is one turn.
+    // A nested follow-up may outlive its original parent invocation.
+    let parent = delegate.parent;
+    while (parent !== null) {
+      const ancestor = this.delegates.get(parent)!;
+      const current = ancestor.threadId
+        ? this.delegates.get(this.threads.get(ancestor.threadId)!)!
+        : ancestor;
+      if (!current.finished) {
+        parent = current.proxyId;
+        break;
+      }
+      parent = ancestor.parent;
+    }
+    this.threads.delete(threadId);
+    const next = this.startDelegate(
+      {
+        type: "subAgentActivity",
+        id: `codex-turn:${threadId}:${turnId}`,
+        kind: "started",
+        agentThreadId: threadId,
+        agentPath: delegate.description,
+      },
+      parent,
+    );
+    next.turnId = turnId;
+    next.followup = true;
+    return next.proxyId;
+  }
+
+  /**
+   * Opens a host tool in its native turn before execution. Follow-up turns get
+   * their own delegate; closed or unknown scopes return false without emitting.
+   * The caller must decline those requests. Request teardown owns cleanup.
+   * @example if (!translator.hostToolCalled(thread, turn, id, name, input)) return declined;
+   */
   hostToolCalled(
     threadId: string,
+    turnId: string,
     callId: string,
     tool: string,
     input: unknown,
-  ): void {
-    this.toolCall(
-      callId,
-      tool,
-      input,
-      this.scopeOf(threadId) ?? null,
-      "provider-mcp",
-    );
+  ): boolean {
+    if (this.done) return false;
+    const scope = this.scopeForTurn(threadId, turnId);
+    if (
+      scope === undefined ||
+      (scope !== null && this.delegates.get(scope)!.finished)
+    )
+      return false;
+    this.toolCall(callId, tool, input, scope, "provider-mcp");
+    return true;
   }
 
   /** Records native questions and answers so new threads retain the user's decisions. */
   questionRequested(
     input: {
       threadId: string;
+      turnId: string;
       itemId: string;
       questions: unknown;
     },
     toolName = "request_user_input",
   ): void {
-    if (!this.done)
+    if (this.done) return;
+    const scope = this.scopeForTurn(input.threadId, input.turnId);
+    if (
+      scope !== undefined &&
+      (scope === null || !this.delegates.get(scope)!.finished)
+    )
       this.toolCall(
         input.itemId,
         toolName,
         { questions: input.questions },
-        this.scopeOf(input.threadId) ?? null,
+        scope,
       );
   }
 
@@ -237,8 +297,6 @@ export class TurnTranslator {
         if (candidates.length === 1) this.bind(candidates[0]!, id);
         return;
       }
-      case "turn/started":
-        return;
       case "thread/tokenUsage/updated": {
         if (event.params.threadId !== this.options.rootThreadId) return;
         const last = event.params.tokenUsage.last;
@@ -265,7 +323,11 @@ export class TurnTranslator {
           this.fail(new Error(event.params.error.message));
         return;
     }
-    const scope = this.scopeOf(event.params.threadId);
+    const turnId =
+      event.method === "turn/started" || event.method === "turn/completed"
+        ? event.params.turn.id
+        : event.params.turnId;
+    const scope = this.scopeForTurn(event.params.threadId, turnId);
     if (scope === undefined) {
       // A child thread announced by neither spawn receivers nor activity yet.
       const queue = this.waiting.get(event.params.threadId) ?? [];
@@ -273,11 +335,16 @@ export class TurnTranslator {
       this.waiting.set(event.params.threadId, queue);
       return;
     }
-    if (event.method === "turn/completed")
-      this.options.asyncQuestions?.finishThread(event.params.threadId);
     // A terminal activity can precede the child's own terminal notification.
     if (scope !== null && this.delegates.get(scope)!.finished) return;
+    if (
+      event.method === "turn/completed" &&
+      this.scopeOf(event.params.threadId) === scope
+    )
+      this.options.asyncQuestions?.finishThread(event.params.threadId);
     switch (event.method) {
+      case "turn/started":
+        return;
       case "turn/completed":
         if (scope === null) this.finishRoot(event.params.turn);
         else this.childCompleted(scope, event.params.turn);
@@ -493,7 +560,8 @@ export class TurnTranslator {
         } else {
           const proxyId = this.threads.get(item.agentThreadId);
           const delegate = proxyId ? this.delegates.get(proxyId) : undefined;
-          if (delegate) {
+          // Activity has no target turn ID and is ambiguous after a follow-up.
+          if (delegate && !delegate.followup) {
             delegate.outcome ??= item.kind;
             this.tryFinish(delegate);
           }
@@ -567,7 +635,12 @@ export class TurnTranslator {
             prompt: "",
             agent: "codex",
           };
-    const delegate: Delegate = { proxyId: item.id, parent, finished: false };
+    const delegate: Delegate = {
+      proxyId: item.id,
+      parent,
+      description: call.description,
+      finished: false,
+    };
     this.delegates.set(item.id, delegate);
     this.openTools.set(item.id, { name: "spawn_agent", scope: parent });
     const owner = scopedMetadata(parent);
@@ -627,7 +700,8 @@ export class TurnTranslator {
       const delegate = proxyId ? this.delegates.get(proxyId) : undefined;
       if (!delegate) continue;
       const state = item.agentsStates[threadId];
-      if (state?.message !== undefined) delegate.message = state.message;
+      if (state?.message !== undefined && !delegate.followup)
+        delegate.message = state.message;
       this.tryFinish(delegate);
     }
   }
@@ -653,7 +727,10 @@ export class TurnTranslator {
     if (delegate.finished || delegate.outcome === undefined) return;
     for (const other of this.delegates.values())
       if (other.parent === delegate.proxyId && !other.finished) return;
-    if (delegate.threadId)
+    if (
+      delegate.threadId &&
+      this.scopeOf(delegate.threadId) === delegate.proxyId
+    )
       this.options.asyncQuestions?.finishThread(delegate.threadId);
     this.closeScope(delegate.proxyId);
     delegate.finished = true;
