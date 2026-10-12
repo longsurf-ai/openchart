@@ -1,7 +1,50 @@
 // Purpose: Owns the inline column contract shared by watchlist persistence and entity validation.
 
 import { defineId } from "@openchart/identifier";
-import { Schema } from "effect";
+import { Adjustment, Resolution } from "@openchart/feed";
+import { SessionType } from "@openchart/market";
+import { ReadInput } from "@openchart/server/workspace/contract";
+import * as Tea from "@openchart/tea";
+import { Effect, Schema } from "effect";
+
+/** Optional authored title; omitting it lets presentation derive the output title. */
+export const WatchlistColumnTitle = Schema.NonEmptyString.check(
+  Schema.isMaxLength(200),
+);
+
+/** Per-column cadence; omitted session/adjustment use the row provider's defaults. */
+export const WatchlistFormulaBars = Schema.Struct({
+  resolution: Resolution,
+  session: Schema.optionalKey(SessionType),
+  adjustment: Schema.optionalKey(Adjustment),
+}).annotate({ parseOptions: { onExcessProperty: "error" } });
+
+/** A complete, independently saved Tea program and its selected numeric output. */
+export const WatchlistFormulaMetric = Schema.Struct({
+  kind: Schema.Literal("formula"),
+  source: Schema.Struct({
+    workspaceId: ReadInput.fields.workspaceId,
+    path: ReadInput.fields.path.check(
+      Schema.makeFilter((path) => path.endsWith(".tea")),
+    ),
+  }),
+  snapshot: Tea.SnapshotSources.fields.sources,
+  parameterOverrides: Tea.NodeParameters,
+  output: Schema.NonEmptyString,
+  bars: WatchlistFormulaBars,
+})
+  .check(
+    Schema.makeFilter(
+      ({ source, snapshot }) => Object.hasOwn(snapshot, source.path),
+      { message: "The snapshot must contain the code at source.path" },
+    ),
+  )
+  .annotate({ parseOptions: { onExcessProperty: "error" } });
+
+/** Persisted Formula calculation configuration, without results or subscriptions. */
+export type WatchlistFormulaMetric = typeof WatchlistFormulaMetric.Type;
+/** Persisted Formula market settings, resolved separately for each row. */
+export type WatchlistFormulaBars = typeof WatchlistFormulaBars.Type;
 
 /**
  * A metric selected by a watchlist column, discriminated by `kind`.
@@ -25,6 +68,7 @@ export const WatchlistMetric = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("volume") }),
   // The latest session day's intraday prices against the previous close.
   Schema.Struct({ kind: Schema.Literal("priceHistory") }),
+  WatchlistFormulaMetric,
 ]).annotate({ parseOptions: { onExcessProperty: "error" } });
 
 /** A metric selected by a watchlist column. */
@@ -50,6 +94,10 @@ export const WatchlistColumnId = defineId("wcl", "WatchlistColumn.ID");
  */
 export const WatchlistColumn = Schema.Struct({
   id: WatchlistColumnId,
+  title: Schema.optionalKey(WatchlistColumnTitle),
+  visible: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
   metric: WatchlistMetric,
 }).annotate({ parseOptions: { onExcessProperty: "error" } });
 

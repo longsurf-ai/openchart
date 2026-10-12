@@ -1,6 +1,6 @@
 // Purpose: Discover studies through visual examples and natural-language prompts, with chart-owned attachment actions.
 import { useContext, useMemo, useState, type ReactNode } from "react";
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Compass, FileCode2, Library } from "lucide-react";
 import type * as Tea from "@openchart/tea";
 import { Button } from "@openchart/app/components/ui/button";
@@ -20,12 +20,8 @@ import {
   SidebarProvider,
 } from "@openchart/app/components/ui/sidebar";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
-import {
-  WorkspaceFileNavigation,
-  defaultWorkspaceQueryOptions,
-  workspacesQueryOptions,
-  workspaceTreeQueryOptions,
-} from "@openchart/app/lib/workspace/workspace";
+import { WorkspaceFileNavigation } from "@openchart/app/lib/workspace/workspace";
+import { useWorkspaceTeaFiles } from "@openchart/app/lib/workspace/use-workspace-tea-files";
 import {
   indicatorCatalogQueryOptions,
   resolveIndicator,
@@ -109,17 +105,11 @@ export function IndicatorLibraryContent({
     () => assignIndicatorExamples((catalog.data ?? []).map(({ id }) => id)),
     [catalog.data],
   );
-  const workspaces = useQuery({
-    ...workspacesQueryOptions(transport),
+  const scripts = useWorkspaceTeaFiles(transport, {
     enabled: readFiles,
+    search: query,
   });
-  const home = useQuery(defaultWorkspaceQueryOptions(transport));
-  const trees = useQueries({
-    queries: (workspaces.data ?? []).map((workspace) => ({
-      ...workspaceTreeQueryOptions(transport, workspace.id),
-      enabled: readFiles,
-    })),
-  });
+  const { home } = scripts;
   const adder = useAddIndicator({
     transport,
     chartId,
@@ -154,57 +144,13 @@ export function IndicatorLibraryContent({
     scope === "Discover" && !needle
       ? (entries.find(({ id }) => id === goal.featured) ?? entries[0])
       : undefined;
-  const files = (home.data ? (workspaces.data ?? []) : []).flatMap(
-    (workspace, index) => {
-      const tree = trees[index]?.data;
-      return tree?.status === "ready"
-        ? tree.entries
-            .filter(
-              ({ path }) =>
-                path.endsWith(".tea") &&
-                // Bundled originals, including the chart's own built-ins, install here.
-                !(
-                  workspace.id === home.data &&
-                  path.toLocaleLowerCase().startsWith("indicators/builtin/")
-                ),
-            )
-            .map(({ path }) => ({
-              workspaceId: workspace.id,
-              path,
-              root: workspace.root,
-            }))
-        : [];
-    },
-  );
-  const custom = files.filter((file) =>
-    `${file.path} ${file.root}`.toLocaleLowerCase().includes(needle),
-  );
+  const custom = scripts.files;
   const personal = scope === "My scripts";
-  const loading =
-    catalog.isPending ||
-    (readFiles &&
-      (workspaces.isPending ||
-        home.isPending ||
-        trees.some((tree) => tree.isPending)));
-  const unavailable =
-    readFiles &&
-    trees.some((tree) => tree.data && tree.data.status !== "ready");
-  const failed =
-    catalog.isError ||
-    (readFiles &&
-      (workspaces.isError ||
-        home.isError ||
-        trees.some((tree) => tree.isError) ||
-        unavailable));
+  const loading = catalog.isPending || (readFiles && scripts.pending);
+  const failed = catalog.isError || (readFiles && scripts.failed);
   const retry = () => {
     void catalog.refetch();
-    if (readFiles) {
-      void workspaces.refetch();
-      void home.refetch();
-      trees.forEach((tree) => {
-        void tree.refetch();
-      });
-    }
+    if (readFiles) scripts.retry();
   };
   const select = (entry: IndicatorCatalogEntry) =>
     opener.mutate({ selection: entry.id, entry });
@@ -382,7 +328,7 @@ export function IndicatorLibraryContent({
                 {failed ? (
                   <div className="space-y-3 rounded-lg border p-6">
                     <p className="text-sm">
-                      {unavailable
+                      {readFiles && scripts.unavailable
                         ? "Some Workspaces are unavailable. Available scripts are shown below."
                         : "Couldn’t load these studies."}
                     </p>

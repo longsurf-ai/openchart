@@ -46,17 +46,27 @@ import {
   type Quote,
 } from "../hooks/use-quote";
 import type { WatchlistView } from "../stores/view";
-import { formatMetric, gridTemplate, metricTone } from "../utils/columns";
+import {
+  formatFormula,
+  formatMetric,
+  gridTemplate,
+  metricTone,
+} from "../utils/columns";
 import {
   indexWatchlist,
   moveOperation,
   removeNode,
   ROOT_ID,
-  type Metric,
+  type Column,
   type WatchlistNode,
 } from "../utils/tree";
-import { useWatchlistPlacement } from "./context";
+import { useWatchlistPlacement, type FormulaValues } from "./context";
 import { Sparkline } from "./sparkline";
+
+import {
+  useFormulaCells,
+  useSortFormulaValues,
+} from "../hooks/use-formula-cells";
 
 type Item = Extract<WatchlistNode, { kind: "item" }>["item"];
 type Sort = NonNullable<WatchlistView["sort"]>;
@@ -69,14 +79,24 @@ function sortRows(
   nodes: Map<string, WatchlistNode>,
   quotes: Readonly<Record<string, Quote>>,
   sort: Sort,
+  column: Column | undefined,
+  formulas: FormulaValues,
 ): string[] {
-  // Price History sorts by the move it draws: change since the previous close.
-  const metric = sort.metric === "priceHistory" ? "changePercent" : sort.metric;
   const value = (id: string) => {
     const node = nodes.get(id);
-    return node?.kind === "item"
-      ? quotes[providerListingKey(node.item)]?.[metric]
-      : undefined;
+    if (node?.kind !== "item" || !column) return undefined;
+    if (column.metric.kind === "formula") {
+      const cell = formulas[node.id]?.[column.id];
+      return cell?.status === "ready" && Number.isFinite(cell.value)
+        ? cell.value
+        : undefined;
+    }
+    // Price History sorts by the move it draws, not its hovered close.
+    const metric =
+      column.metric.kind === "priceHistory"
+        ? "changePercent"
+        : column.metric.kind;
+    return quotes[providerListingKey(node.item)]?.[metric];
   };
   return [...ids].sort((left, right) => {
     const a = value(left);
@@ -87,20 +107,24 @@ function sortRows(
   });
 }
 
-/** Collapsible sections and draggable rows; each drop saves one JSON Patch move. Clicking a row, or Enter on it, raises ViewChart for its listing. @example <WatchlistTree watchlist={watchlist} metrics={["price"]} /> */
+/** Collapsible sections and draggable rows; each drop saves one JSON Patch move. Clicking a row, or Enter on it, raises ViewChart for its listing. @example <WatchlistTree watchlist={watchlist} columns={watchlist.columns} /> */
 export function WatchlistTree({
   watchlist,
-  metrics,
+  columns,
 }: {
   watchlist: Watchlist;
-  metrics: readonly Metric[];
+  columns: readonly Column[];
 }) {
   const { save, view, openDialog } = useWatchlistPlacement();
   const chart = useIntent(viewChart);
   const collapsed = useStore(view, (state) => state.collapsed);
   const sort = useStore(view, (state) => state.sort);
-  // Only a sorted view re-renders when quotes change.
-  const quotes = useSortQuotes(sort !== null);
+  const sortColumn = columns.find((column) => column.id === sort?.columnId);
+  // Only the active sort's stream can rebuild the tree.
+  const quotes = useSortQuotes(
+    !!sortColumn && sortColumn.metric.kind !== "formula",
+  );
+  const formulas = useSortFormulaValues(sortColumn?.metric.kind === "formula");
   const nodes = useMemo(() => indexWatchlist(watchlist), [watchlist]);
   const children = useMemo(() => {
     const result = new Map<string, string[]>();
@@ -109,13 +133,20 @@ export function WatchlistTree({
       else {
         const rows = node.section.items.length;
         result.set(node.id, [
-          ...sortRows(node.children.slice(0, rows), nodes, quotes, sort),
+          ...sortRows(
+            node.children.slice(0, rows),
+            nodes,
+            quotes,
+            sort,
+            sortColumn,
+            formulas,
+          ),
           ...node.children.slice(rows),
         ]);
       }
     }
     return result;
-  }, [nodes, sort, quotes]);
+  }, [nodes, sort, quotes, sortColumn, formulas]);
   // Unnamed sections have no heading to collapse, so they always stay open.
   const expandedItems = useMemo(
     () =>
@@ -204,7 +235,12 @@ export function WatchlistTree({
     hotkeys: {
       customPrimaryAction: {
         hotkey: "Enter",
-        handler: (_, tree) => tree.getFocusedItem().primaryAction(),
+        handler: (event, tree) => {
+          // Native button activation belongs to the cell action, not the row.
+          if (event.target instanceof Element && event.target.closest("button"))
+            return;
+          tree.getFocusedItem().primaryAction();
+        },
       },
     },
     indent: INDENT,
@@ -214,7 +250,7 @@ export function WatchlistTree({
   useEffect(() => {
     tree.rebuildTree();
   }, [tree, children, expandedItems]);
-  const columns = { gridTemplateColumns: gridTemplate(metrics) };
+  const tracks = { gridTemplateColumns: gridTemplate(columns) };
   const target = tree.getDragTarget();
   const parent = target?.item.getItemData();
   const depth =
@@ -253,8 +289,8 @@ export function WatchlistTree({
               key={item.getKey()}
               item={item}
               node={node}
-              metrics={metrics}
-              style={columns}
+              columns={columns}
+              style={tracks}
               onRemove={() =>
                 save.mutate((current) => removeNode(current, node.id))
               }
@@ -342,13 +378,13 @@ function SectionRow({
 function ItemRow({
   item,
   node,
-  metrics,
+  columns,
   style,
   onRemove,
 }: {
   item: ItemInstance<WatchlistNode>;
   node: Extract<WatchlistNode, { kind: "item" }>;
-  metrics: readonly Metric[];
+  columns: readonly Column[];
   style: CSSProperties;
   onRemove: () => void;
 }) {
@@ -365,7 +401,7 @@ function ItemRow({
             style={style}
           >
             <SymbolCell item={node.item} depth={node.depth} />
-            <QuoteCells item={node.item} metrics={metrics} />
+            <QuoteCells item={node.item} columns={columns} />
           </div>
         }
       />
@@ -399,10 +435,22 @@ function SymbolCell({ item, depth }: { item: Item; depth: number }) {
 
 function QuoteCells({
   item,
-  metrics,
+  columns,
 }: {
   item: Item;
-  metrics: readonly Metric[];
+  columns: readonly Column[];
+}) {
+  if (!columns.some((column) => column.metric.kind !== "formula"))
+    return <MetricCells item={item} columns={columns} />;
+  return <DailyQuoteCells item={item} columns={columns} />;
+}
+
+function DailyQuoteCells({
+  item,
+  columns,
+}: {
+  item: Item;
+  columns: readonly Column[];
 }) {
   // Feed requests are strict: send the listing identity, never the row's own id.
   const { request, error, retry } = useDailyRequest({
@@ -411,20 +459,20 @@ function QuoteCells({
   });
   if (error)
     return (
-      <QuoteFailure
-        symbol={item.listing.symbol}
-        metrics={metrics}
-        retry={retry}
+      <MetricCells
+        item={item}
+        columns={columns}
+        quoteError={{ symbol: item.listing.symbol, retry }}
       />
     );
-  if (!request) return <MetricCells item={item} metrics={metrics} />;
+  if (!request) return <MetricCells item={item} columns={columns} />;
   return (
     <LiveQuoteCells
       key={providerListingKey(item)}
-      item={item}
       request={request}
       quoteKey={providerListingKey(item)}
-      metrics={metrics}
+      item={item}
+      columns={columns}
     />
   );
 }
@@ -433,80 +481,135 @@ function LiveQuoteCells({
   item,
   request,
   quoteKey,
-  metrics,
+  columns,
 }: {
   item: Item;
   request: BarsRequest;
   quoteKey: string;
-  metrics: readonly Metric[];
+  columns: readonly Column[];
 }) {
   const { quote, error, retry } = useLiveQuote(request, quoteKey);
   if (error)
     return (
-      <QuoteFailure
-        symbol={request.listing.symbol}
-        metrics={metrics}
-        retry={retry}
+      <MetricCells
+        item={item}
+        columns={columns}
+        quoteError={{ symbol: request.listing.symbol, retry }}
       />
     );
-  return <MetricCells item={item} metrics={metrics} quote={quote} />;
-}
-
-function QuoteFailure({
-  symbol,
-  metrics,
-  retry,
-}: {
-  symbol: string;
-  metrics: readonly Metric[];
-  retry: () => void;
-}) {
-  if (!metrics.length) return null;
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="justify-self-end text-xs text-muted-foreground"
-      style={{ gridColumn: `span ${metrics.length}` }}
-      aria-label={`Retry quote for ${symbol}`}
-      onClick={() => retry()}
-    >
-      <RefreshCw className="size-3" aria-hidden /> Retry quote
-    </Button>
-  );
+  return <MetricCells item={item} columns={columns} quote={quote} />;
 }
 
 function MetricCells({
   item,
-  metrics,
+  columns,
   quote,
+  quoteError,
 }: {
   item: Item;
-  metrics: readonly Metric[];
+  columns: readonly Column[];
   quote?: Quote;
+  quoteError?: { symbol: string; retry: () => void };
 }) {
-  // The close under the shared Price History crosshair replaces live values.
+  const formulas = useFormulaCells(item.id);
+  // Crosshair quotes change built-ins; Formula values remain on their latest bar.
   const [hovered, setHovered] = useState<number>();
   const shown = quoteAt(quote, hovered);
-  return metrics.map((metric) =>
-    metric === "priceHistory" ? (
-      <Sparkline
-        key={metric}
-        provider={item.provider}
-        listing={item.listing}
-        previousClose={quote?.previousClose}
-        onHover={setHovered}
-      />
-    ) : (
+  const firstBuiltin = columns.find(
+    (column) => column.metric.kind !== "formula",
+  )?.id;
+  return columns.map((column) => {
+    if (column.metric.kind === "formula") {
+      const cell = formulas?.[column.id];
+      const text =
+        cell?.status === "error"
+          ? "Error"
+          : cell?.status === "empty"
+            ? "—"
+            : cell?.status === "ready"
+              ? formatFormula(cell.value)
+              : "…";
+      const time =
+        cell?.time !== undefined && Number.isFinite(cell.time)
+          ? new Date(cell.time).toLocaleString()
+          : undefined;
+      const title =
+        cell?.status === "error"
+          ? cell.error
+          : cell?.status === "empty"
+            ? `No value for the latest bar${time ? ` · ${time}` : ""}`
+            : cell?.status === "ready" && time
+              ? `Latest bar · ${time}`
+              : undefined;
+      return (
+        <span
+          key={column.id}
+          className={cn(
+            "truncate pr-3 text-right tabular-nums",
+            cell?.status === "error" && "text-destructive",
+          )}
+          title={title}
+        >
+          {cell?.status === "error" && cell.retry ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                cell.retry?.();
+              }}
+              aria-label="Retry formula"
+            >
+              {text}
+            </Button>
+          ) : (
+            text
+          )}
+        </span>
+      );
+    }
+    if (quoteError && column.id !== firstBuiltin)
+      return (
+        <span key={column.id} className="pr-3 text-right text-muted-foreground">
+          —
+        </span>
+      );
+    if (quoteError)
+      return (
+        <Button
+          key={column.id}
+          variant="ghost"
+          size="sm"
+          className="justify-self-end text-xs text-muted-foreground"
+          aria-label={`Retry quote for ${quoteError.symbol}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            quoteError.retry();
+          }}
+        >
+          <RefreshCw className="size-3" aria-hidden /> Retry
+        </Button>
+      );
+    if (column.metric.kind === "priceHistory")
+      return (
+        <Sparkline
+          key={column.id}
+          provider={item.provider}
+          listing={item.listing}
+          previousClose={quote?.previousClose}
+          onHover={setHovered}
+        />
+      );
+    return (
       <span
-        key={metric}
+        key={column.id}
         className={cn(
           "truncate pr-3 text-right tabular-nums",
-          metricTone(metric, shown),
+          metricTone(column.metric.kind, shown),
         )}
       >
-        {formatMetric(metric, shown)}
+        {formatMetric(column.metric.kind, shown)}
       </span>
-    ),
-  );
+    );
+  });
 }

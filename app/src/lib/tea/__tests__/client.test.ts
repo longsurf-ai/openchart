@@ -22,6 +22,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 
 import { createTeaClient } from "@openchart/app/lib/tea";
+import {
+  createTeaGroup,
+  type TeaGroupRequest,
+} from "@openchart/app/lib/tea/group";
 import { createTransport } from "@openchart/app/lib/transport/transport";
 import { FeedTransport } from "@openchart/app/lib/feed/transport";
 import type { BarsView } from "@openchart/app/feed";
@@ -264,6 +268,96 @@ async function start(
     finishDisposes,
   };
 }
+
+it("shares grouped HTTP compilation and Hose execution and retains latest replacement rows", async () => {
+  const f = await start();
+  const releaseError = vi.fn();
+  const group = createTeaGroup(f.client, releaseError);
+  cleanup.push(() => group.close());
+  const node: TeaGroupRequest["node"] = {
+    source: { entry: "main.tea", sources: { "main.tea": "close" } },
+    ...Tea.barsInputs(series),
+    parameters: {},
+    requests: {},
+    from: 0,
+    to: "now",
+    countBack: 1,
+    warmupBars: Tea.standardWarmupBars,
+  };
+  group.reconcile([
+    { key: "histogram", node },
+    { key: "signal", node },
+  ]);
+  await vi.waitFor(() =>
+    expect(group.getSnapshot().get("histogram")?.status).toBe("ready"),
+  );
+  expect(
+    f.http.filter(({ path }) => path === "/trpc/tea.compile"),
+  ).toHaveLength(1);
+  expect(f.channels).toHaveLength(1);
+  expect(group.getSnapshot().get("histogram")).toBe(
+    group.getSnapshot().get("signal"),
+  );
+  expect(group.getSnapshot().get("signal")?.data?.get(0)?.value).toBeNull();
+  f.channels[0]!.data(update(2));
+  await vi.waitFor(() =>
+    expect(group.getSnapshot().get("signal")?.time).toBe(2),
+  );
+  expect(group.getSnapshot().get("signal")?.data?.numRows).toBe(1);
+  expect(group.getSnapshot().get("signal")?.data?.get(0)?.value).toBeNaN();
+  f.channels[0]!.data(
+    encodeMessage({ type: "updates", data: fromRows(outputs, [row(2, 7)]) }),
+  );
+  await vi.waitFor(() =>
+    expect(group.getSnapshot().get("signal")?.data?.get(0)?.value).toBe(7),
+  );
+  group.reconcile([{ key: "signal", node }]);
+  expect(f.stopped.size).toBe(0);
+  group.close();
+  await vi.waitFor(() => expect(f.stopped.size).toBe(1));
+  await vi.waitFor(() =>
+    expect(
+      f.http.filter(({ path }) => path === "/trpc/tea.dispose"),
+    ).toHaveLength(1),
+  );
+  expect([...f.sockets.clients][0]!.readyState).toBe(WebSocket.OPEN);
+  expect(releaseError).not.toHaveBeenCalled();
+});
+
+it("releases grouped HTTP compilations that finish after their consumers leave", async () => {
+  const f = await start(undefined, { holdCompile: true });
+  const group = createTeaGroup(f.client, vi.fn());
+  cleanup.push(() => group.close());
+  group.reconcile([
+    {
+      key: "late",
+      node: {
+        source: { entry: "main.tea", sources: { "main.tea": "close" } },
+        ...Tea.barsInputs(series),
+        parameters: {},
+        requests: {},
+        from: 0,
+        to: "now",
+        countBack: 1,
+        warmupBars: Tea.standardWarmupBars,
+      },
+    },
+  ]);
+  await vi.waitFor(() =>
+    expect(
+      f.http.filter(({ path }) => path === "/trpc/tea.compile"),
+    ).toHaveLength(1),
+  );
+  group.close();
+  f.finishCompiles();
+  await vi.waitFor(() =>
+    expect(
+      f.http.filter(({ path }) => path === "/trpc/tea.dispose"),
+    ).toHaveLength(1),
+  );
+  expect(f.compileCancelled()).toBe(false);
+  expect(f.channels).toHaveLength(0);
+});
 
 it("decodes recursive Arrow metadata and avoids redisposing explicitly released nodes", async () => {
   const { client, http } = await start();

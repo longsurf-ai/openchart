@@ -1,22 +1,23 @@
 # watchlist
 
-Owns independent watchlists: ordered metric columns and a recursive tree of
-sections holding provider-scoped listings. The Watchlist widget selects a list
-in local view state; Dashboards never own that selection or the list.
+Owns independent watchlists. Widgets select them in local view state;
+Dashboards never own that selection.
 
-- schema.ts owns watchlist/watchlist_section/watchlist_item. Only the root has
-  an envelope; sections and items share its revision and cascade with it.
-  Sections link through `parent_section_id`; positions are per sibling list.
-- column.ts owns the column and metric contract; columns stay inline JSON.
-  Keep metrics a discriminated union so future variants can own parameters.
-- The entity nests `sections[].sections[]` to any depth through
-  `Schema.suspend`. Keep codecs such as decoding defaults out of the recursion;
-  Agent JSON Schema export cannot document them. Recursive types are `type`
-  aliases so they remain JSON objects.
-- Invariants walk the tree with scoped `at` contexts: ids are unique per
-  watchlist, each listing appears once across all sections, and each metric
-  appears once among columns.
-- Store maps rows to the tree depth-first, replaces the tree on save, and
-  re-reads what it wrote. Moving a row or subtree is one RFC 6902 `move`.
-- Market values come from Feed; widths, sort, collapse, density, and decimals
-  are frontend view state.
+- schema.ts owns watchlist/watchlist_section/watchlist_item. Sections and items
+  share the root's revision and cascade with it. Sections use
+  `parent_section_id`; positions are per sibling list.
+- column.ts owns inline JSON columns: stable IDs, optional titles, shared
+  visibility (legacy defaults true), built-ins and Formula snapshots/settings.
+  Hide retains configuration; remove deletes it. Results are never persisted.
+- Formula transitions compile outside the write transaction, validate output
+  and overrides, then recheck revision before saving. Configure uses saved
+  code; Reload captures source/import edits. Generic patches validate structure
+  without compiling. Temporary compiled nodes are released.
+- Recursive sections use `Schema.suspend` and `type` aliases. Keep decoding
+  defaults out of recursion so Agent JSON Schema export works.
+- Invariants require unique column/section/item IDs, one listing across the
+  tree, and one column per built-in metric, including hidden columns. Formula
+  columns may repeat.
+- Store assembles depth-first, replaces the tree on save, and rereads writes.
+  Moving a row or subtree uses one RFC 6902 `move`.
+- Widths, sorting, collapse, density, and decimals are widget view state.

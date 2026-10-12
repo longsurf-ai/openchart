@@ -6,9 +6,11 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Settings2,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { Badge } from "@openchart/app/components/ui/badge";
 import { Button } from "@openchart/app/components/ui/button";
 import {
   DropdownMenu,
@@ -27,8 +29,8 @@ import {
 import { useWidget } from "@openchart/app/hooks/use-widget";
 
 import type { Watchlist } from "../api/queries";
-import { COLUMNS } from "../utils/columns";
-import { METRICS, toggleColumn } from "../utils/tree";
+import { COLUMNS, columnTitle } from "../utils/columns";
+import { METRICS, toggleColumn, toggleColumnVisibility } from "../utils/tree";
 import { useWatchlistPlacement } from "./context";
 import { WatchlistMenuItems } from "./watchlist-menu";
 
@@ -68,8 +70,15 @@ export function WatchlistHeader({
   watchlist: Watchlist | null;
 }) {
   const { transport } = useWidget();
-  const { save, watchlistId, addSymbol, openDialog, switchTo } =
-    useWatchlistPlacement();
+  const {
+    save,
+    watchlistId,
+    addSymbol,
+    openDialog,
+    switchTo,
+    addFormula,
+    configureFormula,
+  } = useWatchlistPlacement();
   return (
     <div className="flex h-9 shrink-0 items-center gap-1 px-1.5">
       <DropdownMenu>
@@ -149,7 +158,8 @@ export function WatchlistHeader({
                 <DropdownMenuCheckboxItem
                   key={metric}
                   checked={watchlist.columns.some(
-                    (column) => column.metric.kind === metric,
+                    (column) =>
+                      column.metric.kind === metric && column.visible !== false,
                   )}
                   onSelect={(event) => event.preventDefault()}
                   onCheckedChange={() =>
@@ -159,6 +169,43 @@ export function WatchlistHeader({
                   {COLUMNS[metric].title}
                 </DropdownMenuCheckboxItem>
               ))}
+              {watchlist.columns
+                .filter((column) => column.metric.kind === "formula")
+                .map((column) => (
+                  <div key={column.id} className="flex items-center gap-1">
+                    <DropdownMenuCheckboxItem
+                      className="min-w-0 flex-1 gap-2"
+                      checked={column.visible !== false}
+                      onSelect={(event) => event.preventDefault()}
+                      onCheckedChange={() =>
+                        save.mutate((current) =>
+                          toggleColumnVisibility(current, column.id),
+                        )
+                      }
+                    >
+                      <span className="max-w-40 truncate">
+                        {columnTitle(column)}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="rounded-full px-1.5 py-0 text-2xs font-normal text-muted-foreground"
+                      >
+                        Formula
+                      </Badge>
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuItem
+                      aria-label={`Settings for ${columnTitle(column)}`}
+                      className="shrink-0 px-2"
+                      onSelect={() => configureFormula(column.id)}
+                    >
+                      <Settings2 className="size-3.5" />
+                    </DropdownMenuItem>
+                  </div>
+                ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={addFormula}>
+                <Plus /> Add formula column…
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -4,6 +4,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  replaceEqualDeep,
 } from "@tanstack/react-query";
 import { ListTree } from "lucide-react";
 import {
@@ -28,6 +29,8 @@ import {
   watchlistList,
   watchlistDetail,
   watchlistMutation,
+  formulaColumnMutation,
+  type FormulaSource,
 } from "../api/queries";
 import {
   createWatchlistViewStore,
@@ -38,13 +41,18 @@ import {
   addSection,
   renameSection,
   removeNode,
+  removeColumn,
+  type Column,
 } from "../utils/tree";
 import {
   WatchlistPlacementContext,
   WatchlistSymbolPicker,
+  WatchlistFormulaPicker,
+  type FormulaValues,
   type WatchlistAction,
 } from "./context";
 import { WatchlistDialog } from "./watchlist-dialog";
+import { FormulaColumnDialog } from "./formula-column-dialog";
 import { WatchlistView } from "./watchlist-view";
 
 function WatchlistPlacement({ children }: PropsWithChildren) {
@@ -109,9 +117,9 @@ function WatchlistSession({
   const createNext = (name: string) =>
     create.mutateAsync({
       name,
-      metrics: client
-        .getQueryData(watchlistDetail(transport, watchlistId).queryKey)
-        ?.columns.map((column) => column.metric.kind),
+      columns: client.getQueryData(
+        watchlistDetail(transport, watchlistId).queryKey,
+      )?.columns,
     });
   const remove = useMutation(deleteWatchlist(transport, client));
   const Picker = useContext(WatchlistSymbolPicker);
@@ -119,6 +127,52 @@ function WatchlistSession({
   const [action, setAction] = useState<WatchlistAction>();
   const [quotes] = useState(() => new BehaviorSubject<Quotes>({}));
   const [crosshair] = useState(() => new BehaviorSubject<number | null>(null));
+  const [formulaValues] = useState(
+    () => new BehaviorSubject<FormulaValues>({}),
+  );
+  const FormulaPicker = useContext(WatchlistFormulaPicker);
+  const [pickingFormula, setPickingFormula] = useState(false);
+  const [formula, setFormula] = useState<{
+    source: FormulaSource;
+    column?: Column;
+    revision: number;
+    open: boolean;
+    draftVersion?: number;
+  }>();
+  const currentWatchlist = useQuery(
+    watchlistDetail(transport, watchlistId),
+  ).data;
+  const latestColumn = currentWatchlist?.columns.find(
+    (column) => column.id === formula?.column?.id,
+  );
+  const columnChanged =
+    formula?.column !== undefined &&
+    currentWatchlist !== undefined &&
+    replaceEqualDeep(formula.column, latestColumn) !== formula.column;
+  const editFormula = useMutation(
+    formulaColumnMutation(transport, client, watchlistId),
+  );
+  const configureFormula = useCallback(
+    (columnId: string) => {
+      const current = client.getQueryData(
+        watchlistDetail(transport, watchlistId).queryKey,
+      );
+      const column = current?.columns.find((item) => item.id === columnId);
+      if (column?.metric.kind !== "formula" || !current) return;
+      const source = column.metric.source;
+      setFormula((draft) =>
+        draft?.column?.id === columnId
+          ? { ...draft, open: true }
+          : {
+              source,
+              column,
+              revision: current.revision,
+              open: true,
+            },
+      );
+    },
+    [client, transport, watchlistId],
+  );
   const value = useMemo(
     () => ({
       watchlistId,
@@ -126,15 +180,107 @@ function WatchlistSession({
       save,
       quotes,
       crosshair,
+      formulaValues,
+      addFormula: () => {
+        if (formula && !formula.column) setFormula({ ...formula, open: true });
+        else setPickingFormula(true);
+      },
+      configureFormula,
       addSymbol: (sectionId?: string) => setPicking({ sectionId }),
       openDialog: setAction,
       switchTo,
     }),
-    [watchlistId, view, save, quotes, crosshair, switchTo],
+    [
+      watchlistId,
+      view,
+      save,
+      quotes,
+      crosshair,
+      formulaValues,
+      configureFormula,
+      formula,
+      switchTo,
+    ],
   );
   return (
     <WatchlistPlacementContext.Provider value={value}>
       {children}
+      {pickingFormula && FormulaPicker ? (
+        <FormulaPicker
+          onClose={() => setPickingFormula(false)}
+          onSelect={(source) => {
+            const current = client.getQueryData(
+              watchlistDetail(transport, watchlistId).queryKey,
+            );
+            if (!current) return;
+            setPickingFormula(false);
+            setFormula({ source, revision: current.revision, open: true });
+          }}
+        />
+      ) : null}
+      {formula ? (
+        <FormulaColumnDialog
+          key={`${formula.column?.id ?? `${formula.source.workspaceId}:${formula.source.path}`}:${formula.draftVersion ?? 0}`}
+          target={formula}
+          conflict={
+            columnChanged ? (latestColumn ? "changed" : "removed") : undefined
+          }
+          onLoadSaved={() => {
+            if (latestColumn?.metric.kind !== "formula" || !currentWatchlist)
+              return;
+            setFormula({
+              source: latestColumn.metric.source,
+              column: latestColumn,
+              revision: currentWatchlist.revision,
+              open: true,
+              draftVersion: (formula.draftVersion ?? 0) + 1,
+            });
+          }}
+          open={formula.open}
+          pending={editFormula.isPending || save.isPending}
+          onClose={() => setFormula(undefined)}
+          onSuspend={() => setFormula({ ...formula, open: false })}
+          onSave={(settings, expectedRevision) =>
+            editFormula.mutateAsync(
+              formula.column
+                ? {
+                    kind: "configure",
+                    columnId: formula.column.id,
+                    expectedColumn: formula.column,
+                    settings,
+                    expectedRevision,
+                  }
+                : {
+                    kind: "add",
+                    source: formula.source,
+                    settings,
+                    expectedRevision,
+                  },
+            )
+          }
+          onReload={async (expectedRevision) => {
+            if (!formula.column)
+              throw new Error("Save the column before reloading.");
+            const updated = await editFormula.mutateAsync({
+              kind: "reload",
+              columnId: formula.column.id,
+              expectedColumn: formula.column,
+              expectedRevision,
+            });
+            const column = updated.columns.find(
+              (column) => column.id === formula.column?.id,
+            );
+            if (column)
+              setFormula({ ...formula, column, revision: updated.revision });
+            return updated;
+          }}
+          onRemove={() =>
+            save.mutateAsync((current) =>
+              formula.column ? removeColumn(current, formula.column.id) : [],
+            )
+          }
+        />
+      ) : null}
       {picking && Picker ? (
         <Picker
           onClose={() => setPicking(undefined)}

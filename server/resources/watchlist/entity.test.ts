@@ -28,14 +28,84 @@ test("basic metric columns preserve their identity and authored order", () => {
     { id: "wcl_percent", metric: { kind: "changePercent" } },
     { id: "wcl_change", metric: { kind: "change" } },
   ];
+  const normalized = columns.map((column) => ({ ...column, visible: true }));
   for (const parse of boundaries) {
-    expect(parse(columns).columns).toEqual(columns);
+    expect(parse(columns).columns).toEqual(normalized);
     expect(parse([...columns].reverse()).columns).toEqual(
-      [...columns].reverse(),
+      [...normalized].reverse(),
     );
   }
   const entity = read({ ...envelope, name: "Markets", columns });
   expect(Schema.encodeSync(WatchlistEntity)(entity)).toEqual(entity);
+});
+
+const formula = {
+  kind: "formula",
+  source: { workspaceId: "wsp_test", path: "value.tea" },
+  snapshot: { "value.tea": 'emit "value" close\n' },
+  parameterOverrides: {},
+  output: "value",
+  bars: { resolution: "1d" },
+};
+
+test("Formula columns repeat with independent identities and retain hidden configuration", () => {
+  const columns = [
+    { id: "wcl_first", title: "First", visible: false, metric: formula },
+    { id: "wcl_second", visible: true, metric: formula },
+  ];
+  for (const parse of boundaries) {
+    expect(parse(columns).columns).toEqual(columns);
+    expect(() =>
+      parse([columns[0], { ...columns[1], id: "wcl_first" }]),
+    ).toThrow();
+    expect(() =>
+      parse([
+        { id: "wcl_price", visible: false, metric: { kind: "price" } },
+        { id: "wcl_other", visible: true, metric: { kind: "price" } },
+      ]),
+    ).toThrow();
+  }
+});
+
+test("Formula structure requires a snapshot entry and finite overrides without compiling generic writes", () => {
+  for (const parse of boundaries) {
+    expect(parse([{ id: "wcl_a", metric: formula }]).columns[0]?.visible).toBe(
+      true,
+    );
+    for (const metric of [
+      { ...formula, snapshot: { "other.tea": "" } },
+      { ...formula, parameterOverrides: { length: Infinity } },
+      { ...formula, bars: {} },
+      { ...formula, bars: { resolution: "invalid" } },
+      { ...formula, output: "" },
+      { ...formula, source: { ...formula.source, path: "../value.tea" } },
+    ])
+      expect(() => parse([{ id: "wcl_a", metric }])).toThrow();
+    expect(
+      parse([
+        {
+          id: "wcl_a",
+          metric: {
+            ...formula,
+            snapshot: {
+              "value.tea": "not compiled by the structural boundary",
+            },
+          },
+        },
+      ]).columns,
+    ).toHaveLength(1);
+  }
+});
+
+test("column titles are optional, nonempty, and at most 200 characters", () => {
+  for (const parse of boundaries) {
+    expect(
+      parse([{ id: "wcl_a", title: "x".repeat(200), metric: formula }])
+        .columns[0]?.title,
+    ).toHaveLength(200);
+    for (const title of ["", "x".repeat(201), null])
+      expect(() => parse([{ id: "wcl_a", title, metric: formula }])).toThrow();
+  }
 });
 
 test("omitted and empty columns use the watchlist table's empty default", () => {

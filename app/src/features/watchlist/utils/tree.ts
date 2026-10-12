@@ -9,7 +9,10 @@ type Section = Watchlist["sections"][number];
 type Item = Section["items"][number];
 
 /** A metric a column can show; the Resource owns the list. */
-export type Metric = Watchlist["columns"][number]["metric"]["kind"];
+export type Column = Watchlist["columns"][number];
+
+/** Built-in quote metrics; formula columns have their own program definition. */
+export type Metric = Exclude<Column["metric"]["kind"], "formula">;
 
 /** Every metric in display-menu order. */
 export const METRICS = [
@@ -250,12 +253,17 @@ export function toggleColumn(
   const index = watchlist.columns.findIndex(
     (column) => column.metric.kind === metric,
   );
-  if (index >= 0) return [{ op: "remove", path: `/columns/${index}` }];
+  if (index >= 0)
+    return toggleColumnVisibility(watchlist, watchlist.columns[index]!.id);
   return [
     {
       op: "add",
       path: "/columns/-",
-      value: { id: watchlistIds.column.create(), metric: { kind: metric } },
+      value: {
+        id: watchlistIds.column.create(),
+        visible: true,
+        metric: { kind: metric },
+      },
     },
   ];
 }
@@ -271,4 +279,29 @@ export function moveColumn(
   return from < 0 || to < 0 || from === to
     ? []
     : [{ op: "move", from: `/columns/${from}`, path: `/columns/${to}` }];
+}
+
+/** Toggle visibility without changing column identity, position, or saved settings. Missing columns make no edit. @example toggleColumnVisibility(watchlist, column.id) */
+export function toggleColumnVisibility(
+  watchlist: Pick<Watchlist, "columns">,
+  id: string,
+): WatchlistOperation[] {
+  const index = watchlist.columns.findIndex((column) => column.id === id);
+  if (index < 0) return [];
+  return [
+    {
+      op: "add",
+      path: `/columns/${index}/visible`,
+      value: watchlist.columns[index]!.visible === false,
+    },
+  ];
+}
+
+/** Remove only a column's configuration; its Workspace code is never touched. @example removeColumn(watchlist, column.id) */
+export function removeColumn(
+  watchlist: Pick<Watchlist, "columns">,
+  id: string,
+): WatchlistOperation[] {
+  const index = watchlist.columns.findIndex((column) => column.id === id);
+  return index < 0 ? [] : [{ op: "remove", path: `/columns/${index}` }];
 }

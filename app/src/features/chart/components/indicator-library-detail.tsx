@@ -1,4 +1,5 @@
 // Purpose: Explain one resolved study using its authored guide and canonical Tea inputs.
+import { parseTeaParameterOverrides } from "@openchart/app/components/ui/tea-parameter-fields/parse-parameter-overrides";
 import { useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, Copy, FileCode2 } from "lucide-react";
@@ -8,10 +9,7 @@ import { Markdown } from "@openchart/app/components/ui/markdown/markdown";
 import type { IndicatorCatalogEntry } from "@openchart/app/features/chart/api/indicator-scripts";
 import { useErrorToast } from "@openchart/app/hooks/use-error-toast";
 import { useTeaDefinition } from "@openchart/app/hooks/use-tea";
-import {
-  IndicatorInputsForm,
-  parseIndicatorOverrides,
-} from "./indicator-inputs-dialog";
+import { IndicatorInputsForm } from "./indicator-inputs-dialog";
 
 /** Explain only the selected source; compilation owns inputs, and the existing Add flow owns snapshots and writes. @example <IndicatorLibraryDetail source={source} scope="My scripts" busy={busy} onBack={back} onAdd={add} onOpenSource={open} onModify={modify} /> */
 export function IndicatorLibraryDetail({
@@ -49,7 +47,7 @@ export function IndicatorLibraryDetail({
     if (!compiled) return {};
     try {
       return {
-        parameters: parseIndicatorOverrides(compiled.definition, overrides),
+        parameters: parseTeaParameterOverrides(compiled.definition, overrides),
       };
     } catch (cause) {
       return { error: cause instanceof Error ? cause.message : String(cause) };

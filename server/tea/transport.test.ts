@@ -16,6 +16,10 @@ import {
 } from "@openchart/server/data";
 import { temporaryHome } from "@openchart/server/home.test-utils";
 import { createTeaClient } from "@openchart/app/tea";
+import {
+  createTeaGroup,
+  type TeaGroupRequest,
+} from "../../app/src/lib/tea/group";
 import { createTransport } from "@openchart/app/lib/transport/transport";
 
 it("compiles once, streams attempts, evaluates another window and disposes explicitly and on client shutdown", async () => {
@@ -211,6 +215,89 @@ it("compiles once, streams attempts, evaluates another window and disposes expli
     }
     await vi.waitFor(() => expect(closed).toBe(1));
     expect(queues.size).toBe(0);
+    const groupedClient = {
+      compile: vi.fn(tea.compile),
+      observe: vi.fn(tea.observe),
+      dispose: vi.fn(tea.dispose),
+    };
+    const releaseError = vi.fn();
+    const group = createTeaGroup(groupedClient, releaseError);
+    const groupNode: TeaGroupRequest["node"] = {
+      source: {
+        entry: "total.tea",
+        sources: {
+          "total.tea":
+            'factor = input.float(1)\nvar float total = 0.0\ntotal += close * factor\nemit "total" total\nemit "double" total * 2',
+        },
+      },
+      ...Tea.barsInputs(series),
+      parameters: {},
+      requests: {},
+      from: 180_000,
+      to: "now",
+      countBack: 1,
+      warmupBars: Tea.standardWarmupBars,
+    };
+    try {
+      const total = { key: "total-column", node: groupNode };
+      const double = {
+        key: "double-column",
+        node: { ...groupNode, parameters: { factor: 1 } },
+      };
+      group.reconcile([total, double]);
+      await vi.waitFor(() =>
+        expect(group.getSnapshot().get(total.key)?.status).toBe("ready"),
+      );
+      expect(groupedClient.compile).toHaveBeenCalledOnce();
+      expect(groupedClient.observe).toHaveBeenCalledOnce();
+      expect(group.getSnapshot().get(total.key)).toBe(
+        group.getSnapshot().get(double.key),
+      );
+      expect(group.getSnapshot().get(total.key)?.data?.get(0)).toMatchObject({
+        total: 14,
+        double: 28,
+        provisional: true,
+      });
+      const chart = await lastValueFrom(
+        tea.observe({ ...request, from: 180_000, to: 240_000 }),
+      );
+      if (chart.type !== "snapshot") throw new Error("Expected chart snapshot");
+      expect(group.getSnapshot().get(total.key)?.data?.get(0)?.total).toBe(
+        chart.snapshot.data.get(chart.snapshot.data.numRows - 1)?.total,
+      );
+      const faster = {
+        key: "other-parameters",
+        node: { ...groupNode, parameters: { factor: 2 } },
+      };
+      group.reconcile([total, double, faster]);
+      await vi.waitFor(() =>
+        expect(group.getSnapshot().get(faster.key)?.data?.get(0)?.total).toBe(
+          28,
+        ),
+      );
+      expect(groupedClient.compile).toHaveBeenCalledOnce();
+      expect(groupedClient.observe).toHaveBeenCalledTimes(2);
+      revision++;
+      const final = { time: 180_000, close: 7, final: true };
+      history.set(final.time, final);
+      for (const queue of queues) Queue.offerUnsafe(queue, frame([final]));
+      await vi.waitFor(() =>
+        expect(group.getSnapshot().get(total.key)?.data?.get(0)).toMatchObject({
+          total: 15,
+          double: 30,
+          provisional: false,
+        }),
+      );
+      expect(group.getSnapshot().get(total.key)?.data?.numRows).toBe(1);
+      group.reconcile([double]);
+      expect(group.getSnapshot().get(double.key)?.data?.get(0)?.total).toBe(15);
+      expect(groupedClient.dispose).not.toHaveBeenCalled();
+    } finally {
+      group.close();
+    }
+    await vi.waitFor(() => expect(queues.size).toBe(0));
+    expect(groupedClient.dispose).toHaveBeenCalledOnce();
+    expect(releaseError).not.toHaveBeenCalled();
     const reused = await lastValueFrom(
       tea.observe({ ...request, to: 180_000 }).pipe(toArray()),
     );
