@@ -1,7 +1,7 @@
 /// <reference types="vitest/jsdom" />
 // Purpose: Prove the Watchlist widget renders its tree, live metrics, collapse, sort, row removal through the Resource, and raises ViewChart for rows.
 import { defineId } from "@openchart/identifier";
-import type { ProviderListing } from "@openchart/market";
+import { BarColumns, type ProviderListing } from "@openchart/market";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
@@ -12,8 +12,9 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { BehaviorSubject, NEVER } from "rxjs";
-import { fromRows } from "@openchart/timeseries";
+import { BehaviorSubject, NEVER, Subject } from "rxjs";
+import { defineDataFrame, fromRows } from "@openchart/timeseries";
+import type { BarsView } from "@openchart/app/hooks/use-bars";
 import type { TeaLatestState } from "@openchart/app/hooks/use-tea";
 import { Schema, Field, Float64, TimestampMillisecond } from "apache-arrow";
 
@@ -331,6 +332,7 @@ const rows = () =>
   screen.getAllByRole("treeitem").map((row) => row.getAttribute("aria-label"));
 
 beforeEach(() => {
+  views.clear();
   viewed.mockReset();
   formulaStates.next(new Map());
   formulaRetry.mockReset();
@@ -689,11 +691,12 @@ test("Price History hover and sorting coexist with Formula cells and row intents
     sparkline,
     new MouseEvent("pointermove", { bubbles: true, clientX: 0 }),
   );
-  await waitFor(() => expect(msft).toHaveTextContent("400.00"));
+  // Whole text matches prove hover and return-to-live values have no coloured digits.
+  expect(await within(msft).findByText("400.00")).toBeInTheDocument();
   expect(msft).toHaveTextContent("2,000.00");
   expect(viewed).not.toHaveBeenCalled();
   fireEvent.pointerLeave(sparkline);
-  await waitFor(() => expect(msft).toHaveTextContent("396.00"));
+  expect(await within(msft).findByText("396.00")).toBeInTheDocument();
   await user.click(screen.getByRole("columnheader", { name: "Price History" }));
   await user.click(screen.getByRole("columnheader", { name: "Price History" }));
   await waitFor(() => expect(rows()).toEqual(["AAPL", "Tech", "NVDA", "MSFT"]));
@@ -704,6 +707,44 @@ test("Price History hover and sorting coexist with Formula cells and row intents
   );
   await user.keyboard("{Enter}");
   expect(viewed).toHaveBeenCalledTimes(2);
+});
+
+test("live bars and Tea results highlight only the latest changed digits", async () => {
+  const Bars = defineDataFrame(BarColumns);
+  const frame = (time: number, close: number) =>
+    Bars.create({
+      labels: {},
+      rows: [{ time, open: close, high: close, low: close, close, volume: 10 }],
+    });
+  const updates = new Subject<BarsView["data"]>();
+  views.set("MSFT", {
+    status: "ready",
+    current: { data: frame(2, 396), updates },
+  });
+  formulaStates.next(new Map([["wit_msft:wcl_formula", readyFormula(2000)]]));
+  setup({ formula: true });
+  const msft = await screen.findByRole("treeitem", { name: "MSFT" });
+  const price = await within(msft).findByText("396.00");
+  const formula = await within(msft).findByText("2,000.00");
+
+  act(() => {
+    updates.next(frame(2, 396.01));
+    formulaStates.next(
+      new Map([["wit_msft:wcl_formula", readyFormula(2000.25)]]),
+    );
+  });
+  await waitFor(() => expect(price).toHaveTextContent("396.01"));
+  await waitFor(() => expect(formula).toHaveTextContent("2,000.25"));
+  expect(
+    within(price)
+      .queryAllByText(/./u, { selector: ".text-up" })
+      .map((digit) => digit.textContent),
+  ).toEqual(["1"]);
+  expect(
+    within(formula)
+      .queryAllByText(/./u, { selector: ".text-up" })
+      .map((digit) => digit.textContent),
+  ).toEqual(["2", "5"]);
 });
 
 test("Formula retry works by click and Enter without opening the row in Chart", async () => {

@@ -57,6 +57,7 @@ import {
 } from "../utils/tree";
 import { useWatchlistPlacement, type FormulaValues } from "./context";
 import { Sparkline } from "./sparkline";
+import { LiveNumber } from "./live-number";
 
 import {
   useFormulaCells,
@@ -571,6 +572,12 @@ function MetricCells({
             >
               {text}
             </Button>
+          ) : cell?.status === "ready" && cell.value !== undefined ? (
+            <LiveNumber
+              key={`${providerListingKey(item)}:${column.metric.output}`}
+              value={cell.value}
+              text={text}
+            />
           ) : (
             text
           )}
@@ -617,7 +624,13 @@ function MetricCells({
           metricTone(column.metric.kind, shown),
         )}
       >
-        {formatMetric(column.metric.kind, shown)}
+        {column.metric.kind === "price" &&
+        hovered === undefined &&
+        shown?.price !== undefined ? (
+          <LiveNumber value={shown.price} text={formatMetric("price", shown)} />
+        ) : (
+          formatMetric(column.metric.kind, shown)
+        )}
       </span>
     );
   });
