@@ -681,8 +681,9 @@ test("Price History hover and sorting coexist with Formula cells and row intents
   const { user } = setup({ history: true, formula: true });
   const msft = await screen.findByRole("treeitem", { name: "MSFT" });
   await waitFor(() => expect(msft).toHaveTextContent("2,000.00"));
-  const sparkline = msft.querySelector("svg.cursor-crosshair")!;
-  expect(sparkline).not.toBeNull();
+  const sparkline = within(msft).getByRole("img", {
+    name: "Price history for MSFT",
+  });
   // jsdom lacks PointerEvent's coordinate fields; dispatch the native shape React reads.
   fireEvent(
     sparkline,

@@ -272,7 +272,8 @@ function Line({
     price >= shape.reference ? "fill-up" : "fill-down";
   return (
     <svg
-      aria-hidden
+      role="img"
+      aria-label={`Price history for ${request.listing.symbol}`}
       width={WIDTH}
       height={HEIGHT}
       className="cursor-crosshair justify-self-center overflow-visible"
