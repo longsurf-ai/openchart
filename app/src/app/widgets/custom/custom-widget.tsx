@@ -131,10 +131,19 @@ function CustomWidgetContent({ kind }: { kind: string }) {
     >
       {/* A widget that reads its symbol becomes the header symbol control's target, as a clicked chart does. */}
       <div
-        className="h-full min-h-0 overflow-auto"
+        className="relative h-full min-h-0 overflow-auto"
         onPointerDownCapture={select}
         onFocusCapture={select}
       >
+        {code.error ? (
+          // A failed refresh keeps this revision running; retry loads the newer one.
+          <div className="absolute right-2 top-2 z-10 rounded-md bg-background">
+            <ResourceNotice
+              error={code.error}
+              onRetry={() => void code.refetch()}
+            />
+          </div>
+        ) : null}
         <Component />
       </div>
     </ErrorBoundary>

@@ -48,6 +48,17 @@ test("rejects every /// reference directive", () => {
     );
 });
 
+test("rejects comments that suppress type errors", () => {
+  for (const comment of [
+    "// @ts-nocheck",
+    "// @ts-ignore",
+    "// @ts-expect-error",
+  ])
+    expect(() => checkWidget(`${comment}\n${source}`, filename)).toThrow(
+      /hello\.widget\.tsx\(1,4\): Widget files may not suppress type errors/,
+    );
+});
+
 test("requires a literal kind and title on a default-exported defineWidget", () => {
   expect(() =>
     checkWidget(source.replace(/export default[^\n]+/, ""), filename),

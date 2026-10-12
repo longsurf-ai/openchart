@@ -110,9 +110,9 @@ export function transpileWidget(text: string, filename: string) {
   }).outputText;
 }
 
-function invalid(source: ts.SourceFile, node: ts.Node, message: string) {
+function invalid(source: ts.SourceFile, at: ts.Node | number, message: string) {
   const { line, character } = source.getLineAndCharacterOfPosition(
-    node.getStart(source),
+    typeof at === "number" ? at : at.getStart(source),
   );
   return new WidgetInvalid({
     message: `${source.fileName.split("/").pop()}(${line + 1},${character + 1}): ${message}`,
@@ -128,6 +128,14 @@ function inspectImports(source: ts.SourceFile, allowed: readonly string[]) {
     throw new WidgetInvalid({
       message: "Widget files may not use /// reference directives.",
     });
+  // Suppressed diagnostics would let code the check never saw go live.
+  const suppression = /@ts-(?:nocheck|ignore|expect-error)\b/.exec(source.text);
+  if (suppression)
+    throw invalid(
+      source,
+      suppression.index,
+      `Widget files may not suppress type errors with ${suppression[0]}.`,
+    );
   const inspect = (node: ts.Node): void => {
     if (
       (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&

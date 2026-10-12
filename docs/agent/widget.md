@@ -93,7 +93,9 @@ what your own effects create.
 ## Save and place
 
 1. Write the file in the current Workspace, then call `save_widget` with its
-   Workspace-relative path. Fix any diagnostics and save again.
+   Workspace-relative path. Fix any diagnostics and save again; comments
+   that suppress them (`@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`) are
+   refused.
 2. `save_widget` returns `placementKind` (`custom:<kind>`). Read the dashboard
    with `resource_read`, then `resource_mutate` a patch that adds
    `{ id: "wdg_<unique>", kind: placementKind, layout: { x, y, w, h } }` to

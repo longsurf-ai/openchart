@@ -102,6 +102,7 @@ function setup(
   charts: { id: string }[] = [],
 ) {
   let compiled = code === null ? null : { revision: 1, code };
+  const compiledQuery = vi.fn(async () => compiled);
   // The header's Widgets menu lists saved widgets on mount and its rows read
   // `source.path`, while the card reads only `compiled`.
   const transport = {
@@ -110,7 +111,7 @@ function setup(
       resources: {
         custom_widget: {
           list: { query: vi.fn(async () => ({ items: [], cursor: null })) },
-          compiled: { query: vi.fn(async () => compiled) },
+          compiled: { query: compiledQuery },
         },
         chart: {
           list: { query: vi.fn(async () => ({ items: charts, cursor: null })) },
@@ -149,6 +150,7 @@ function setup(
     </QueryClientProvider>,
   );
   return {
+    compiledQuery,
     // A save publishes resource.changed; Resource invalidation refetches these keys.
     publish: async (next: { revision: number; code: string }) => {
       compiled = next;
@@ -266,4 +268,21 @@ test("the header targets the chart until a symbol widget is clicked, and a focus
   expect(
     await screen.findByRole("button", { name: "Chart cht_test" }),
   ).toBeInTheDocument();
+});
+
+test("a failed refresh keeps the running revision and offers a retry for the new one", async () => {
+  const user = userEvent.setup();
+  const { compiledQuery, publish } = setup();
+  expect(
+    await screen.findByRole("button", { name: "Clicks 0" }),
+  ).toBeInTheDocument();
+  compiledQuery.mockRejectedValueOnce(new Error("Backend unavailable"));
+  await publish({ revision: 2, code: counter("Taps") });
+  await user.click(await screen.findByRole("button", { name: "Retry" }));
+  expect(
+    await screen.findByRole("button", { name: "Taps 0" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Retry" }),
+  ).not.toBeInTheDocument();
 });
