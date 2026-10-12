@@ -16,19 +16,27 @@ export function useDrawingTool(chart: ChartRuntime) {
     (state) => state.drawings.toolLocked,
   );
   const selectTool = useCallback(
-    (tool: Drawing.Type | null) => {
+    (tool: Drawing.Tool | null) => {
       chart.mutate((state) => {
         state.drawings.activeTool = tool;
         delete state.drawings.draft;
         delete state.drawings.selectedId;
+        delete state.measurement;
       });
     },
     [chart],
   );
+  const clearMeasurement = useCallback(() => {
+    chart.mutate((state) => {
+      delete state.measurement;
+      if (state.drawings.activeTool === "measurement")
+        state.drawings.activeTool = null;
+    });
+  }, [chart]);
   const toggleLock = useCallback(() => {
     chart.mutate((state) => {
       state.drawings.toolLocked = !state.drawings.toolLocked;
     });
   }, [chart]);
-  return { activeTool, toolLocked, selectTool, toggleLock };
+  return { activeTool, toolLocked, selectTool, toggleLock, clearMeasurement };
 }

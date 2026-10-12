@@ -60,3 +60,10 @@ Public entry point for the v2 chart runtime. Wires a canvas element to the chart
   subtree. If the pointer is still geometrically inside the chart interaction
   root, do not clear annotation hover just because the DOM related target is
   outside that subtree.
+
+- Measurement supports drag-release and click-move-click on the same transient
+  state. A click enters tracking; neither Shift nor a held mouse button is
+  required after the start. Right-click cancels an unfinished range; completed
+  range/card menus consume paint-owned hit regions and never create Drawing
+  Resources. Escape, Delete/Backspace, host clearing and disposal must not allow
+  a later mouseup to restore a cleared range.

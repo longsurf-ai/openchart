@@ -6,8 +6,10 @@ import {
   Lock,
   LockOpen,
   MousePointer2,
+  Ruler,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
 import Draggable from "react-draggable";
@@ -19,6 +21,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@openchart/app/components/ui/dropdown";
 import { Separator } from "@openchart/app/components/ui/separator";
@@ -38,7 +41,26 @@ import { getGridPreset } from "@openchart/app/features/chart/utils/grid-layout";
 import type { ChartRuntime } from "@openchart/app/lib/chart/store";
 import { cn } from "@openchart/app/utils/cn";
 
-type Tool = { id: Drawing.Type; label: string; icon: TradingToolIconName };
+type Tool = {
+  id: Drawing.Tool;
+  label: string;
+  shortcut?: string;
+  icon: TradingToolIconName | "ruler";
+};
+
+function ToolIcon({
+  name,
+  className,
+}: {
+  name: Tool["icon"];
+  className: string;
+}) {
+  return name === "ruler" ? (
+    <Ruler className={className} />
+  ) : (
+    <TradingToolIcon name={name} className={className} />
+  );
+}
 
 /** Select the active cell locally; drawing controls operate its registered runtime. @example <FocusedDrawingToolbar /> */
 export function FocusedDrawingToolbar() {
@@ -119,12 +141,18 @@ const groups: readonly { id: string; label: string; tools: readonly Tool[] }[] =
       ],
     },
     {
-      id: "volume",
-      label: "Volume",
+      id: "measurement",
+      label: "Measurement",
       tools: [
         {
+          id: "measurement",
+          label: "Measure",
+          shortcut: "Shift",
+          icon: "ruler",
+        },
+        {
           id: "volume_profile",
-          label: "Fixed range volume profile",
+          label: "Volume Profile",
           icon: "volume-profile",
         },
       ],
@@ -205,13 +233,17 @@ function AiSparkles() {
 /** All tools use the core's existing gestures; each group button shows its last chosen tool. @example <DrawingToolbar chart={activeChart} /> */
 export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
   const railRef = useRef<HTMLDivElement>(null);
-  const { activeTool, toolLocked, selectTool, toggleLock } =
+  const { activeTool, toolLocked, selectTool, toggleLock, clearMeasurement } =
     useDrawingTool(chart);
+  const measurementPhase = useStore(
+    chart.store,
+    (state) => state.measurement?.phase,
+  );
   const drawingCount = useStore(
     chart.store,
     (state) => v2.ChartStateModel.drawingItems(state).length,
   );
-  const [lastPicked, setLastPicked] = useState<Record<string, Drawing.Type>>(
+  const [lastPicked, setLastPicked] = useState<Record<string, Drawing.Tool>>(
     {},
   );
   return (
@@ -264,12 +296,13 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
                       variant="ghost"
                       size="icon-sm"
                       aria-label={group.label}
+                      aria-pressed={active}
                       className={cn(
                         "rounded-md text-muted-foreground hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground",
                         active && "bg-accent text-foreground",
                       )}
                     >
-                      <TradingToolIcon
+                      <ToolIcon
                         name={shown.icon}
                         className="size-4 stroke-icon-regular"
                       />
@@ -299,11 +332,16 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
                       selectTool(tool.id);
                     }}
                   >
-                    <TradingToolIcon
+                    <ToolIcon
                       name={tool.icon}
                       className="size-4 stroke-icon-regular text-muted-foreground"
                     />
                     {tool.label}
+                    {tool.shortcut ? (
+                      <DropdownMenuShortcut aria-hidden="true">
+                        {tool.shortcut}
+                      </DropdownMenuShortcut>
+                    ) : null}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -311,6 +349,18 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
           );
         })}
         <Separator className="my-0.5 w-6" />
+        {measurementPhase ? (
+          <RailButton
+            label={
+              measurementPhase === "complete"
+                ? "Delete measurement"
+                : "Cancel measurement"
+            }
+            onClick={clearMeasurement}
+          >
+            <X className="size-4" />
+          </RailButton>
+        ) : null}
         <RailButton
           label={toolLocked ? "Keep tool selected: on" : "Keep tool selected"}
           active={toolLocked}
@@ -324,10 +374,13 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
         </RailButton>
         <RailButton
           label="Remove all drawings"
-          disabled={!drawingCount}
+          disabled={!drawingCount && !measurementPhase}
           className="hover:text-destructive"
           onClick={() =>
             chart.mutate((state) => {
+              delete state.measurement;
+              if (state.drawings.activeTool === "measurement")
+                state.drawings.activeTool = null;
               for (const id of v2.ChartStateModel.drawingItems(state).map(
                 (item) => item.id,
               ))

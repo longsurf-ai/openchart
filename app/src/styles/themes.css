@@ -38,6 +38,8 @@
     --scrollbar-thumb-hover: oklch(0.708 0 0 / 50%);
     --up: hsl(160 48% 33%);
     --down: hsl(0 60% 44%);
+    --chart-comparison-up: hsl(160 48% 24%);
+    --chart-comparison-down: hsl(0 60% 32%);
     --unchanged: hsl(220 8% 42%);
     --indicator-blue: hsl(221 83% 53%);
     --indicator-orange: hsl(29 90% 48%);
@@ -103,6 +105,8 @@
     --scrollbar-thumb-hover: oklch(0.985 0 0 / 35%);
     --up: hsl(160 48% 44%);
     --down: hsl(0 60% 60%);
+    --chart-comparison-up: hsl(160 48% 32%);
+    --chart-comparison-down: hsl(0 60% 44%);
     --unchanged: hsl(220 5% 55%);
     --indicator-blue: hsl(218 78% 66%);
     --indicator-orange: hsl(31 88% 61%);

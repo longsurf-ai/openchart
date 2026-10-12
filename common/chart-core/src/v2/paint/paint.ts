@@ -81,6 +81,7 @@ import {
   readComparableValue,
   transformPointForMode,
 } from "@openchart/chart-core/v2/scale-mode";
+import { paintMeasurement } from "./measurement";
 import type { RenderProfileFrame, RenderProfileMetadata } from "./profile";
 
 type Axis = YAxisConfig.Axis;
@@ -157,6 +158,13 @@ export interface RuntimeState {
   xRuntimeCache?: XRuntimesCache;
   /** Detached DOM label geometry from this paint, never persisted in Chart.State. */
   drawingLabelPlacements?: Map<string, readonly LineLabelPlacement[]>;
+  /** Last painted ruler range and card bounds, in canvas pixels; never persisted. */
+  measurementHitRegions?: readonly {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }[];
   floatingAxisOverlays?: Array<{
     axisId: string;
     seriesId: string;
@@ -2257,6 +2265,7 @@ export function repaint(
     readonly LineLabelPlacement[]
   >();
   runtime.drawingLabelPlacements = drawingLabelPlacements;
+  runtime.measurementHitRegions = undefined;
   const time = <T>(
     name: string,
     action: () => T,
@@ -4745,6 +4754,49 @@ export function repaint(
         crosshairText,
         font,
       );
+    }
+  }
+
+  if (state.measurement) {
+    const series = all.find((item) => item.id === state.measurement!.seriesId);
+    const seriesRuntime = series && seriesMap.get(series.id);
+    const axis =
+      series && axes.find((item) => item.id === Series.getYAxisId(series));
+    const scale = axis && coord.scales.y[axis.id];
+    const paneId = series && paneIdsBySeries.get(series.id);
+    const pane = paneId ? paneRects.get(paneId) : undefined;
+    if (
+      series &&
+      series.options.visible !== false &&
+      seriesRuntime &&
+      axis &&
+      scale &&
+      pane
+    ) {
+      runtime.measurementHitRegions = paintMeasurement({
+        ctx,
+        state,
+        series,
+        scale,
+        pane,
+        font,
+        transform: modeTransforms.get(series.id),
+        xAt: seriesRuntime.xFn,
+        xAxis: config.xAxis.visible
+          ? { x: areaX, y: timeAxisY, width: areaWidth, height: timeAxisHeight }
+          : undefined,
+        yAxis:
+          axis.visible && axis.fixed !== false
+            ? {
+                x: axisXFor(axis),
+                y: pane.y,
+                width: axisWidth,
+                height: pane.height,
+                side: axis.side,
+                format: (value) => formatAxisValue(axis, value),
+              }
+            : undefined,
+      });
     }
   }
 

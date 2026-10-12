@@ -12,6 +12,9 @@ Chart widget. It queries and mutates the Chart Resource independently of rendere
 readiness. An open picker keeps its original chart/cell IDs until the save ends.
 The Dashboard owns one transient selection shared by this control and the grids.
 
+New comparison symbols default to candlesticks with darker theme-owned green/red
+bodies, wicks and borders. Explicit series styles override these defaults.
+
 Each widget's centered floating controls contain interval (with session and
 adjustment), chart type (with volume), compare, grid presets and links.
 The controls remain mounted and appear on hover, keyboard focus and while their
@@ -26,6 +29,20 @@ Smaller presets keep their hidden cells for reuse when expanding the grid again.
 
 The drawing rail stays visible and floats over the chart. Drag its top handle
 to move it within the widget; react-draggable owns its position and gestures.
+The Measurement group in the drawing rail contains Measure and Volume Profile. Select Measure, or hold Shift for the first click in a plot. A click sets
+the start; release both Shift and the mouse to follow the pointer, then click
+again to fix the endpoint. Dragging also works: drag and release to finish.
+The readout shows price change, percent, ticks, bar intervals, elapsed calendar
+time and inclusive volume. Upward moves are blue and downward moves red, with
+matching X/Y axis ranges. During creation, right-click, Escape or Cancel
+measurement dismisses the range. A completed range or readout card has a
+right-click Delete measurement action; Delete/Backspace in the chart, the rail's
+Delete measurement button and Remove all drawings also clear it. An ordinary
+plot click, tool switch or change of symbol/interval clears the result. Keep tool
+selected supports repeated measurements. Shift measurement replaces Shift plot
+panning; axis gestures are unchanged. Measurements stay local to each mounted
+cell and never become Drawing Resources. Missing volume is unavailable or
+partial; projected empty margins are not market data.
 Auto/Log and axis
 settings stay beside their individual vertical axes, with A/L in a separate
 hover/focus row above the compact settings buttons. A clock button opens the

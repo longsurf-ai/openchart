@@ -33,6 +33,14 @@ export namespace Drawing {
   ]);
   export type Type = typeof Type.Type;
 
+  /** Transient toolbar selection. Measurement never creates a saved Drawing.Item.
+   * Hosts own selection; core clears unlocked tools after use and cancels on Escape.
+   * Decoding rejects unknown tools. No resources are acquired.
+   * @example state.drawings.activeTool = "measurement";
+   */
+  export const Tool = Schema.Union([Type, Schema.Literal("measurement")]);
+  export type Tool = typeof Tool.Type;
+
   export const Anchor = Schema.Struct({
     time: Data.Time,
     price: Schema.Finite,
@@ -276,7 +284,7 @@ export namespace Drawing {
   export const State = Schema.Struct({
     selectedId: Schema.optional(Schema.String),
     hoveredId: Schema.optional(Schema.String),
-    activeTool: Schema.optional(Schema.NullOr(Type)),
+    activeTool: Schema.optional(Schema.NullOr(Tool)),
     toolLocked: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(false)),
     ),

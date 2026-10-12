@@ -478,6 +478,7 @@ export namespace ChartStateModel {
   ): void {
     const objectId = ChartObjectId.parse(seriesId);
     delete state.objects[objectId];
+    if (state.measurement?.seriesId === seriesId) delete state.measurement;
     for (const pane of state.panes) {
       removeObjectFromPane(state, pane.id, objectId);
     }
