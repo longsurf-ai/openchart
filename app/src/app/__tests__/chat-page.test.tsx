@@ -1583,15 +1583,18 @@ test("Copilot freezes the active Workspace file before creating a Session and dr
   expect(
     await screen.findByRole("heading", { name: "Workspace" }),
   ).toBeInTheDocument();
-  await user.click(await screen.findByRole("button", { name: "wsp_default" }));
-  await user.click(await screen.findByRole("button", { name: "wsp_research" }));
-  await waitFor(() =>
-    expect(screen.getAllByRole("button", { name: "context.bin" })).toHaveLength(
-      2,
-    ),
+  await user.click(
+    await screen.findByRole("button", {
+      name: "Browse workspace: wsp_default",
+    }),
   );
-  const files = screen.getAllByRole("button", { name: "context.bin" });
-  await user.click(files[1]!);
+  await user.click(
+    await screen.findByRole("menuitemradio", { name: "wsp_research" }),
+  );
+  await screen.findByRole("button", { name: "Browse workspace: wsp_research" });
+  await user.click(
+    await screen.findByRole("treeitem", { name: "context.bin" }),
+  );
   await screen.findByRole("tab", { name: /context.bin/ });
   await user.click(screen.getByRole("button", { name: "Toggle Copilot" }));
   const panel = within(screen.getByRole("complementary", { name: "Copilot" }));
@@ -1602,7 +1605,17 @@ test("Copilot freezes the active Workspace file before creating a Session and dr
   await waitFor(() =>
     expect(rpc.agent.createSession.mutate).toHaveBeenCalledOnce(),
   );
-  await user.click(files[0]!);
+  // Change the active file to the default workspace's copy while creation waits.
+  await user.click(
+    screen.getByRole("button", { name: "Browse workspace: wsp_research" }),
+  );
+  await user.click(
+    await screen.findByRole("menuitemradio", { name: "wsp_default" }),
+  );
+  await screen.findByRole("button", { name: "Browse workspace: wsp_default" });
+  await user.click(
+    await screen.findByRole("treeitem", { name: "context.bin" }),
+  );
   await act(async () => {
     release();
     await creating;

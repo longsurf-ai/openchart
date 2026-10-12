@@ -308,6 +308,55 @@ Server and client buffers are bounded. Each observer replays from its paired
 snapshot; overflow requires a fresh session. There is no durable replay across
 disconnections or guarantee for exchange events the upstream never supplied.
 
+### Workspace Datasets
+
+A `workspace_dataset` Resource declares a timeseries kept as a CSV file in a
+Workspace: its source file, its time column (epoch milliseconds or ISO 8601),
+its observation columns with number, string or boolean types, and how the file
+is collected. The Workspace owns rows; the Resource owns the declaration. Agents
+create and chart Workspace Datasets through ordinary Resource mutations.
+
+Two lifecycles stay separate. Resource changes drive Dataset lifecycle: the
+`local/workspace` Provider observes the Resource list and declares one runtime
+Dataset per Resource with `defineRuntimeDataset`, named `workspace.<id>`, with a
+`time` range key and select only. A changed source, time or columns retires the
+instance, unregisters its name and publishes a replacement; deletion withdraws
+it. File edits change no instance: every select reads and decodes the current
+file, failing `Dataset.NotFound` or `Dataset.InvalidResult` with the row at
+fault as the cause. Catalog validates contributions against the live registry,
+so declarations made after construction publish normally.
+
+Feed's `series` business binds these Datasets through a runtime adapter that
+recognizes the Provider's own declarations by identity, and serves
+`feed.series.select({id, from?, to?})` as a native DataFrame. The browser's
+`useDataset` keys its read by Feed version and by the Workspace file, so a
+re-declaration or a rewritten file refetches. Charts bind columns by value as
+`{kind: "dataset", datasetId, output}` series and show each column's latest
+finite value by the bar's bounded interval end. Missing cells never discard
+another column's update. Alignment carries pre-window
+observations, caps intervals by resolution and the next bar open, and excludes
+observations beyond the current clock. Months use the UTC calendar boundary.
+Each Dataset has one collection action per chart cell, shared by its columns.
+
+`collection` is an Agent prompt target, admitted like a Schedule's, or a Python
+script run with a pinned uv (`uv run --script`, PEP 723 dependencies). Scripts
+write a unique per-run `OPENCHART_OUTPUT`; only a zero exit replaces the data
+file. Execution uses an app-owned snapshot of the bytes checked against the
+server-managed `approvedScriptHash`,
+which only the application can set, so an Agent cannot approve its own script.
+Changing the arguments, script path, output path or Workspace clears approval.
+The review displays these settings and uses the Resource revision to reject
+approval if the execution settings changed while the dialog was open.
+Scripts are self-contained with inline PEP 723 dependencies. Their isolated uv
+environment ignores Workspace project configuration and inherited Python paths;
+the Workspace remains the working directory for reading data, not an automatic
+source of Python modules. Approved scripts still have ordinary host access.
+Agent collections always use the Dataset's source Workspace. Serialized
+admission and durable queued/running Run checks prevent overlapping collections
+for one Dataset; exact intent retries still replay and wake the accepted Run.
+Schedules re-collect through a `data_collection` target; see
+[Scheduler](scheduler.md).
+
 ### Local calendar Dataset
 
 The existing calendar implementation moved to

@@ -12,7 +12,7 @@ import {
 } from "@openchart/app/components/ui/dialog";
 import { useWorkspaceFileMutations } from "@openchart/app/lib/workspace/workspace";
 import { useWorkspaceView } from "./context";
-import type { CreateKind } from "./tree-context-menu";
+import type { CreateKind } from "./file-tree";
 
 const defaultWorkflowSource = `import { defineWorkflow, Schema, agent, textPrompt } from "@openchart/workflow";
 
@@ -119,7 +119,7 @@ export function CreateEntryDialog({
             <DialogDescription>
               {kind === "folder"
                 ? "Enter a folder path within this workspace."
-                : "Use a .md, .markdown, .workflow.ts, .widget.tsx or .tea filename. Include a folder path to create it inside a folder."}
+                : "Enter a file path within this workspace. Include a folder path to create it inside a folder."}
             </DialogDescription>
           </DialogHeader>
           <Input

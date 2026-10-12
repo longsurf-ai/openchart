@@ -51,6 +51,7 @@ test("Workspace exposes reads and registration transitions without intrinsic mut
     | "write"
     | "remove"
     | "rename"
+    | "removeDirectory"
     | "mkdir"
   >();
 });

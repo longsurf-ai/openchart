@@ -34,6 +34,7 @@ function fixture(search: ISymbologyFeedService["search"]) {
         observe: () => Effect.die("Unexpected bars access"),
       },
       logos: { getLogo: () => Effect.die("Unexpected logo access") },
+      series: { select: () => Effect.die("Unexpected series access") },
       calendar: { getCalendar: () => Effect.die("Unexpected calendar access") },
     }),
   );

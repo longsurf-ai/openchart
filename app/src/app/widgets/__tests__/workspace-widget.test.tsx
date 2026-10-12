@@ -33,8 +33,8 @@ vi.mock("dockview-react", async (original) => ({
   }) => {
     const { placementId } = useWidget();
     const [api] = useState(() => ({
-      panels: [{ params: { dirty: false } }],
-      onDidActivePanelChange: () => ({ dispose() {} }),
+      panels: [{ id: "wsp_one/main.tea", params: { dirty: false } }],
+      onDidLayoutChange: () => ({ dispose() {} }),
     }));
     useEffect(
       () => onReady({ api } as unknown as DockviewReadyEvent),
@@ -167,19 +167,34 @@ test("keeps dirty drafts across layout refreshes, checks every widget on navigat
   try {
     const user = userEvent.setup();
     await screen.findByRole("button", { name: "Edit wdg_two" });
+    // The default is unregistered here, so each placement starts on the first workspace.
     for (const id of ["wdg_one", "wdg_two"]) {
       const widget = within(screen.getByRole("region", { name: id }));
-      expect(await widget.findByRole("button", { name: "one" })).toBeVisible();
-      expect(widget.getByRole("button", { name: "two" })).toBeVisible();
       expect(
-        widget.getByRole("button", { name: "Create workspace" }),
+        await widget.findByRole("button", { name: "Browse workspace: one" }),
       ).toBeVisible();
-      if (id === "wdg_one") {
-        expect(snapshot).not.toHaveBeenCalled();
-        await user.click(widget.getByRole("button", { name: "one" }));
-        await user.click(widget.getByRole("button", { name: "two" }));
-      }
+      expect(widget.getByRole("button", { name: "Add" })).toBeVisible();
     }
+    // Choosing a workspace is placement-local.
+    await user.click(
+      within(screen.getByRole("region", { name: "wdg_one" })).getByRole(
+        "button",
+        { name: "Browse workspace: one" },
+      ),
+    );
+    await user.click(await screen.findByRole("menuitemradio", { name: "two" }));
+    expect(
+      await within(screen.getByRole("region", { name: "wdg_one" })).findByRole(
+        "button",
+        { name: "Browse workspace: two" },
+      ),
+    ).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "wdg_two" })).getByRole(
+        "button",
+        { name: "Browse workspace: one" },
+      ),
+    ).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Edit wdg_one" }));
     await user.click(screen.getByRole("button", { name: "Refresh layout" }));
     await user.click(screen.getByRole("link", { name: "Leave dashboard" }));
@@ -235,6 +250,7 @@ test("keeps dirty drafts across layout refreshes, checks every widget on navigat
     view.unmount();
     router.dispose();
     client.clear();
+    localStorage.clear();
     vi.unstubAllGlobals();
   }
 });

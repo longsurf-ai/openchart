@@ -1,5 +1,5 @@
 /// <reference types="vitest/jsdom" />
-// Purpose: Prove the Watchlist widget renders its tree, live metrics, collapse, sort, and row removal through the Resource.
+// Purpose: Prove the Watchlist widget renders its tree, live metrics, collapse, sort, row removal through the Resource, and raises ViewChart for rows.
 import { defineId } from "@openchart/identifier";
 import type { ProviderListing } from "@openchart/market";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -15,6 +15,9 @@ import userEvent from "@testing-library/user-event";
 import { NEVER } from "rxjs";
 
 import { TooltipProvider } from "@openchart/app/components/ui/tooltip";
+import { useIntentHandler } from "@openchart/app/hooks/use-intent";
+import { viewChart } from "@openchart/app/lib/widget/intent/intents";
+import { WidgetIntentProvider } from "@openchart/app/lib/widget/intent/provider";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { WidgetContext } from "@openchart/app/lib/widget/widget";
 
@@ -72,6 +75,13 @@ const listing = (symbol: string) => ({
   provider: "yfinance",
   listing: { symbol, currency: "USD" },
 });
+
+const viewed = vi.fn();
+// Stands in for the chart placement that answers ViewChart on a Dashboard.
+function ChartPlacement() {
+  useIntentHandler(viewChart, viewed);
+  return null;
+}
 
 function setup(
   options: { empty?: boolean; selectedId?: string; paged?: boolean } = {},
@@ -166,24 +176,28 @@ function setup(
   });
   const Placement = watchlistWidget.Provider!;
   const Content = watchlistWidget.Content;
+  const placement = (id: string) => ({
+    placementId: id,
+    dashboardId: "dsh_test",
+    transport,
+    holdControls: () => () => {},
+    placeBeside: vi.fn(),
+  });
   const mount = () =>
     render(
       <QueryClientProvider client={client}>
-        <WidgetContext.Provider
-          value={{
-            placementId,
-            dashboardId: "dsh_test",
-            transport,
-            holdControls: () => () => {},
-            placeBeside: vi.fn(),
-          }}
-        >
-          <TooltipProvider delayDuration={0}>
-            <Placement>
-              <Content />
-            </Placement>
-          </TooltipProvider>
-        </WidgetContext.Provider>
+        <WidgetIntentProvider>
+          <WidgetContext.Provider value={placement("wdg_chart")}>
+            <ChartPlacement />
+          </WidgetContext.Provider>
+          <WidgetContext.Provider value={placement(placementId)}>
+            <TooltipProvider delayDuration={0}>
+              <Placement>
+                <Content />
+              </Placement>
+            </TooltipProvider>
+          </WidgetContext.Provider>
+        </WidgetIntentProvider>
       </QueryClientProvider>,
     );
   const view = mount();
@@ -219,6 +233,7 @@ const rows = () =>
   screen.getAllByRole("treeitem").map((row) => row.getAttribute("aria-label"));
 
 beforeEach(() => {
+  viewed.mockReset();
   capabilities.mockReset().mockReturnValue(daily);
   daily.refetch.mockClear();
   localStorage.clear();
@@ -256,6 +271,24 @@ test("asks Feed for each listing's identity only, never the row id", async () =>
   await waitFor(() => expect(capabilities).toHaveBeenCalled());
   for (const [request] of capabilities.mock.calls)
     expect(Object.keys(request).sort()).toEqual(["listing", "provider"]);
+});
+
+test("clicking a row, or Enter on it, raises ViewChart with the row's listing only", async () => {
+  const { user } = setup();
+  await user.click(await screen.findByRole("treeitem", { name: "MSFT" }));
+  expect(viewed).toHaveBeenCalledExactlyOnceWith(
+    { listing: listing("MSFT") },
+    { placementId: expect.stringMatching(/^wdg_/) },
+  );
+  await user.keyboard("{ArrowDown}{Enter}");
+  await waitFor(() => expect(viewed).toHaveBeenCalledTimes(2));
+  expect(viewed).toHaveBeenLastCalledWith(
+    { listing: listing("NVDA") },
+    expect.anything(),
+  );
+  // Section headings only collapse.
+  await user.click(screen.getByRole("treeitem", { name: "Tech" }));
+  expect(viewed).toHaveBeenCalledTimes(2);
 });
 
 test("collapses a named section and sorts rows within it", async () => {

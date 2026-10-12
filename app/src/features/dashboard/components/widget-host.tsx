@@ -5,6 +5,7 @@ import { Fragment, useCallback, useMemo, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 
 import { Button } from "@openchart/app/components/ui/button";
+import { useIntentActivation } from "@openchart/app/hooks/use-intent";
 import {
   Tooltip,
   TooltipContent,
@@ -24,7 +25,7 @@ import {
 
 type Placement = Dashboard["widgets"][number];
 
-/** Mount a feature by placement identity; the host never queries its business data. @example <WidgetHost {...placementProps} /> */
+/** Mount a feature by placement identity; the host never queries its business data. Working in the card activates the placement for intent resolution. @example <WidgetHost {...placementProps} /> */
 export function WidgetHost({
   placement,
   dashboardId,
@@ -46,6 +47,7 @@ export function WidgetHost({
 }) {
   const queryClient = useQueryClient();
   const changes = useUnsavedChanges();
+  const activate = useIntentActivation(placement.id);
   const [holds, setHolds] = useState(0);
   const holdControls = useCallback(() => {
     setHolds((count) => count + 1);
@@ -134,7 +136,7 @@ export function WidgetHost({
   );
   return (
     <WidgetContext.Provider value={context}>
-      <WidgetCard title={title} held={holds > 0}>
+      <WidgetCard title={title} held={holds > 0} onActivate={activate}>
         <ErrorBoundary
           resetKeys={[placement.kind]}
           fallbackRender={({ resetErrorBoundary }) => (

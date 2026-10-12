@@ -41,8 +41,8 @@ vi.mock(
   "@codingame/monaco-vscode-standalone-typescript-language-features",
   () => ({}),
 );
-vi.mock("@codingame/monaco-vscode-typescript-basics-default-extension", () => ({
-  whenReady: vi.fn().mockResolvedValue(undefined),
+vi.mock("@openchart/app/lib/monaco/grammars", () => ({
+  grammarsReady: vi.fn().mockResolvedValue(undefined),
 }));
 
 test("one failed initialization reports once across multiple editors and remounts", async () => {

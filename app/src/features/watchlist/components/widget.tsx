@@ -118,17 +118,19 @@ function WatchlistSession({
   const [picking, setPicking] = useState<{ sectionId?: string }>();
   const [action, setAction] = useState<WatchlistAction>();
   const [quotes] = useState(() => new BehaviorSubject<Quotes>({}));
+  const [crosshair] = useState(() => new BehaviorSubject<number | null>(null));
   const value = useMemo(
     () => ({
       watchlistId,
       view,
       save,
       quotes,
+      crosshair,
       addSymbol: (sectionId?: string) => setPicking({ sectionId }),
       openDialog: setAction,
       switchTo,
     }),
-    [watchlistId, view, save, quotes, switchTo],
+    [watchlistId, view, save, quotes, crosshair, switchTo],
   );
   return (
     <WatchlistPlacementContext.Provider value={value}>

@@ -15,6 +15,7 @@
 - Confirm deletion in Dialog; Resource delete removes Schedule
   and occurrences, retaining Runs/Sessions. Query clears history and refreshes the list.
 - Run now uses Scheduler even when disabled; refresh history and open the Session.
+  `data_collection` targets edit only name/timing; script Occurrences have no Session.
   Never patch cursors or execute prompts here.
   Pending admission disables Play; no automatic retry.
 - `schedule-calendar.tsx` projects enabled schedules onto the shared `event-calendar`,

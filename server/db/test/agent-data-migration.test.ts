@@ -330,10 +330,12 @@ test("scheduled bindings accept only one nonempty opaque key", () => {
   const target = { kind: "agent_prompt", prompt: input };
   expect(Schema.decodeUnknownSync(AgentScheduleTarget)(target)).toEqual(target);
   expect(
-    Schema.decodeUnknownSync(AgentScheduleTarget)({
-      ...target,
-      binding: { key: "feature-owned-key" },
-    }).binding,
+    (
+      Schema.decodeUnknownSync(AgentScheduleTarget)({
+        ...target,
+        binding: { key: "feature-owned-key" },
+      }) as { binding?: unknown }
+    ).binding,
   ).toEqual({ key: "feature-owned-key" });
   for (const binding of [
     {},

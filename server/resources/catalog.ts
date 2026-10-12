@@ -14,6 +14,7 @@ import { postResource } from "@openchart/server/resources/post";
 import { Schema } from "effect";
 import { symbologyResource } from "@openchart/server/resources/symbology";
 import { watchlistResource } from "@openchart/server/resources/watchlist";
+import { workspaceDatasetResource } from "@openchart/server/resources/workspace-dataset";
 import { customWidgetResource } from "@openchart/server/resources/custom-widget";
 
 /** The sole Resource catalog; every public surface derives from these definitions. */
@@ -31,6 +32,7 @@ export const resources = [
   symbologyResource,
   postResource,
   watchlistResource,
+  workspaceDatasetResource,
   customWidgetResource,
 ] as const;
 

@@ -1,4 +1,5 @@
 // Purpose: Own on-demand directory/file access, scoped observations and serialized mutations.
+import { isUtf8 } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import path from "node:path";
@@ -16,6 +17,7 @@ import { Events } from "@openchart/server/events";
 import { builtinIndicatorPaths } from "@openchart/server/indicators/catalog";
 import type { WorkspaceId } from "@openchart/server/resources/workspace/entity";
 import {
+  EntryExists,
   EntryMissing,
   EntryStale,
   WorkspaceClosed,
@@ -29,7 +31,7 @@ import {
 import { WorkspaceChanged } from "./events";
 import {
   RelativePath,
-  RelPath,
+  type RelPath,
   assetMediaType,
   WORKSPACE_MEDIA_MAX_BYTES,
   type DirectoryPath,
@@ -43,6 +45,8 @@ import { makeDirectoryObservations } from "./directory-observation";
 
 const hash = (bytes: Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
+// UTF-16 and most binary formats contain NUL bytes even when they decode.
+const isText = (bytes: Uint8Array) => isUtf8(bytes) && !bytes.includes(0);
 
 /**
  * One acquired directory; the registry Scope owns its watcher and lifetime.
@@ -102,8 +106,10 @@ export interface Workspace {
 
   /**
    * Reads fresh Base64 bytes, MIME and hash with the readOnly mutation policy.
-   * Consumers decode text; absent files fail with EntryMissing and media above
-   * 32 MiB fails with WorkspaceMediaTooLarge.
+   * Media MIME follows the extension; other files are `text/plain` when their
+   * bytes are UTF-8 without NUL, else `application/octet-stream`. Consumers
+   * decode text; absent files fail with EntryMissing and files above 32 MiB
+   * fail with WorkspaceMediaTooLarge.
    * @example yield* workspace.read(relative);
    */
   readonly read: (relative: RelPath) => Effect.Effect<
@@ -123,8 +129,9 @@ export interface Workspace {
 
   /**
    * Atomically replaces one file after its content comparison; null requires
-   * an absent target. Built-in originals reject writes. Mismatches fail with
-   * EntryStale; returns committed metadata.
+   * an absent target. Built-in originals reject writes; media paths and
+   * existing binary content fail with WorkspacePathInvalid. Mismatches fail
+   * with EntryStale; returns committed metadata.
    * @example yield* workspace.write(relative, 'close', null);
    */
   readonly write: (
@@ -184,26 +191,45 @@ export interface Workspace {
   >;
 
   /**
-   * Renames one artifact without overwriting an observed target. Changed source
-   * content or an existing target fails with EntryStale; returns the new metadata.
-   * Built-in original paths reject rename in either direction.
-   * @example yield* workspace.rename(from, to, hash);
+   * Permanently deletes one folder and everything under it, without a content
+   * comparison; a missing folder is already removed. A folder holding built-in
+   * originals fails with WorkspaceFileProtected.
+   * @example yield* workspace.removeDirectory(relative);
    */
-  readonly rename: (
-    from: RelPath,
-    to: RelPath,
-    expected: string,
+  readonly removeDirectory: (
+    relative: RelativePath,
   ) => Effect.Effect<
-    Entry,
+    void,
     | WorkspaceClosed
     | WorkspaceReadFailed
     | WorkspacePathInvalid
     | WorkspaceMissing
     | WorkspaceWriteFailed
-    | EntryMissing
-    | WorkspaceMediaTooLarge
     | WorkspaceFileProtected
-    | EntryStale
+  >;
+
+  /**
+   * Moves one file or folder, with everything under it, without comparing
+   * contents. Missing parents of the target are created and case-only renames
+   * are allowed. A missing source fails with EntryMissing, an existing target
+   * with EntryExists, a folder moved into itself or a symlink with
+   * WorkspacePathInvalid, and a built-in original, or a folder holding one, on
+   * either side with WorkspaceFileProtected.
+   * @example yield* workspace.rename(from, to);
+   */
+  readonly rename: (
+    from: RelativePath,
+    to: RelativePath,
+  ) => Effect.Effect<
+    void,
+    | WorkspaceClosed
+    | WorkspaceReadFailed
+    | WorkspacePathInvalid
+    | WorkspaceMissing
+    | WorkspaceWriteFailed
+    | WorkspaceFileProtected
+    | EntryExists
+    | EntryMissing
   >;
 }
 
@@ -259,7 +285,7 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
   });
   const checkedPath = Effect.fn("Workspace.path")(function* (
     relative: RelativePath,
-    kind: "file" | "directory" = "file",
+    kind: "file" | "directory" | "any" = "file",
   ) {
     const destination = path.resolve(root, relative);
     const contained = path.relative(root, destination);
@@ -281,12 +307,14 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
       filename = path.join(filename, part);
       const value = yield* info(filename);
       if (!value) break;
-      if (
-        value.isSymbolicLink() ||
-        (index < parts.length - 1 || kind === "directory"
-          ? !value.isDirectory()
-          : !value.isFile())
-      )
+      // lstat reports a symlink as neither a file nor a directory.
+      const actual = value.isDirectory()
+        ? "directory"
+        : value.isFile()
+          ? "file"
+          : "other";
+      const wanted = index < parts.length - 1 ? "directory" : kind;
+      if (actual === "other" || (wanted !== "any" && wanted !== actual))
         return yield* new WorkspacePathInvalid({
           workspaceId: id,
           path: relative,
@@ -299,8 +327,6 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
   ) {
     const filename = yield* checkedPath(relative);
     const read = Effect.gen(function* () {
-      if (assetMediaType(relative) === undefined)
-        return yield* fs.readFile(filename);
       const tooLarge = () =>
         new WorkspaceMediaTooLarge({
           workspaceId: id,
@@ -375,13 +401,9 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         if (stat.isDirectory()) {
           directories.push(relative);
           if (recursive) pending.push(relative);
-        } else if (
-          stat.isFile() &&
-          Schema.is(RelPath)(relative) &&
-          (assetMediaType(relative) === undefined ||
-            stat.size <= WORKSPACE_MEDIA_MAX_BYTES)
-        ) {
-          entries.push({ path: relative });
+        } else if (stat.isFile() && stat.size <= WORKSPACE_MEDIA_MAX_BYTES) {
+          // RelPath only brands RelativePath, which the check above validated.
+          entries.push({ path: relative as RelPath });
         }
       }
     }
@@ -439,8 +461,18 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
     return item;
   });
   const committed = notify;
-  const isReadOnly = (relative: RelPath) =>
+  // Built-in paths are lowercase, so comparing a lowercased path is case-insensitive.
+  const isReadOnly = (relative: RelativePath) =>
     isDefault && builtinIndicatorPaths.has(relative.toLowerCase());
+  const holdsBuiltin = (directory: RelativePath) => {
+    const prefix = `${directory.toLowerCase()}/`;
+    return (
+      isDefault &&
+      [...builtinIndicatorPaths].some((builtin) => builtin.startsWith(prefix))
+    );
+  };
+  const protects = (relative: RelativePath) =>
+    isReadOnly(relative) || holdsBuiltin(relative);
   const writeText = Effect.fn("Workspace.writeText")(function* (
     relative: RelPath,
     text: string,
@@ -451,7 +483,12 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         workspaceId: id,
         path: relative,
       });
-    yield* compare(relative, expected);
+    const current = yield* compare(relative, expected);
+    if (current && !isText(current.bytes))
+      return yield* new WorkspacePathInvalid({
+        workspaceId: id,
+        path: relative,
+      });
     const filename = yield* checkedPath(relative);
     const temporary = path.join(
       path.dirname(filename),
@@ -527,7 +564,9 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
             return yield* new EntryMissing({ workspaceId: id, path: relative });
           return {
             entry: item.entry,
-            mediaType: assetMediaType(relative) ?? "text/plain",
+            mediaType:
+              assetMediaType(relative) ??
+              (isText(item.bytes) ? "text/plain" : "application/octet-stream"),
             readOnly: isReadOnly(relative),
             base64: Buffer.from(item.bytes).toString("base64"),
           };
@@ -590,20 +629,66 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
         }),
         true,
       ).pipe(Effect.asVoid),
-    rename: (from: RelPath, to: RelPath, expected: string) =>
+    removeDirectory: (relative: RelativePath) =>
       admit(
         Effect.gen(function* () {
-          if (isReadOnly(from) || isReadOnly(to))
+          if (holdsBuiltin(relative))
             return yield* new WorkspaceFileProtected({
               workspaceId: id,
-              path: isReadOnly(from) ? from : to,
+              path: relative,
             });
-          const item = yield* compare(from, expected);
-          if (!item)
+          const directory = yield* checkedPath(relative, "directory");
+          if (!(yield* info(directory))) return;
+          yield* fs.remove(directory, { recursive: true }).pipe(
+            Effect.mapError(
+              (cause) =>
+                new WorkspaceWriteFailed({
+                  workspaceId: id,
+                  path: relative,
+                  cause,
+                }),
+            ),
+          );
+          yield* committed;
+        }),
+        true,
+      ),
+    rename: (from: RelativePath, to: RelativePath) =>
+      admit(
+        Effect.gen(function* () {
+          const locked = [from, to].find(protects);
+          if (locked)
+            return yield* new WorkspaceFileProtected({
+              workspaceId: id,
+              path: locked,
+            });
+          const source = yield* checkedPath(from, "any");
+          const current = yield* info(source);
+          if (!current)
             return yield* new EntryMissing({ workspaceId: id, path: from });
-          yield* compare(to, null);
-          const source = yield* checkedPath(from);
-          const target = yield* checkedPath(to);
+          const target = yield* checkedPath(to, "any");
+          // A folder never moves inside itself. Comparing the target's existing
+          // ancestors by inode holds on case-sensitive and case-insensitive disks.
+          const parts = to.split("/");
+          for (let depth = parts.length - 1; depth > 0; depth--) {
+            const ancestor = yield* info(
+              path.join(root, ...parts.slice(0, depth)),
+            );
+            if (ancestor?.ino === current.ino && ancestor.dev === current.dev)
+              return yield* new WorkspacePathInvalid({
+                workspaceId: id,
+                path: to,
+              });
+          }
+          const existing = yield* info(target);
+          // A case-only rename on a case-insensitive disk finds the source
+          // itself; on a case-sensitive disk another entry must not be replaced.
+          const sameEntry =
+            from.toLowerCase() === to.toLowerCase() &&
+            existing?.ino === current.ino &&
+            existing.dev === current.dev;
+          if (existing && !sameEntry)
+            return yield* new EntryExists({ workspaceId: id, path: to });
           yield* fs
             .makeDirectory(path.dirname(target), { recursive: true })
             .pipe(
@@ -618,7 +703,6 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
               ),
             );
           yield* committed;
-          return { path: to, hash: item.entry.hash };
         }),
         true,
       ),

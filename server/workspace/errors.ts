@@ -28,12 +28,17 @@ export class WorkspaceFileProtected extends Schema.TaggedError<WorkspaceFileProt
   "WorkspaceFileProtected",
   { workspaceId: WorkspaceId, path: Schema.String },
 ) {}
+/** A move would replace an existing file or folder; nothing changed. */
+export class EntryExists extends Schema.TaggedError<EntryExists>()(
+  "EntryExists",
+  { workspaceId: WorkspaceId, path: Schema.String },
+) {}
 /** A requested artifact does not exist. */
 export class EntryMissing extends Schema.TaggedError<EntryMissing>()(
   "EntryMissing",
   { workspaceId: WorkspaceId, path: Schema.String },
 ) {}
-/** Binary media exceeds the owner's bounded-read limit; the file is preserved unchanged. */
+/** A file exceeds the owner's bounded-read limit; the file is preserved unchanged. */
 export class WorkspaceMediaTooLarge extends Schema.TaggedError<WorkspaceMediaTooLarge>()(
   "WorkspaceMediaTooLarge",
   { workspaceId: WorkspaceId, path: Schema.String, maxBytes: Schema.Int },

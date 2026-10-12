@@ -3,7 +3,7 @@ import { extname } from "node:path";
 import { Schema } from "effect";
 import { WorkspaceId } from "@openchart/server/resources/workspace/entity";
 
-/** Binary Workspace imports and previews are bounded before reading; larger files stay on disk but are not indexed. */
+/** Every Workspace read is bounded before reading; larger files stay on disk but are not indexed. */
 export const WORKSPACE_MEDIA_MAX_BYTES = 32 * 1024 * 1024;
 
 const assetTypes: Readonly<Record<string, string>> = {
@@ -32,12 +32,6 @@ export const assetMediaType = (path: string) => {
     : undefined;
 };
 
-const isTextPath = (value: string) =>
-  value.endsWith(".tea") ||
-  value.endsWith(".workflow.ts") ||
-  value.endsWith(".widget.tsx") ||
-  /\.(md|markdown)$/i.test(value);
-
 /** Non-hidden relative path inside one registered directory, for files or folders. */
 export const RelativePath = Schema.String.check(
   Schema.makeFilter(
@@ -57,16 +51,8 @@ export type RelativePath = typeof RelativePath.Type;
 /** A directory relative to the workspace; the empty string denotes its root. */
 export const DirectoryPath = Schema.Union([Schema.Literal(""), RelativePath]);
 export type DirectoryPath = typeof DirectoryPath.Type;
-/** Portable artifact path inside one registered directory. */
-export const RelPath = RelativePath.check(
-  Schema.makeFilter(
-    (value) => isTextPath(value) || assetMediaType(value) !== undefined,
-    {
-      message:
-        "Expected a .tea, .workflow.ts, .widget.tsx, Markdown, PDF, image, audio or video path",
-    },
-  ),
-).pipe(Schema.brand("Workspace.RelPath"));
+/** Portable file path inside one registered directory; any non-hidden file type. */
+export const RelPath = RelativePath.pipe(Schema.brand("Workspace.RelPath"));
 /** Validated relative artifact path. */
 export type RelPath = typeof RelPath.Type;
 /** Supported media artifact path; text source files are never accepted as media imports. */
@@ -117,7 +103,7 @@ export type WatchTarget = WorkspaceInterest["target"];
 export const WatchInput = Schema.Struct({
   interests: Schema.Array(WorkspaceInterest),
 });
-/** Creates a folder and any missing parents inside the registered root. */
+/** One folder: `mkdir` creates it with missing parents; `removeDirectory` deletes it. */
 export const MkdirInput = Schema.Struct({
   ...ByWorkspace.fields,
   path: RelativePath,
@@ -127,10 +113,9 @@ export const ReadInput = Schema.Struct({
   ...ByWorkspace.fields,
   path: RelPath,
 });
-/** Null expected hash means create only if the target is absent. */
+/** Null expected hash means create only if the target is absent. Media paths never take text. */
 export const WriteInput = Schema.Struct({
   ...ReadInput.fields,
-  path: RelPath.check(Schema.makeFilter(isTextPath)),
   text: Schema.String,
   expected: Schema.NullOr(Hash),
 });
@@ -139,10 +124,9 @@ export const RemoveInput = Schema.Struct({
   ...ReadInput.fields,
   expected: Hash,
 });
-/** Rename stays within the same workspace and never intentionally overwrites a target. */
+/** Moves a file or folder within one workspace; never overwrites an existing entry. */
 export const RenameInput = Schema.Struct({
   ...ByWorkspace.fields,
-  from: RelPath,
-  to: RelPath,
-  expected: Hash,
+  from: RelativePath,
+  to: RelativePath,
 });

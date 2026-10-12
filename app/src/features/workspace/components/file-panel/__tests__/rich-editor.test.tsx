@@ -4,7 +4,7 @@ import {
   renderWithToaster as render,
   findErrorToast,
 } from "@openchart/app/testing/test-utils";
-import MarkdownEditor from "@openchart/app/features/workspace/components/file-panel/markdown-editor";
+import RichEditor from "@openchart/app/features/workspace/components/file-panel/rich-editor";
 
 vi.mock(
   "@openchart/app/features/workspace/components/file-panel/crepe-editor",
@@ -45,7 +45,8 @@ test("initialization failure reports once; retry opens the latest source draft",
   function Draft() {
     const [value, onChange] = useState("Original draft");
     return (
-      <MarkdownEditor
+      <RichEditor
+        viewer="markdown"
         value={value}
         onChange={onChange}
         path="notes.md"
@@ -56,7 +57,9 @@ test("initialization failure reports once; retry opens the latest source draft",
     );
   }
   render(<Draft />);
-  fireEvent.click(screen.getByRole("button", { name: "Original draft" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Original draft" }),
+  );
   const error = await findErrorToast("Editor unavailable");
   expect(screen.getAllByText("Editor unavailable")).toHaveLength(1);
   const source = await screen.findByRole("textbox", { name: "Source" });

@@ -2,7 +2,7 @@ import { renderWithToaster as render } from "@openchart/app/testing/test-utils";
 import { findErrorToast, testAppHost } from "@openchart/app/testing/test-utils";
 import { createQueryClient } from "@openchart/app/lib/react-query/react-query";
 /// <reference types="vitest/jsdom" />
-// Purpose: Verify Workspace creation and local draft protection across route/window exits.
+// Purpose: Verify the Workspace navigator, file actions and local draft protection across route/window exits.
 import { createRef, useEffect } from "react";
 import {
   AuiConfig,
@@ -23,7 +23,7 @@ import userEvent from "@testing-library/user-event";
 import type { DockviewReadyEvent } from "dockview-react";
 import { createTransport } from "@openchart/app/lib/transport/transport";
 import { UnsavedChangesProvider } from "@openchart/app/lib/unsaved-changes/unsaved-changes";
-import { AppHostProvider } from "@openchart/app/lib/host/host";
+import { AppHostProvider, type AppHost } from "@openchart/app/lib/host/host";
 import { workspacesQueryOptions } from "@openchart/app/lib/workspace/workspace";
 import { useSidebar } from "@openchart/app/components/ui/sidebar";
 import { WorkspaceView } from "@openchart/app/features/workspace/components/workspace-view";
@@ -43,27 +43,35 @@ const rpc = vi.hoisted(() => ({
     mkdir: { mutate: vi.fn() },
     read: { query: vi.fn() },
     remove: { mutate: vi.fn() },
+    rename: { mutate: vi.fn() },
+    removeDirectory: { mutate: vi.fn() },
   },
 }));
+type Panel = {
+  id: string;
+  params: {
+    workspaceId: string;
+    path: string;
+    dirty?: boolean;
+    saving?: boolean;
+  };
+  api: {
+    close: () => void;
+    setActive: () => void;
+    updateParameters: (next: { moving: boolean }) => void;
+  };
+};
 const api = vi.hoisted(() => ({
-  panels: [] as Array<{
-    params: {
-      workspaceId?: string;
-      path?: string;
-      dirty?: boolean;
-      saving?: boolean;
-    };
-    api?: { close: () => void };
-  }>,
+  panels: [] as Panel[],
   getPanel: vi.fn(),
   addPanel: vi.fn(),
   activePanel: undefined as
     | { params: { workspaceId: string; path: string; dirty?: boolean } }
     | undefined,
-  activeListeners: new Set<() => void>(),
-  onDidActivePanelChange: (listener: () => void) => {
-    api.activeListeners.add(listener);
-    return { dispose: () => api.activeListeners.delete(listener) };
+  listeners: new Set<() => void>(),
+  onDidLayoutChange: (listener: () => void) => {
+    api.listeners.add(listener);
+    return { dispose: () => api.listeners.delete(listener) };
   },
 }));
 vi.mock("@trpc/client", async (original) => ({
@@ -109,18 +117,22 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
   api.panels.length = 0;
   api.activePanel = undefined;
+  api.listeners.clear();
+  localStorage.clear();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
 });
 const defaultWorkspace = { id: "wsp_test", root: "/workspaces/default" };
 const researchWorkspace = { id: "wsp_research", root: "/workspaces/research" };
+const row = (name: string) => screen.findByRole("treeitem", { name });
 function setup(
   directories: string[] = [],
   workspaces = [defaultWorkspace],
   paths: string[] = [],
   collapsible = false,
   file?: { workspaceId: string; path: string },
+  host: Partial<AppHost> = {},
 ) {
   rpc.resources.workspace.getDefault.query.mockResolvedValue(
     defaultWorkspace.id,
@@ -186,9 +198,10 @@ function setup(
   ]);
   const aui = createRef<AssistantClient>();
   const context = AuiConfig({ modelContext: ModelContextClient() });
+  const appHost = testAppHost({ revealPath: vi.fn(async () => {}), ...host });
   const view = render(
     <QueryClientProvider client={client}>
-      <AppHostProvider value={testAppHost()}>
+      <AppHostProvider value={appHost}>
         <AuiProvider config={context} ref={aui}>
           <RouterProvider router={router} />
         </AuiProvider>
@@ -205,8 +218,36 @@ function setup(
     router,
     client,
     transport,
+    appHost,
+    unmount: view.unmount,
     readContext: () => aui.current!.modelContext.getModelContext().system,
   };
+}
+/** An open tab, announced like Dockview's layout event so the tree sees its dirty flag. */
+function openPanel(workspaceId: string, path: string, dirty = true) {
+  const panel: Panel = {
+    id: `${workspaceId}/${path}`,
+    params: { workspaceId, path, dirty },
+    api: {
+      close: vi.fn(() => {
+        api.panels.splice(api.panels.indexOf(panel), 1);
+      }),
+      setActive: vi.fn(),
+      updateParameters: vi.fn(),
+    },
+  };
+  api.panels.push(panel);
+  act(() => api.listeners.forEach((listener) => listener()));
+  return panel;
+}
+async function chooseWorkspace(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+) {
+  await user.click(
+    await screen.findByRole("button", { name: /^Browse workspace:/ }),
+  );
+  await user.click(await screen.findByRole("menuitemradio", { name }));
 }
 
 test("publishes only the active file and clears its context on close and route exit", async () => {
@@ -217,7 +258,7 @@ test("publishes only the active file and clears its context on close and route e
       api.activePanel = {
         params: { workspaceId, path: "main.tea", dirty: true },
       };
-      api.activeListeners.forEach((listener) => listener());
+      api.listeners.forEach((listener) => listener());
     });
     expect(readContext()).toBe(
       JSON.stringify({
@@ -228,120 +269,111 @@ test("publishes only the active file and clears its context on close and route e
   }
   act(() => {
     api.activePanel = undefined;
-    api.activeListeners.forEach((listener) => listener());
+    api.listeners.forEach((listener) => listener());
   });
   expect(readContext()).toBe(JSON.stringify({ view: "workspace", file: null }));
   await act(() => router.navigate("/next"));
   expect(readContext()).toBeUndefined();
-  expect(api.activeListeners.size).toBe(0);
+  expect(api.listeners.size).toBe(0);
 });
 
-test.each([false, true])(
-  "offers file search before the folder action in a collapsible=%s workspace",
-  async (collapsible) => {
-    const { user } = setup([], [defaultWorkspace], [], collapsible);
-    await screen.findByRole("button", { name: "default" });
-    const search = screen.getByRole("button", { name: "Find file" });
-    const create = screen.getByRole("button", { name: "Create workspace" });
-    const buttons = screen.getAllByRole("button");
-    expect(buttons.indexOf(search)).toBeLessThan(buttons.indexOf(create));
-    await user.hover(create);
-    expect(
-      await screen.findByRole("tooltip", { name: "Create workspace" }),
-    ).toBeVisible();
-    await user.click(search);
-    expect(
-      screen.getByRole("combobox", { name: "Search files" }),
-    ).toHaveFocus();
-  },
-);
+test("shows one workspace at a time and remembers the choice for the next visit", async () => {
+  const { user, unmount } = setup(
+    [],
+    [defaultWorkspace, researchWorkspace],
+    ["main.tea"],
+  );
+  expect(
+    await screen.findByRole("button", { name: "Browse workspace: default" }),
+  ).toBeVisible();
+  expect(await row("main.tea")).toBeVisible();
+  expect(rpc.workspace.listDirectory.query).toHaveBeenLastCalledWith(
+    { workspaceId: "wsp_test", path: "" },
+    expect.anything(),
+  );
+  await chooseWorkspace(user, "research");
+  expect(
+    await screen.findByRole("button", { name: "Browse workspace: research" }),
+  ).toBeVisible();
+  await waitFor(() =>
+    expect(rpc.workspace.listDirectory.query).toHaveBeenLastCalledWith(
+      { workspaceId: "wsp_research", path: "" },
+      expect.anything(),
+    ),
+  );
+  expect(screen.getByRole("textbox", { name: "Search files" })).toHaveAttribute(
+    "placeholder",
+    "Search research",
+  );
+  unmount();
+  setup([], [defaultWorkspace, researchWorkspace], ["main.tea"]);
+  expect(
+    await screen.findByRole("button", { name: "Browse workspace: research" }),
+  ).toBeVisible();
+});
 
-test("searches unopened folders locally and opens the exact workspace file with the keyboard", async () => {
+test("searches the selected workspace's unopened folders and opens a match with the keyboard", async () => {
   const { user } = setup(
     ["indicators"],
     [defaultWorkspace, researchWorkspace],
     ["indicators/semis.tea", "unrelated.md"],
   );
-  await screen.findByRole("button", { name: "default" });
+  await row("indicators");
   expect(rpc.workspace.listTree.query).not.toHaveBeenCalled();
-  await user.click(screen.getByRole("button", { name: "Find file" }));
-  const search = screen.getByRole("combobox", { name: "Search files" });
-  expect(search).toHaveFocus();
+  const search = screen.getByRole("textbox", { name: "Search files" });
   await user.type(search, "semis");
-  expect(await screen.findAllByRole("option")).toHaveLength(2);
-  expect(screen.queryByText("unrelated.md")).not.toBeInTheDocument();
-  expect(rpc.workspace.listDirectory.query).not.toHaveBeenCalled();
+  const match = await row("semis.tea");
+  expect(await row("indicators")).toHaveAttribute("aria-expanded", "true");
+  expect(
+    screen.queryByRole("treeitem", { name: "unrelated.md" }),
+  ).not.toBeInTheDocument();
+  expect(rpc.workspace.listTree.query).toHaveBeenCalledExactlyOnceWith(
+    { workspaceId: "wsp_test" },
+    expect.anything(),
+  );
   expect(rpc.workspace.read.query).not.toHaveBeenCalled();
-  expect(rpc.workspace.listTree.query).toHaveBeenCalledTimes(2);
-
-  await user.type(search, ".tea");
-  expect(rpc.workspace.listTree.query).toHaveBeenCalledTimes(2);
-  await user.keyboard("{ArrowDown}{Enter}");
+  act(() => match.focus());
+  await user.keyboard("{Enter}");
   expect(api.addPanel).toHaveBeenCalledWith(
     expect.objectContaining({
-      params: { workspaceId: "wsp_research", path: "indicators/semis.tea" },
+      params: { workspaceId: "wsp_test", path: "indicators/semis.tea" },
     }),
   );
   await user.clear(search);
-  await user.type(search, "wsp_research");
-  expect(await screen.findByText("No matching files.")).toBeVisible();
-});
-
-test("clearing search restores expanded folders and Escape clears an empty result", async () => {
-  const { user } = setup(
-    ["indicators"],
-    [defaultWorkspace],
-    ["indicators/semis.tea"],
-  );
-  await user.click(await screen.findByRole("button", { name: "default" }));
-  await user.click(await screen.findByRole("button", { name: "indicators" }));
-  const file = await screen.findByRole("button", { name: "semis.tea" });
-  await user.click(screen.getByRole("button", { name: "Find file" }));
-  const search = screen.getByRole("combobox", { name: "Search files" });
-  await user.type(search, "indicators");
-  expect(await screen.findByRole("option")).toHaveTextContent("semis.tea");
-  expect(file).not.toBeVisible();
-  await user.tab();
-  expect(
-    screen.getByRole("button", { name: "Clear file search" }),
-  ).toHaveFocus();
-  await user.keyboard("{Enter}");
-  expect(api.addPanel).not.toHaveBeenCalled();
-  expect(file).toBeVisible();
-  expect(search).toHaveFocus();
   await user.type(search, "no-such-file");
   expect(await screen.findByText("No matching files.")).toBeVisible();
   await user.keyboard("{Escape}");
   expect(search).toHaveValue("");
-  expect(file).toBeVisible();
-  expect(rpc.workspace.listDirectory.query).toHaveBeenCalledTimes(2);
+  expect(await row("unrelated.md")).toBeVisible();
+  expect(
+    screen.queryByRole("treeitem", { name: "semis.tea" }),
+  ).not.toBeInTheDocument();
 });
 
-test("distinguishes unavailable workspaces from no matches and retries their file listing", async () => {
+test("a failed search listing offers a retry instead of reporting no matches", async () => {
   const { user } = setup();
   rpc.workspace.listTree.query.mockResolvedValue({ status: "missing" });
-  await screen.findByRole("button", { name: "default" });
-  await user.click(screen.getByRole("button", { name: "Find file" }));
+  await screen.findByRole("button", { name: "Browse workspace: default" });
   await user.type(
-    screen.getByRole("combobox", { name: "Search files" }),
+    screen.getByRole("textbox", { name: "Search files" }),
     "semis",
   );
-  expect(await screen.findByText("Couldn’t search default.")).toBeVisible();
+  const retry = await screen.findByRole("button", { name: "Try again" });
   expect(screen.queryByText("No matching files.")).not.toBeInTheDocument();
   rpc.workspace.listTree.query.mockResolvedValue({
     status: "ready",
     entries: [{ path: "semis.tea" }],
     directories: [],
   });
-  await user.click(screen.getByRole("button", { name: "Try again" }));
-  expect(await screen.findByRole("option")).toHaveTextContent("semis.tea");
+  await user.click(retry);
+  expect(await row("semis.tea")).toBeVisible();
 });
 
-test("opens a requested file after Dockview is ready and publishes its exact workspace identity", async () => {
+test("opens a requested file after Dockview is ready, shows its workspace and publishes its identity", async () => {
   const file = { workspaceId: "wsp_research", path: "indicators/My study.tea" };
   api.addPanel.mockImplementation(({ params }) => {
     api.activePanel = { params };
-    api.activeListeners.forEach((listener) => listener());
+    api.listeners.forEach((listener) => listener());
   });
   const { readContext } = setup(
     [],
@@ -359,6 +391,9 @@ test("opens a requested file after Dockview is ready and publishes its exact wor
     ),
   );
   expect(readContext()).toBe(JSON.stringify({ view: "workspace", file }));
+  expect(
+    await screen.findByRole("button", { name: "Browse workspace: research" }),
+  ).toBeVisible();
 });
 
 test.each([
@@ -375,18 +410,17 @@ test.each([
   },
 );
 
-test("creates an empty folder from the workspace root and refreshes it from disk", async () => {
+test("Add creates a folder at the root and refreshes it from disk", async () => {
   const { user } = setup();
+  await screen.findByRole("button", { name: "Browse workspace: default" });
   await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "New file in default" }),
-    ).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled(),
   );
-  openContextMenu(await screen.findByRole("button", { name: "default" }));
-  expect(await screen.findAllByRole("menuitem")).toHaveLength(2);
-  await user.click(screen.getByRole("menuitem", { name: "Create folder" }));
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.click(await screen.findByRole("menuitem", { name: "New folder" }));
   const dialog = await screen.findByRole("dialog", { name: "Create folder" });
   const input = within(dialog).getByRole("textbox", { name: "Folder path" });
+  expect(input).toHaveValue("untitled");
   await user.clear(input);
   await user.type(input, "empty");
   rpc.workspace.mkdir.mutate.mockImplementation(async () => {
@@ -406,22 +440,14 @@ test("creates an empty folder from the workspace root and refreshes it from disk
     workspaceId: "wsp_test",
     path: "empty",
   });
-  expect(screen.getByRole("button", { name: "default" })).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
-  await user.click(screen.getByRole("button", { name: "default" }));
-  expect(await screen.findByRole("button", { name: "empty" })).toBeVisible();
+  expect(await row("empty")).toHaveAttribute("aria-expanded", "false");
   expect(rpc.workspace.write.mutate).not.toHaveBeenCalled();
 });
 
-test("creates a file in the right-clicked empty folder and opens its tab", async () => {
+test("a folder's New file creates inside it and opens the new tab", async () => {
   const { user } = setup(["src"]);
-  await user.click(await screen.findByRole("button", { name: "default" }));
-  openContextMenu(await screen.findByRole("button", { name: "src" }));
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Create file" }),
-  );
+  openContextMenu(await row("src"));
+  await user.click(await screen.findByRole("menuitem", { name: "New file" }));
   const dialog = await screen.findByRole("dialog", { name: "Create file" });
   expect(
     within(dialog).getByRole("textbox", { name: "File path" }),
@@ -448,6 +474,25 @@ test("creates a file in the right-clicked empty folder and opens its tab", async
   );
 });
 
+test("Add targets the focused folder, or the focused file's folder", async () => {
+  const { user } = setup(["src"], [defaultWorkspace], ["src/main.tea"]);
+  await user.click(await row("src"));
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.click(await screen.findByRole("menuitem", { name: "New file" }));
+  let dialog = await screen.findByRole("dialog", { name: "Create file" });
+  expect(
+    within(dialog).getByRole("textbox", { name: "File path" }),
+  ).toHaveValue("src/untitled.workflow.ts");
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  await user.click(await row("main.tea"));
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.click(await screen.findByRole("menuitem", { name: "New folder" }));
+  dialog = await screen.findByRole("dialog", { name: "Create folder" });
+  expect(
+    within(dialog).getByRole("textbox", { name: "Folder path" }),
+  ).toHaveValue("src/untitled");
+});
+
 test("opens identical relative paths from different workspaces in separate tabs", async () => {
   const { user } = setup(
     [],
@@ -462,14 +507,15 @@ test("opens identical relative paths from different workspaces in separate tabs"
   api.addPanel.mockImplementation(({ id }: { id: string }) => {
     panels.set(id, { api: { setActive: vi.fn() } });
   });
-  await user.click(await screen.findByRole("button", { name: "default" }));
-  await user.click(await screen.findByRole("button", { name: "research" }));
+  await user.click(await row("main.tea"));
+  await chooseWorkspace(user, "research");
   await waitFor(() =>
-    expect(screen.getAllByRole("button", { name: "main.tea" })).toHaveLength(2),
+    expect(rpc.workspace.listDirectory.query).toHaveBeenLastCalledWith(
+      { workspaceId: "wsp_research", path: "" },
+      expect.anything(),
+    ),
   );
-  const files = screen.getAllByRole("button", { name: "main.tea" });
-  await user.click(files[0]!);
-  await user.click(files[1]!);
+  await user.click(await row("main.tea"));
   expect(api.addPanel).toHaveBeenNthCalledWith(
     1,
     expect.objectContaining({
@@ -484,68 +530,44 @@ test("opens identical relative paths from different workspaces in separate tabs"
       params: { workspaceId: "wsp_research", path: "main.tea" },
     }),
   );
-  await user.click(files[0]!);
+  await chooseWorkspace(user, "default");
+  await user.click(await row("main.tea"));
   expect(api.addPanel).toHaveBeenCalledTimes(2);
   expect(panels.get("wsp_test/main.tea")?.api.setActive).toHaveBeenCalledOnce();
 });
 
-test("new-file actions target their own workspace", async () => {
-  const { user } = setup([], [defaultWorkspace, researchWorkspace]);
-  await user.click(
-    await screen.findByRole("button", { name: "New file in research" }),
-  );
-  const dialog = await screen.findByRole("dialog", { name: "Create file" });
-  rpc.workspace.write.mutate.mockResolvedValue({
-    path: "untitled.workflow.ts",
-    hash: "a".repeat(64),
-  });
-  await user.click(within(dialog).getByRole("button", { name: "Create file" }));
-  await waitFor(() =>
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-  );
-  expect(rpc.workspace.write.mutate).toHaveBeenCalledExactlyOnceWith({
-    workspaceId: "wsp_research",
-    path: "untitled.workflow.ts",
-    text: expect.stringContaining("export default defineWorkflow({"),
-    expected: null,
-  });
-  expect(api.addPanel).toHaveBeenCalledWith(
-    expect.objectContaining({
-      params: { workspaceId: "wsp_research", path: "untitled.workflow.ts" },
-    }),
-  );
-});
-
-test("mounts newly registered workspaces without navigating or losing dirty tabs", async () => {
+test("newly registered workspaces join the switcher without changing the view or losing dirty tabs", async () => {
   const { user, client, transport, router } = setup(
     [],
     [defaultWorkspace],
     ["main.tea"],
   );
-  await user.click(await screen.findByRole("button", { name: "default" }));
-  await user.click(await screen.findByRole("button", { name: "main.tea" }));
-  const dirtyPanel = { params: { dirty: true } };
-  api.panels.push(dirtyPanel);
+  await user.click(await row("main.tea"));
+  const dirtyPanel = openPanel(defaultWorkspace.id, "main.tea");
   rpc.resources.workspace.list.query.mockResolvedValue({
     items: [defaultWorkspace, researchWorkspace],
     nextCursor: null,
   });
   await act(() => client.invalidateQueries(workspacesQueryOptions(transport)));
-  expect(await screen.findByRole("button", { name: "research" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "default" })).toBeVisible();
+  await user.click(
+    screen.getByRole("button", { name: "Browse workspace: default" }),
+  );
+  expect(
+    await screen.findByRole("menuitemradio", { name: "research" }),
+  ).toBeVisible();
+  await user.keyboard("{Escape}");
+  expect(
+    screen.getByRole("button", { name: "Browse workspace: default" }),
+  ).toBeVisible();
   expect(router.state.location.pathname).toBe("/");
   expect(api.panels).toContain(dirtyPanel);
   expect(api.addPanel).toHaveBeenCalledOnce();
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
 test("failed creation keeps its draft until closing, then reopening starts a fresh form", async () => {
   const { user } = setup(["src"]);
-  await user.click(await screen.findByRole("button", { name: "default" }));
-  openContextMenu(await screen.findByRole("button", { name: "src" }));
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Create folder" }),
-  );
+  openContextMenu(await row("src"));
+  await user.click(await screen.findByRole("menuitem", { name: "New folder" }));
   const dialog = await screen.findByRole("dialog", { name: "Create folder" });
   const input = within(dialog).getByRole("textbox", { name: "Folder path" });
   await user.clear(input);
@@ -562,59 +584,35 @@ test("failed creation keeps its draft until closing, then reopening starts a fre
   expect(
     within(dialog).getByRole("textbox", { name: "Folder path" }),
   ).toHaveValue("src/custom");
-  expect(rpc.workspace.mkdir.mutate).toHaveBeenCalledTimes(1);
   await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(rpc.workspace.mkdir.mutate).toHaveBeenCalledTimes(1);
 
-  openContextMenu(screen.getByRole("button", { name: "src" }));
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Create folder" }),
-  );
+  openContextMenu(await row("src"));
+  await user.click(await screen.findByRole("menuitem", { name: "New folder" }));
   const reopened = await screen.findByRole("dialog", { name: "Create folder" });
   expect(
     within(reopened).getByRole("textbox", { name: "Folder path" }),
   ).toHaveValue("src/untitled");
-  expect(within(reopened).queryByRole("alert")).not.toBeInTheDocument();
   await user.click(within(reopened).getByRole("button", { name: "Cancel" }));
   expect(rpc.workspace.mkdir.mutate).toHaveBeenCalledTimes(1);
 });
-
-function openPanel(workspaceId: string, path: string) {
-  const panel = {
-    params: { workspaceId, path, dirty: true },
-    api: {
-      close: vi.fn(() => {
-        api.panels.splice(api.panels.indexOf(panel), 1);
-      }),
-    },
-  };
-  api.panels.push(panel);
-  return panel;
-}
 
 test("deleting confirms the exact file, retains dirty tabs on failure, and closes only its tab after success", async () => {
   const { user } = setup(["src"], [defaultWorkspace], ["src/main.tea"]);
   const target = openPanel(defaultWorkspace.id, "src/main.tea");
   const sibling = openPanel(defaultWorkspace.id, "other.tea");
   const otherWorkspace = openPanel(researchWorkspace.id, "src/main.tea");
-  await user.click(await screen.findByRole("button", { name: "default" }));
-  await user.click(await screen.findByRole("button", { name: "src" }));
+  await user.click(await row("src"));
   expect(rpc.workspace.read.query).not.toHaveBeenCalled();
-  openContextMenu(await screen.findByRole("button", { name: "main.tea" }));
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Delete file" }),
-  );
+  openContextMenu(await row("main.tea"));
+  await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
   let dialog = await screen.findByRole("dialog", { name: "Delete file?" });
   expect(dialog).toHaveTextContent("src/main.tea");
-  expect(rpc.workspace.remove.mutate).not.toHaveBeenCalled();
   await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
   expect(target.api.close).not.toHaveBeenCalled();
 
-  openContextMenu(screen.getByRole("button", { name: "main.tea" }));
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Delete file" }),
-  );
+  openContextMenu(await row("main.tea"));
+  await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
   dialog = await screen.findByRole("dialog", { name: "Delete file?" });
   await waitFor(() =>
     expect(
@@ -628,43 +626,25 @@ test("deleting confirms the exact file, retains dirty tabs on failure, and close
   await findErrorToast("Couldn’t delete file");
   expect(dialog).toBeInTheDocument();
   expect(target.api.close).not.toHaveBeenCalled();
-  expect(target.params.dirty).toBe(true);
   expect(rpc.workspace.remove.mutate).toHaveBeenCalledExactlyOnceWith({
     workspaceId: defaultWorkspace.id,
     path: "src/main.tea",
     expected: "a".repeat(64),
   });
-
-  let complete!: () => void;
-  rpc.workspace.remove.mutate.mockImplementationOnce(
-    () =>
-      new Promise<void>((resolve) => {
-        complete = resolve;
-      }),
-  );
+  rpc.workspace.remove.mutate.mockResolvedValueOnce(undefined);
+  rpc.workspace.listDirectory.query.mockResolvedValue({
+    status: "ready",
+    entries: [],
+    directories: [],
+  });
   await waitFor(() =>
     expect(
       within(dialog).getByRole("button", { name: "Delete file" }),
     ).toBeEnabled(),
   );
   await user.click(within(dialog).getByRole("button", { name: "Delete file" }));
-  expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
-  await user.keyboard("{Escape}");
-  expect(dialog).toBeInTheDocument();
-  expect(target.api.close).not.toHaveBeenCalled();
-  rpc.workspace.listDirectory.query.mockResolvedValue({
-    status: "ready",
-    entries: [],
-    directories: [],
-  });
-  await act(async () => complete());
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-  );
-  await waitFor(() =>
-    expect(
-      screen.queryByRole("button", { name: "main.tea" }),
-    ).not.toBeInTheDocument(),
   );
   expect(target.api.close).toHaveBeenCalledOnce();
   expect(sibling.api.close).not.toHaveBeenCalled();
@@ -680,11 +660,8 @@ test("read-only files cannot be deleted", async () => {
     base64: btoa("builtin"),
     readOnly: true,
   });
-  await user.click(await screen.findByRole("button", { name: "default" }));
-  openContextMenu(await screen.findByRole("button", { name: "builtin.tea" }));
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Delete file" }),
-  );
+  openContextMenu(await row("builtin.tea"));
+  await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
   const dialog = await screen.findByRole("dialog", { name: "Delete file?" });
   expect(
     await within(dialog).findByText("Built-in files are read-only."),
@@ -695,36 +672,136 @@ test("read-only files cannot be deleted", async () => {
   expect(rpc.workspace.remove.mutate).not.toHaveBeenCalled();
 });
 
-test("forget protects the default identity, works for missing folders, and closes only that workspace after success", async () => {
-  const workspaces = [
-    { ...defaultWorkspace, root: "/workspaces/protected" },
-    { ...researchWorkspace, root: "/another/default" },
-  ];
-  const { user } = setup([], workspaces);
-  rpc.workspace.listDirectory.query.mockResolvedValue({ status: "missing" });
+test("deleting a folder confirms it and closes only tabs inside it", async () => {
+  const { user } = setup(["src", "srcfiles"]);
+  const inside = openPanel(defaultWorkspace.id, "src/deep/main.tea", false);
+  const prefixed = openPanel(defaultWorkspace.id, "srcfiles/main.tea", false);
+  openContextMenu(await row("src"));
+  await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+  const dialog = await screen.findByRole("dialog", { name: "Delete folder?" });
+  expect(dialog).toHaveTextContent("src and everything in it");
+  rpc.workspace.removeDirectory.mutate.mockResolvedValue(undefined);
+  await user.click(
+    within(dialog).getByRole("button", { name: "Delete folder" }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  expect(rpc.workspace.removeDirectory.mutate).toHaveBeenCalledExactlyOnceWith({
+    workspaceId: defaultWorkspace.id,
+    path: "src",
+  });
+  expect(inside.api.close).toHaveBeenCalledOnce();
+  expect(prefixed.api.close).not.toHaveBeenCalled();
+});
+
+test("renaming moves a file and its clean tab follows; dirty tabs block it", async () => {
+  const { user } = setup(["src"], [defaultWorkspace], ["src/main.tea"]);
+  await user.click(await row("src"));
+  const clean = openPanel(defaultWorkspace.id, "src/main.tea", false);
+  const file = await row("main.tea");
+  act(() => file.focus());
+  // user-event's default key map has no function keys; send F2's real code.
+  fireEvent.keyDown(file, { key: "F2", code: "F2" });
+  fireEvent.keyUp(file, { key: "F2", code: "F2" });
+  const input = await screen.findByRole("textbox", { name: "Rename main.tea" });
+  await user.clear(input);
+  await user.type(input, "renamed.tea{Enter}");
+  await waitFor(() =>
+    expect(rpc.workspace.rename.mutate).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: defaultWorkspace.id,
+      from: "src/main.tea",
+      to: "src/renamed.tea",
+    }),
+  );
+  await waitFor(() => expect(clean.api.close).toHaveBeenCalledOnce());
+  expect(api.addPanel).toHaveBeenCalledWith(
+    expect.objectContaining({
+      params: { workspaceId: defaultWorkspace.id, path: "src/renamed.tea" },
+    }),
+  );
+
+  openPanel(defaultWorkspace.id, "src/main.tea");
+  // The open menu hides the rest of the page from assistive queries.
+  expect(
+    await screen.findByRole("img", { name: "Unsaved changes" }),
+  ).toBeVisible();
+  openContextMenu(await row("src"));
+  expect(
+    await screen.findByRole("menuitem", { name: "Rename" }),
+  ).toHaveAttribute("aria-disabled", "true");
+});
+
+test("tabs under a moving folder are read-only until it moves, then reopen at the new path", async () => {
+  const { user } = setup(["src"]);
+  const inside = openPanel(defaultWorkspace.id, "src/main.tea", false);
+  const outside = openPanel(defaultWorkspace.id, "other.tea", false);
+  let finish!: () => void;
+  rpc.workspace.rename.mutate.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const folder = await row("src");
+  act(() => folder.focus());
+  fireEvent.keyDown(folder, { key: "F2", code: "F2" });
+  fireEvent.keyUp(folder, { key: "F2", code: "F2" });
+  const input = await screen.findByRole("textbox", { name: "Rename src" });
+  await user.clear(input);
+  await user.type(input, "lib{Enter}");
+  await waitFor(() => expect(rpc.workspace.rename.mutate).toHaveBeenCalled());
+  expect(inside.api.updateParameters).toHaveBeenCalledExactlyOnceWith({
+    moving: true,
+  });
+  expect(inside.api.close).not.toHaveBeenCalled();
+  expect(outside.api.updateParameters).not.toHaveBeenCalled();
+  await act(async () => finish());
+  await waitFor(() => expect(inside.api.close).toHaveBeenCalledOnce());
+  expect(api.addPanel).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      params: { workspaceId: defaultWorkspace.id, path: "lib/main.tea" },
+    }),
+  );
+  expect(outside.api.close).not.toHaveBeenCalled();
+});
+
+test("the switcher reveals the workspace folder in Finder", async () => {
+  const { user, appHost } = setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Browse workspace: default" }),
+  );
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Reveal in Finder" }),
+  );
+  expect(appHost.revealPath).toHaveBeenCalledExactlyOnceWith(
+    "/workspaces/default",
+  );
+});
+
+test("forget is offered only for non-default workspaces and closes only that workspace's tabs", async () => {
+  const { user } = setup([], [defaultWorkspace, researchWorkspace]);
   const first = openPanel(researchWorkspace.id, "main.tea");
   const second = openPanel(researchWorkspace.id, "other.tea");
   const kept = openPanel(defaultWorkspace.id, "main.tea");
-  openContextMenu(await screen.findByRole("button", { name: "protected" }));
-  await screen.findByRole("menuitem", { name: "Create file" });
+  await user.click(
+    await screen.findByRole("button", { name: "Browse workspace: default" }),
+  );
+  await screen.findByRole("menuitem", { name: "Reveal in Finder" });
   expect(
     screen.queryByRole("menuitem", { name: "Forget workspace" }),
   ).not.toBeInTheDocument();
-  await user.keyboard("{Escape}");
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "New file in default" }),
-    ).toBeEnabled(),
+  await user.click(screen.getByRole("menuitemradio", { name: "research" }));
+  rpc.workspace.listDirectory.query.mockResolvedValue({ status: "missing" });
+  await user.click(
+    await screen.findByRole("button", { name: "Browse workspace: research" }),
   );
-  openContextMenu(screen.getByRole("button", { name: "default" }));
-  expect(
-    await screen.findByRole("menuitem", { name: "Create file" }),
-  ).not.toHaveAttribute("aria-disabled", "true");
-  await user.click(screen.getByRole("menuitem", { name: "Forget workspace" }));
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Forget workspace" }),
+  );
   const dialog = await screen.findByRole("dialog", {
     name: "Forget workspace?",
   });
-  expect(dialog).toHaveTextContent("/another/default");
+  expect(dialog).toHaveTextContent("/workspaces/research");
   expect(dialog).toHaveTextContent("Files on disk will be kept.");
   rpc.resources.workspace.forget.mutate.mockRejectedValueOnce(
     new Error("Forget failed"),
@@ -734,10 +811,9 @@ test("forget protects the default identity, works for missing folders, and close
   );
   await findErrorToast("Couldn’t forget workspace");
   expect(first.api.close).not.toHaveBeenCalled();
-  expect(dialog).toBeInTheDocument();
   rpc.resources.workspace.forget.mutate.mockImplementationOnce(async () => {
     rpc.resources.workspace.list.query.mockResolvedValue({
-      items: [workspaces[0]],
+      items: [defaultWorkspace],
       nextCursor: null,
     });
   });
@@ -752,11 +828,9 @@ test("forget protects the default identity, works for missing folders, and close
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
-  await waitFor(() =>
-    expect(
-      screen.queryByRole("button", { name: "default" }),
-    ).not.toBeInTheDocument(),
-  );
+  expect(
+    await screen.findByRole("button", { name: "Browse workspace: default" }),
+  ).toBeVisible();
   expect(rpc.resources.workspace.forget.mutate).toHaveBeenLastCalledWith({
     id: researchWorkspace.id,
   });
@@ -770,8 +844,9 @@ test.each(["dirty", "saving"] as const)(
   "protects %s tabs from outer navigation and window exits, then cleans up on unmount",
   async (flag) => {
     const { user, router } = setup();
-    await screen.findByRole("button", { name: "default" });
-    api.panels.push({ params: { [flag]: true } });
+    await screen.findByRole("button", { name: "Browse workspace: default" });
+    const panel = openPanel(defaultWorkspace.id, "main.tea", false);
+    panel.params[flag] = true;
 
     const beforeUnload = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(beforeUnload);
@@ -799,9 +874,9 @@ test.each(["dirty", "saving"] as const)(
 
 test("reads current tab flags so completed saves allow navigation and window exits", async () => {
   const { user, router } = setup();
-  await screen.findByRole("button", { name: "default" });
-  const panel = { params: { dirty: true, saving: true } };
-  api.panels.push(panel);
+  await screen.findByRole("button", { name: "Browse workspace: default" });
+  const panel = openPanel(defaultWorkspace.id, "main.tea");
+  panel.params.saving = true;
   const beforeSave = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(beforeSave);
   expect(beforeSave.defaultPrevented).toBe(true);

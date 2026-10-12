@@ -233,13 +233,41 @@ export function defineDataset<
   layout: Layout.Timeseries;
   access: A & ExactAccess<A>;
 }): Definition<N, K, S, Layout.Timeseries, A>;
-export function defineDataset(definition: {
-  name: string;
-  keys: Keys;
-  schema: ObservationSchema;
-  layout: Layout;
-  access: Access;
-}): unknown {
+export function defineDataset(definition: RuntimeDeclaration): unknown {
+  return defineRuntimeDataset(definition);
+}
+
+/** A declaration whose name and observation schema exist only at runtime. */
+export interface RuntimeDeclaration {
+  readonly name: string;
+  readonly keys: Keys;
+  readonly schema: ObservationSchema;
+  readonly layout: Layout;
+  readonly access: Access;
+}
+
+/** An erased declaration with its derived frame constructor, if timeseries. */
+export type RuntimeDefinition = DatasetDefinition & {
+  readonly frame: DataFrameKind<DataFrameSpec> | undefined;
+};
+
+/**
+ * Declares and registers a Dataset described by user data, such as a Resource,
+ * applying every {@link defineDataset} check. The Provider that publishes it
+ * owns its name: it calls `unregister` after retiring the last instance.
+ * @throws If its name is taken or its keys, layout or access modes violate the Dataset contract.
+ * @example
+ * const definition = defineRuntimeDataset({
+ *   name: `workspace.${id}`,
+ *   keys: Schema.Struct({time: k.range(Schema.Number)}),
+ *   schema: Schema.Struct({time: Schema.Number, close: Schema.Finite}),
+ *   layout: Layout.Timeseries,
+ *   access: {select: true},
+ * });
+ */
+export function defineRuntimeDataset(
+  definition: RuntimeDeclaration,
+): RuntimeDefinition {
   const { name, keys, layout } = definition;
   const modes = Object.entries(definition.access);
   if (

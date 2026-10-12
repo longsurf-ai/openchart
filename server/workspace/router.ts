@@ -111,12 +111,23 @@ export const workspaceRouter = trpc.router({
       }),
     ),
   ),
+  removeDirectory: trpc.procedure
+    .input(parser(MkdirInput))
+    .mutation(({ ctx, input }) =>
+      ctx.runtime.runPromise(
+        Effect.gen(function* () {
+          const workspaces = yield* Workspaces;
+          const workspace = yield* workspaces.open(input.workspaceId);
+          return yield* workspace.removeDirectory(input.path);
+        }),
+      ),
+    ),
   rename: trpc.procedure.input(parser(RenameInput)).mutation(({ ctx, input }) =>
     ctx.runtime.runPromise(
       Effect.gen(function* () {
         const workspaces = yield* Workspaces;
         const workspace = yield* workspaces.open(input.workspaceId);
-        return yield* workspace.rename(input.from, input.to, input.expected);
+        return yield* workspace.rename(input.from, input.to);
       }),
     ),
   ),

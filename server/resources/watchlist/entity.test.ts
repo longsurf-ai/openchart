@@ -50,17 +50,17 @@ test("omitted and empty columns use the watchlist table's empty default", () => 
 
 test("metrics require a supported discriminator and reject extra parameters", () => {
   const parse = Schema.decodeUnknownSync(WatchlistMetric);
-  for (const kind of ["price", "change", "changePercent", "volume"]) {
+  for (const kind of [
+    "price",
+    "change",
+    "changePercent",
+    "volume",
+    "priceHistory",
+  ]) {
     expect(parse({ kind })).toEqual({ kind });
     expect(() => parse({ kind, range: "1d" })).toThrow();
   }
-  for (const metric of [
-    "price",
-    null,
-    {},
-    { kind: "pe" },
-    { kind: "priceHistory" },
-  ]) {
+  for (const metric of ["price", null, {}, { kind: "pe" }]) {
     expect(() => parse(metric)).toThrow();
   }
 });
@@ -68,7 +68,6 @@ test("metrics require a supported discriminator and reject extra parameters", ()
 test("rejects unsupported metrics and obsolete column configuration", () => {
   const invalidColumns = [
     { id: "wcl_pe", metric: { kind: "pe" } },
-    { id: "wcl_history", metric: { kind: "priceHistory" } },
     { id: "wcl_price", metric: "price" },
     { id: "wcl_price", metric: {} },
     { id: "wcl_price", metric: null },

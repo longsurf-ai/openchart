@@ -29,6 +29,14 @@ import { prepareOnboardingContent } from "./onboarding/content/content";
 import { BillingLink, isBillingReturn } from "./billing";
 import { cloudEndpoints, developmentTestAccount } from "./cloud";
 
+/** A renderer-supplied absolute local path; URLs, UNC paths and NUL bytes are refused. */
+const LocalPath = z
+  .string()
+  .refine(
+    (value) =>
+      isAbsolute(value) && !value.startsWith("//") && !value.includes("\0"),
+    "Expected an absolute local path",
+  );
 // The name determines the app's data folder and macOS Keychain entry.
 // Give development runs their own name to keep their data separate.
 // tooling replaces this flag at build time; release bundles cannot enable Vite.
@@ -360,18 +368,12 @@ function start(): void {
         });
         ipcMain.handle("desktop.openPath", async (event, input: unknown) => {
           assertTrustedFrame(event);
-          const path = z
-            .string()
-            .refine(
-              (value) =>
-                isAbsolute(value) &&
-                !value.startsWith("//") &&
-                !value.includes("\0"),
-              "Expected an absolute local path",
-            )
-            .parse(input);
-          const error = await shell.openPath(path);
+          const error = await shell.openPath(LocalPath.parse(input));
           if (error) throw new Error(error);
+        });
+        ipcMain.handle("desktop.revealPath", async (event, input: unknown) => {
+          assertTrustedFrame(event);
+          shell.showItemInFolder(LocalPath.parse(input));
         });
         ipcMain.handle("desktop.openBilling", async (event, input: unknown) => {
           assertTrustedFrame(event);
@@ -462,7 +464,7 @@ function start(): void {
               type: UpdateSourceType.StaticStorage,
               baseUrl: process.env.OPENCHART_UPDATE_URL!,
             },
-            updateInterval: "1 hour",
+            updateInterval: "10 minutes",
             // The sidebar offers the restart instead of an interrupting dialog.
             // Without it, Squirrel installs the download on the next normal quit.
             onNotifyUser: ({ releaseName }) => {

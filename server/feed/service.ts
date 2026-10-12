@@ -3,12 +3,14 @@ import { Context, type Effect } from "effect";
 import type { IBarsFeedService } from "@openchart/server/feed/bar/service";
 import type { ISymbologyFeedService } from "@openchart/server/feed/symbology/service";
 import type { ICalendarFeedService } from "@openchart/server/feed/calendar/service";
+import type { ISeriesFeedService } from "@openchart/server/feed/series/service";
 
 /** The consumer services of one Feed version, as {@link Feed} returns them. */
 export interface FeedServices {
   readonly bars: IBarsFeedService;
   readonly symbology: ISymbologyFeedService;
   readonly calendar: ICalendarFeedService;
+  readonly series: ISeriesFeedService;
 }
 
 /** Current Feed version and access to its consumer services; Events carries change notifications. */

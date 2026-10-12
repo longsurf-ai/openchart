@@ -24,7 +24,11 @@ import {
 const dock = vi.hoisted(() => ({
   panels: new Map<
     string,
-    { params: unknown; api: { setActive: () => void } }
+    {
+      id: string;
+      params: unknown;
+      api: { setActive: () => void };
+    }
   >(),
   addPanel: vi.fn(),
   setActive: vi.fn(),
@@ -45,11 +49,12 @@ vi.mock("dockview-react", async (original) => ({
       addPanel: (panel: { id: string; params: unknown }) => {
         dock.addPanel(panel);
         dock.panels.set(panel.id, {
+          id: panel.id,
           params: panel.params,
           api: { setActive: dock.setActive },
         });
       },
-      onDidActivePanelChange: () => ({ dispose() {} }),
+      onDidLayoutChange: () => ({ dispose() {} }),
     }));
     useEffect(() => {
       dock.ready();
@@ -122,13 +127,16 @@ test("opens requested files in its own placement once, including before mount an
   let router = route();
   let view = mount(router);
   try {
-    await waitFor(() =>
-      expect(dock.addPanel).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          id: "wsp_test/indicators/rsi.tea",
-          params: file,
-        }),
-      ),
+    // The lazily imported view's first load can outlast waitFor's 1s default.
+    await waitFor(
+      () =>
+        expect(dock.addPanel).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            id: "wsp_test/indicators/rsi.tea",
+            params: file,
+          }),
+        ),
+      { timeout: 5000 },
     );
     // Another placement's request never reaches this widget.
     act(() => requestWorkspaceFile("wdg_other", { ...file, path: "a.tea" }));

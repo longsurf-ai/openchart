@@ -193,14 +193,19 @@ test("rejects empty or omitted pane bindings in every Resource schema", () => {
   }
 });
 
-test("source is a typed union and indicator bindings cannot be main", () => {
+test("source is a typed union and indicator or dataset bindings cannot be main", () => {
   type IndicatorSeries = Extract<
     ChartSeries,
     { readonly source: { readonly kind: "indicator" } }
   >;
+  type DatasetSeries = Extract<
+    ChartSeries,
+    { readonly source: { readonly kind: "dataset" } }
+  >;
   expectTypeOf<IndicatorSeries["role"]>().toEqualTypeOf<"normal">();
+  expectTypeOf<DatasetSeries["role"]>().toEqualTypeOf<"normal">();
   expectTypeOf<ChartSeries["source"]["kind"]>().toEqualTypeOf<
-    "market" | "indicator"
+    "market" | "indicator" | "dataset"
   >();
   const parse = Schema.decodeUnknownSync(ChartSeries, STRICT_PARSE_OPTIONS);
   const indicator = {
@@ -209,6 +214,12 @@ test("source is a typed union and indicator bindings cannot be main", () => {
   };
   expect(parse(indicator).role).toBe(chartSeriesTable.role.default);
   expect(() => parse({ ...indicator, role: "main" })).toThrow();
+  const dataset = {
+    id: "csr_dataset",
+    source: { kind: "dataset", datasetId: "wsd_a", output: "cpi" },
+  };
+  expect(parse(dataset).role).toBe(chartSeriesTable.role.default);
+  expect(() => parse({ ...dataset, role: "main" })).toThrow();
   // Only price can be main; volume is always a normal binding.
   const market = (output: string) => ({
     id: "csr_market",

@@ -176,12 +176,12 @@ The internal `installBuiltin` writes only built-in original paths: if the conten
 
 `read`, `mkdir`, `write`, `remove`, `rename`, and instance shutdown admission use the same semaphore. Directory enumeration runs independently and does not hold the save lock. Waiting for a permit is interruptible. Once a file mutation enters its commit phase, it completes the necessary operations and publishes the result before it responds to cancellation or release. Whole-directory scans are never put inside the uninterruptible file commit phase.
 
-| Operation                     | Preconditions                                                                                    | Commit point and result                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `mkdir(path)`                 | Path passes validation and goes through no symlink. An existing path must be a directory         | Creates the directory and missing parents. An existing directory succeeds. Creates no Resource registration                   |
-| `write(path, text, expected)` | Re-reads disk inside the lock and compares the hash. expected null means the file must not exist | After a `wx` temp file in the same directory is fully written and renamed into place, returns the Entry for the written bytes |
-| `remove(path, expected)`      | Compares the hash if the file exists. Succeeds directly if it is already gone                    | Returns success once unlink succeeds or the file is confirmed gone                                                            |
-| `rename(from, to, expected)`  | from matches the hash, and to does not exist. Both pass path checks                              | After rename succeeds, returns the new path and the source content hash                                                       |
+| Operation                     | Preconditions                                                                                                               | Commit point and result                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `mkdir(path)`                 | Path passes validation and goes through no symlink. An existing path must be a directory                                    | Creates the directory and missing parents. An existing directory succeeds. Creates no Resource registration                   |
+| `write(path, text, expected)` | Re-reads disk inside the lock and compares the hash. expected null means the file must not exist                            | After a `wx` temp file in the same directory is fully written and renamed into place, returns the Entry for the written bytes |
+| `remove(path, expected)`      | Compares the hash if the file exists. Succeeds directly if it is already gone                                               | Returns success once unlink succeeds or the file is confirmed gone                                                            |
+| `rename(from, to)`            | from exists as a file or folder, and to does not exist unless it is from itself (a case-only rename). Both pass path checks | Moves the entry with everything under it; contents are not compared                                                           |
 
 write/rename create parent directories as needed, and clean up their own temp files on failure. rename fails directly on EXDEV, without falling back to copy and delete. The same root does not guarantee the same volume.
 
@@ -193,7 +193,7 @@ CAS and the target-does-not-exist check only cover operations coordinated by thi
 
 - forget or runtime shutdown first closes the instance's operation admission. Mutations already in their commit phase complete, then observation and background tasks are released. Queued and later `listTree/listDirectory/read/mkdir/write/remove/rename` return WorkspaceClosed.
 - Old `watch` subscriptions end explicitly. Closing the Scope alone does not invalidate every object already handed out. The instance owner must enforce the closed state and stream termination. A new `Workspaces.open(id)` returns WorkspaceUnknown for a deleted registration.
-- `EntryStale` has only one conflict shape: `{workspaceId, path, current: Entry | null}`. null means the file does not exist. When create hits an existing name, or the rename target exists, current points to the target. It contains no file body.
+- `EntryStale` has only one conflict shape: `{workspaceId, path, current: Entry | null}`. null means the file does not exist. When create hits an existing name, current points to the target. It contains no file body. An existing rename target fails with EntryExists instead.
 - The shared policy in `server/lib/errors` maps EntryStale to CONFLICT, with explicit structured details for the tRPC error projection. The frontend can read again to get the latest content for a diff, and retry with the new hash. It must not receive only a generic error or have to parse an error string.
 
 ## 6. Transport, frontend, and Agent
@@ -209,7 +209,7 @@ Registrations reuse the get/list of `resources.workspace` and the existing Resou
 | `workspace.read({workspaceId, path})`                  | `{entry, mediaType, base64, readOnly}`                                               |
 | `workspace.write({workspaceId, path, text, expected})` | Committed Entry                                                                      |
 | `workspace.remove({workspaceId, path, expected})`      | Success                                                                              |
-| `workspace.rename({workspaceId, from, to, expected})`  | Committed Entry                                                                      |
+| `workspace.rename({workspaceId, from, to})`            | Success. Moves a file or folder                                                      |
 
 The frontend `lib/workspace/workspace.ts` is the Workspace API shared by features. It owns registrations, the default Workspace, directory queries, reads and writes, and cache invalidation. `app/connection` mounts the shared SSE subscription. The app passes a transport to `AgentView`, and the Agent feature renders the fixed Workspace picker and file candidates directly from shared queries. `AgentViewContext` shares the transport and the current workspaceId with the normal and edit composers. `useAgent` takes only the workspaceId needed for submission, and does not expose Workspace queries.
 
@@ -308,7 +308,7 @@ Verify the implementation with temporary directories, a temporary SQLite databas
 - Registration rejects ancestor overlap. The Workspace file API rejects symlinks, out-of-bounds paths, and hidden paths. An unreadable hidden directory does not block scanning valid artifacts.
 - External changes refresh active queries. Changes in unexpanded subdirectories trigger no scan. read always returns the body and hash of the same disk bytes.
 - Text/images/PDF return the correct MIME and raw bytes through the same read, which rejects symlinks, hidden paths, and out-of-bounds access. The text write endpoint rejects images/PDF, and the original file stays unchanged.
-- A stale write/create/rename returns a structured conflict. remove of an already deleted file succeeds. rename covers the failure paths for an existing target, a stale source hash, and EXDEV.
+- A stale write/create returns a structured conflict. remove of an already deleted file succeeds. rename covers the failure paths for an existing target, a missing source, and EXDEV.
 - File commits scan no other files. An unreadable file does not block other saves, and enumeration failures and file commits are reported separately.
 - Deleting the root, restoring an empty directory, and quickly replacing the root all recover. State changes are published between missing and ready-empty. Verify retries with controlled time, without requiring the operation to finish within exactly five seconds.
 - After an external tool moves an ordinary workspace directory away, the old registration keeps its original root and shows missing, without recreating an empty directory. Registering the new path gets a new ID, and old references stay missing.

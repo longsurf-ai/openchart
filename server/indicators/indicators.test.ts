@@ -48,6 +48,9 @@ it("seeds the full library on startup, backfills partial workspaces, rewrites ch
         : [];
     })
     .toEqual([...builtinIndicatorPaths].sort());
+  // Workspace protection compares lowercased paths against these.
+  for (const path of builtinIndicatorPaths)
+    expect(path).toBe(path.toLowerCase());
   // An original that differs from the bundle, such as one from an older
   // version, is rewritten.
   expect(await readFile(join(directory, "sma.tea"), "utf8")).toBe(
@@ -74,7 +77,6 @@ it("seeds the full library on startup, backfills partial workspaces, rewrites ch
       workspaceId,
       from: source.path,
       to: "macd.tea",
-      expected: macd.entry.hash,
     }),
   ).rejects.toMatchObject({ code: "FORBIDDEN" });
   const copy = await first.rpc.workspace.write({
@@ -88,19 +90,17 @@ it("seeds the full library on startup, backfills partial workspaces, rewrites ch
       workspaceId,
       from: copy.path,
       to: source.path,
-      expected: copy.hash,
     }),
   ).rejects.toMatchObject({ code: "FORBIDDEN" });
-  const renamed = await first.rpc.workspace.rename({
+  await first.rpc.workspace.rename({
     workspaceId,
     from: copy.path,
     to: "indicators/my-macd.tea",
-    expected: copy.hash,
   });
   await first.rpc.workspace.remove({
     workspaceId,
-    path: renamed.path,
-    expected: renamed.hash,
+    path: "indicators/my-macd.tea",
+    expected: copy.hash,
   });
   const otherRoot = join(home, "other-workspace");
   await mkdir(otherRoot);

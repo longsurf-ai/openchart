@@ -7,6 +7,7 @@ import { SetupFailed } from "@openchart/server/models/onboarding/errors";
 import { AlertSaveConflict } from "@openchart/server/alert/errors";
 
 import {
+  EntryExists,
   EntryMissing,
   EntryStale,
   WorkspaceClosed,
@@ -259,6 +260,12 @@ export function failureFor(
       "command.unsupported_part",
       "This Part cannot be restored to a command without losing information.",
     );
+  if (cause instanceof EntryExists)
+    return failure(
+      "CONFLICT",
+      "workspace.entry_exists",
+      "A file or folder with that name already exists.",
+    );
   if (cause instanceof EntryStale)
     return failure(
       "CONFLICT",
@@ -292,7 +299,7 @@ export function failureFor(
     return failure(
       "BAD_REQUEST",
       "workspace.media_too_large",
-      `Workspace media exceeds the ${cause.maxBytes / (1024 * 1024)} MiB limit.`,
+      `Workspace file exceeds the ${cause.maxBytes / (1024 * 1024)} MiB limit.`,
     );
   if (cause instanceof WorkspaceFileProtected)
     return failure(

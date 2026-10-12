@@ -54,6 +54,7 @@ export function testAppHost(overrides: Partial<AppHost> = {}): AppHost {
   return {
     pickDirectory: async () => null,
     openPath: async () => {},
+    revealPath: async () => {},
     changelog: [],
     onUpdateReady: () => () => {},
     restartToUpdate: async () => {},

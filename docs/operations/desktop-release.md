@@ -135,7 +135,7 @@ with the retained local `SHA256SUMS`.
 ## 4. Verify the real update and website
 
 Start the previous signed version on the test Mac. Production Apple Silicon
-builds check at startup and hourly, download the full ZIP, and use Squirrel.Mac
+builds check at startup and every 10 minutes, download the full ZIP, and use Squirrel.Mac
 to verify the app signature and install it. Development never checks for updates.
 
 - Wait for the blue update button beside the account at the bottom of the

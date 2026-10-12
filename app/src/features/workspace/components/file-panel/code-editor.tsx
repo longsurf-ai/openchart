@@ -32,15 +32,8 @@ export default function CodeEditor({
           height="100%"
           path={path}
           keepCurrentModel={path.endsWith(".tea")}
-          language={
-            path.endsWith(".tea")
-              ? "tea"
-              : /\.tsx?$/.test(path)
-                ? "typescript"
-                : /\.(md|markdown)$/i.test(path)
-                  ? "markdown"
-                  : "plaintext"
-          }
+          // Monaco infers every other language from the model path's extension.
+          language={path.endsWith(".tea") ? "tea" : undefined}
           value={value}
           onMount={(editor) => {
             editor.focus();

@@ -19,6 +19,8 @@ import {
 } from "@openchart/app/features/chart/api/queries";
 import { chartWidget } from "@openchart/app/features/chart/components/widget";
 import { ChartSelectionContext } from "@openchart/app/lib/chart/selection";
+import type { FeedClient } from "@openchart/app/lib/feed/client";
+import { FeedReactContext } from "@openchart/app/lib/feed/provider";
 import { type Dashboard } from "@openchart/app/lib/resource/dashboard";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { WidgetContext } from "@openchart/app/lib/widget/widget";
@@ -121,33 +123,38 @@ function setup() {
     placementId = dashboard.widgets[0]!.id,
   ) => (
     <QueryClientProvider client={client}>
-      <ChartSelectionContext.Provider
-        value={{
-          activeChartId: undefined,
-          focusedCells: {},
-          focus,
-          activeWidgetId: undefined,
-          focusWidget: vi.fn(),
-        }}
-      >
-        <WidgetContext.Provider
+      {/* The mounted grid answers ViewChart, which reads the app's Feed client. */}
+      <FeedReactContext.Provider value={{} as FeedClient}>
+        <ChartSelectionContext.Provider
           value={{
-            placementId,
-            dashboardId: dashboard.id,
-            transport,
-            holdControls: () => () => {},
-            placeBeside: vi.fn(),
+            activeChartId: undefined,
+            focusedCells: {},
+            focus,
+            activeWidgetId: undefined,
+            focusWidget: vi.fn(),
           }}
         >
-          <ErrorBoundary
-            fallbackRender={({ error }) => <p role="alert">{error.message}</p>}
+          <WidgetContext.Provider
+            value={{
+              placementId,
+              dashboardId: dashboard.id,
+              transport,
+              holdControls: () => () => {},
+              placeBeside: vi.fn(),
+            }}
           >
-            <TooltipProvider delayDuration={0}>
-              <ChartPlacement>{children}</ChartPlacement>
-            </TooltipProvider>
-          </ErrorBoundary>
-        </WidgetContext.Provider>
-      </ChartSelectionContext.Provider>
+            <ErrorBoundary
+              fallbackRender={({ error }) => (
+                <p role="alert">{error.message}</p>
+              )}
+            >
+              <TooltipProvider delayDuration={0}>
+                <ChartPlacement>{children}</ChartPlacement>
+              </TooltipProvider>
+            </ErrorBoundary>
+          </WidgetContext.Provider>
+        </ChartSelectionContext.Provider>
+      </FeedReactContext.Provider>
     </QueryClientProvider>
   );
   return {

@@ -208,6 +208,7 @@ function setup(initialViewport?: { from: number; to: number }) {
       getCapabilities: vi.fn(),
     },
     calendar: { getCalendar: vi.fn() },
+    series: { select: vi.fn() },
     symbology: {
       index: vi.fn(),
       indexStatus: vi.fn().mockResolvedValue([]),

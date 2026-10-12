@@ -17,6 +17,8 @@ export type AppHost = {
   pickDirectory: () => Promise<string | null>;
   /** Opens an absolute local path with the system's default app; failures reject. */
   openPath: (path: string) => Promise<void>;
+  /** Shows an absolute local path selected in the system file manager; failures reject. */
+  revealPath: (path: string) => Promise<void>;
   /** Opens a validated Stripe link in the browser; failures reject. */
   openBilling: (url: string) => Promise<void>;
   /** Subscribes to billing return notifications; returns the unsubscribe. */

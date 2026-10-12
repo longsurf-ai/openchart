@@ -17,6 +17,7 @@ declare global {
       >;
       readonly pickDirectory: () => Promise<string | null>;
       readonly openPath: (path: string) => Promise<void>;
+      readonly revealPath: (path: string) => Promise<void>;
       readonly openBilling: (url: string) => Promise<void>;
       readonly onBillingReturn: (listener: () => void) => () => void;
       readonly onUpdateReady: (
@@ -51,6 +52,7 @@ void window.desktop
       bootstrap(connection, createClerkProvider(publishableKey, testAccount), {
         pickDirectory: () => window.desktop.pickDirectory(),
         openPath: (path) => window.desktop.openPath(path),
+        revealPath: (path) => window.desktop.revealPath(path),
         openBilling: (url) => window.desktop.openBilling(url),
         onBillingReturn: (listener) => window.desktop.onBillingReturn(listener),
         changelog,

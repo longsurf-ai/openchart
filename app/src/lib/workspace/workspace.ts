@@ -82,6 +82,10 @@ export function defaultWorkspaceQueryOptions(transport: AppTransport) {
   });
 }
 
+/** A registration's display name: its folder's name, or the whole root for a drive. @example workspaceName("/workspaces/research"); // "research" */
+export const workspaceName = (root: string) =>
+  root.split(/[\\/]/).filter(Boolean).at(-1) ?? root;
+
 /** Reads the registered root without opening file contents. @example useQuery(workspaceQueryOptions(transport, id)); */
 export function workspaceQueryOptions(transport: AppTransport, id: string) {
   return queryOptions({
@@ -301,7 +305,9 @@ export function useWorkspaceFileMutations(
     onSuccess: (_, input) => onRemoved?.(input.path),
     onSettled,
   });
-  const rename = useMutation({
+  // Files and folders move whole; a rename never changes contents, so no hash guards it.
+  const move = useMutation({
+    meta: { errorTitle: "Couldn’t move" },
     mutationFn: (
       input: Omit<Parameters<FileRpc["rename"]["mutate"]>[0], "workspaceId">,
     ) => transport.rpc.workspace.rename.mutate({ workspaceId, ...input }),
@@ -315,7 +321,15 @@ export function useWorkspaceFileMutations(
     retry: false,
     onSettled,
   });
-  return { write, remove, rename, mkdir };
+  const removeDirectory = useMutation({
+    meta: { errorTitle: "Couldn’t delete folder" },
+    mutationFn: (path: string) =>
+      transport.rpc.workspace.removeDirectory.mutate({ workspaceId, path }),
+    retry: false,
+    onSuccess: (_, path) => onRemoved?.(path),
+    onSettled,
+  });
+  return { write, remove, move, mkdir, removeDirectory };
 }
 
 const ResourceChanged = z.object({ resource: z.string() });

@@ -187,7 +187,7 @@ is uploaded last, after the downloads. Authenticate with `wrangler login` first.
 The public base URL is `https://downloads.longsurf.ai/openchart/darwin/arm64`.
 
 Production Apple Silicon builds use `update-electron-app` with Electron's native
-Squirrel.Mac updater, checking on startup and hourly. Electron validates the
+Squirrel.Mac updater, checking on startup and every 10 minutes. Electron validates the
 downloaded app's signature. No dialog interrupts the user: main sends the
 downloaded release name to open pages and answers pages that load later, and the
 sidebar shows a blue download button beside the account. Clicking it enters the

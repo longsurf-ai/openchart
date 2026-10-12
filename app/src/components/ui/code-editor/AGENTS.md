@@ -1,7 +1,7 @@
 # Shared Monaco
 
-- `lib/monaco/monaco.ts` owns the single bundled VS Code runtime, workers and Tea/TypeScript
-  TextMate grammars. Readiness waits for bundled theme and grammar registration
+- `lib/monaco/monaco.ts` owns the single bundled VS Code runtime, workers and Tea
+  grammar; `grammars.ts` lists the other TextMate grammars. Readiness waits for bundled theme and grammar registration
   before editors mount; Monarch grammars cannot supply highlighting in this runtime.
   Shared initialization failures are reported once by that runtime owner.
 - This component owns readiness and common editor options. Overflow widgets

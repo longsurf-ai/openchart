@@ -17,7 +17,17 @@ export function register(definition: DatasetDefinition): void {
   definitions.set(definition.name, definition);
 }
 
-/** Returns every declaration in registration order. */
+/**
+ * Releases a runtime declaration's name once its Provider no longer publishes it.
+ * Only the registered declaration itself releases the name; any other is ignored.
+ * @example unregister(definition);
+ */
+export function unregister(definition: DatasetDefinition): void {
+  if (definitions.get(definition.name) === definition)
+    definitions.delete(definition.name);
+}
+
+/** Returns every current declaration in registration order. */
 export function list(): DatasetDefinition[] {
   return [...definitions.values()];
 }

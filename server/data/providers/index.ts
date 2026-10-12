@@ -3,12 +3,19 @@ import { Effect, Layer, Schema, Struct } from "effect";
 import { BinanceProvider } from "@openchart/server/data/providers/binance/binance";
 import { YFinanceProvider } from "@openchart/server/data/providers/yfinance/yfinance";
 import { OpenChartProvider } from "@openchart/server/data/providers/openchart/openchart";
-export { BinanceProvider, YFinanceProvider, OpenChartProvider };
+import { WorkspaceDatasetsProvider } from "@openchart/server/data/providers/local/workspace/workspace";
+export {
+  BinanceProvider,
+  YFinanceProvider,
+  OpenChartProvider,
+  WorkspaceDatasetsProvider,
+};
 
 const providers = [
   BinanceProvider,
   YFinanceProvider,
   OpenChartProvider,
+  WorkspaceDatasetsProvider,
 ] as const;
 
 /** Ready Provider services; application composition supplies their shared dependencies. */

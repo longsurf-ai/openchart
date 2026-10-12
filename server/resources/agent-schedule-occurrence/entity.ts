@@ -26,7 +26,8 @@ const occurrenceColumns = createSelectSchema(agentScheduleOccurrences);
 /**
  * One accepted scheduled fire, with its own identity and revision.
  * The envelope's createdAt records acceptance; fireAt is the planned instant.
- * Run owns execution status and results. All fields are server-managed;
+ * Run owns execution status and results; a script collection has none, and
+ * its Monitoring check reports the outcome instead. All fields are server-managed;
  * backend creation retains the complete body. Read/list-only API exposure
  * separately limits the available operations.
  */
@@ -35,7 +36,8 @@ export const AgentScheduleOccurrenceEntity = Schema.Struct({
   scheduleId: listKey(serverManaged(occurrenceColumns.fields.scheduleId)),
   agentRunId: serverManaged(occurrenceColumns.fields.agentRunId),
   // Projected from the referenced Run; never stored independently on Occurrence.
-  sessionId: serverManaged(SessionId),
+  // Both are null for a script collection, which has no Run.
+  sessionId: serverManaged(Schema.NullOr(SessionId)),
   fireAt: serverManaged(occurrenceColumns.fields.fireAt),
 });
 

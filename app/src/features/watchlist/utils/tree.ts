@@ -17,6 +17,7 @@ export const METRICS = [
   "change",
   "changePercent",
   "volume",
+  "priceHistory",
 ] as const satisfies readonly Metric[];
 
 /** Client-generated child identities, matching the Resource's prefixes. */

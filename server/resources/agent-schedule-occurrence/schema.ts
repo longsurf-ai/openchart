@@ -13,7 +13,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-/** One accepted run per scheduled fire instant, addressed as its own Resource. */
+/** One accepted fire per scheduled instant, addressed as its own Resource. */
 export const agentScheduleOccurrences = sqliteTable(
   "agent_schedule_occurrence",
   {
@@ -23,9 +23,10 @@ export const agentScheduleOccurrences = sqliteTable(
     scheduleId: text("schedule_id")
       .notNull()
       .references(() => agentSchedules.id, { onDelete: "cascade" }),
-    agentRunId: text("agent_run_id")
-      .notNull()
-      .references(() => agentRun.id, { onDelete: "restrict" }),
+    // Null for a script collection, which runs without an Agent Run.
+    agentRunId: text("agent_run_id").references(() => agentRun.id, {
+      onDelete: "restrict",
+    }),
     fireAt: integer("fire_at").notNull(),
   },
   (table) => [

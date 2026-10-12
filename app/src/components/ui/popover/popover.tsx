@@ -41,4 +41,7 @@ const PopoverContent = React.forwardRef<
   );
 });
 
-export { Popover, PopoverTrigger, PopoverContent };
+/** Positions the popup against another element or a `virtualRef` instead of its trigger. @example <PopoverAnchor virtualRef={rowRef} /> */
+const PopoverAnchor = PopoverPrimitive.Anchor;
+
+export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };

@@ -13,7 +13,7 @@ import {
 import { useTeaDefinition } from "@openchart/app/hooks/use-tea";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { IndicatorInputsDialog } from "./indicator-inputs-dialog";
-import { targetCell } from "./symbol-control";
+import { targetCell } from "@openchart/app/features/chart/utils/resource";
 
 /**
  * Add a resolved script to the cell (the Dashboard's target cell when omitted).

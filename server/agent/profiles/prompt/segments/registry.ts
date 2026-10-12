@@ -21,6 +21,10 @@ export const promptSegmentRegistry: PromptSegmentRegistry = {
     new URL("./alerts.txt", import.meta.url),
     "utf8",
   ),
+  "../segments/datasets.txt": readFileSync(
+    new URL("./datasets.txt", import.meta.url),
+    "utf8",
+  ),
   "../segments/identity.txt": readFileSync(
     new URL("./identity.txt", import.meta.url),
     "utf8",

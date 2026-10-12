@@ -10,5 +10,6 @@ export const analystPromptManifest = {
     "../segments/tea.txt",
     "../segments/posts.txt",
     "../segments/alerts.txt",
+    "../segments/datasets.txt",
   ],
 } as const;

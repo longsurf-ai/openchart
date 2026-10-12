@@ -14,6 +14,7 @@ import {
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { cn } from "@openchart/app/utils/cn";
 import {
+  workspaceName,
   workspaceQueryOptions,
   workspacesQueryOptions,
 } from "@openchart/app/lib/workspace/workspace";
@@ -42,7 +43,7 @@ export function WorkspacePicker({
   const root =
     workspace.data?.root ??
     workspaces.data?.find((item) => item.id === workspaceId)?.root;
-  const label = root ? folderName(root) : "Workspace";
+  const label = root ? workspaceName(root) : "Workspace";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -91,9 +92,9 @@ export function WorkspacePicker({
               <DropdownMenuRadioItem
                 key={item.id}
                 value={item.id}
-                textValue={folderName(item.root)}
+                textValue={workspaceName(item.root)}
               >
-                <span className="truncate">{folderName(item.root)}</span>
+                <span className="truncate">{workspaceName(item.root)}</span>
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -101,8 +102,4 @@ export function WorkspacePicker({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-function folderName(root: string) {
-  return root.split(/[\\/]/).filter(Boolean).at(-1) ?? root;
 }

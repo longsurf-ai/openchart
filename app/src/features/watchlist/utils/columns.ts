@@ -10,7 +10,15 @@ export const COLUMNS: Readonly<
   change: { label: "Chg", title: "Change", width: "5rem" },
   changePercent: { label: "Chg%", title: "Change %", width: "5.25rem" },
   volume: { label: "Vol", title: "Volume", width: "5.5rem" },
+  priceHistory: {
+    label: "Price History",
+    title: "Price history",
+    width: "7.75rem",
+  },
 };
+
+/** Metrics shown as one formatted number; Price History draws a sparkline. */
+export type ScalarMetric = Exclude<Metric, "priceHistory">;
 
 /** One CSS grid template shared by the header and every row. */
 export function gridTemplate(metrics: readonly Metric[]): string {
@@ -45,7 +53,10 @@ const percent = new Intl.NumberFormat(undefined, {
 });
 
 /** Display text for one metric; missing or non-finite values show a dash. */
-export function formatMetric(metric: Metric, quote: Quote | undefined): string {
+export function formatMetric(
+  metric: ScalarMetric,
+  quote: Quote | undefined,
+): string {
   const value = quote?.[metric];
   if (value === undefined || !Number.isFinite(value)) return "—";
   switch (metric) {
@@ -61,7 +72,10 @@ export function formatMetric(metric: Metric, quote: Quote | undefined): string {
 }
 
 /** Change columns are coloured by sign; price and volume stay neutral. */
-export function metricTone(metric: Metric, quote: Quote | undefined): string {
+export function metricTone(
+  metric: ScalarMetric,
+  quote: Quote | undefined,
+): string {
   if (metric !== "change" && metric !== "changePercent") return "";
   const value = quote?.[metric];
   if (value === undefined || !Number.isFinite(value) || Math.abs(value) < 0.005)

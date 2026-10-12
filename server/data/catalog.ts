@@ -8,10 +8,7 @@ import {
   SubscriptionRef,
   type Scope,
 } from "effect";
-import {
-  listDefinitions,
-  type DatasetDefinition,
-} from "@openchart/server/data/dataset";
+import { listDefinitions } from "@openchart/server/data/dataset";
 import type { Dataset } from "@openchart/server/data/dataset/index";
 import type { IDatasetProvider } from "./provider";
 
@@ -19,7 +16,6 @@ import type { IDatasetProvider } from "./provider";
 export class Catalog extends Context.Service<
   Catalog,
   {
-    readonly definitions: readonly DatasetDefinition[];
     /** Read current callable instances; dies after an invalid contribution. @example yield* catalog.list(); */
     list(): Effect.Effect<readonly Dataset[]>;
     /** Observe complete snapshots, including the initial state. @example catalog.watch(); */
@@ -37,7 +33,6 @@ export function catalogLayer<E, R>(
     Catalog,
     Effect.gen(function* () {
       const pviders = yield* providers;
-      const definitions = listDefinitions();
       const current = yield* SubscriptionRef.make<readonly Dataset[]>([]);
       const failed = yield* Deferred.make<never>();
       const contributions: (readonly Dataset[])[] = pviders.map(() => []);
@@ -51,7 +46,7 @@ export function catalogLayer<E, R>(
           for (const dataset of datasets) {
             if (
               !host.definitions.includes(dataset.definition) ||
-              !definitions.includes(dataset.definition)
+              !listDefinitions().includes(dataset.definition)
             )
               throw new Error(
                 `Provider published undeclared Dataset ${dataset.definition.name}`,
@@ -95,7 +90,6 @@ export function catalogLayer<E, R>(
         ),
       );
       return Catalog.of({
-        definitions,
         list: () =>
           Effect.suspend(() =>
             Deferred.isDoneUnsafe(failed)

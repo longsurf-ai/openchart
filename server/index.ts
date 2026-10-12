@@ -25,6 +25,7 @@ import { workspaceRouter } from "@openchart/server/workspace/router";
 import { modelsRouter } from "@openchart/server/models/router";
 import { configRouter } from "@openchart/server/config/router";
 import { schedulerRouter } from "@openchart/server/scheduler/router";
+import { collectionRouter } from "@openchart/server/collection/router";
 import { monitoringRouter } from "@openchart/server/monitoring/router";
 import { proactiveRouter } from "@openchart/server/proactive/router";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
@@ -51,6 +52,7 @@ export const router = trpc.router({
   resources: resourceRouter,
   config: configRouter,
   scheduler: schedulerRouter,
+  collection: collectionRouter,
   monitoring: monitoringRouter,
   proactive: proactiveRouter,
   models: modelsRouter,

@@ -44,10 +44,12 @@ openchart/
       bar/                    service, provisioner, Hose handler
       symbology/              service, provisioner, business RPC router
       calendar/               service contract, provider routing and router
+      series/                 finite reads of declared timeseries, such as Workspace Datasets
     agent/                    durable run admission and process-local execution orchestration
       contracts/              pure Message/Part and prompt input contracts
       link-preview/           optional public-page title/description reads; no cache or browser
     scheduler/                scheduled dispatch and scoped background Layer
+    collection/               runs Workspace Dataset collections: Agent prompts or uv scripts
     bus/                      backend-only process-local events between services; ids only, no transport
     alert/                    observes enabled alert rules through Tea, records alert events, publishes to bus
     trigger/                  subscribes to bus events, renders templates, invokes notification or agent targets

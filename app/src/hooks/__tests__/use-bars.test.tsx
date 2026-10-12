@@ -119,6 +119,7 @@ function setup(automatic = true) {
       indexStatus: vi.fn().mockResolvedValue([]),
       search: vi.fn(),
     },
+    series: { select: vi.fn() },
     calendar: { getCalendar: vi.fn() },
   };
   const wrapper = ({ children }: { children: ReactNode }) => (

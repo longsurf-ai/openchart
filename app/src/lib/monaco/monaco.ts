@@ -7,7 +7,7 @@ import TypeScriptWorker from "@codingame/monaco-vscode-standalone-typescript-lan
 import TextMateWorker from "@codingame/monaco-vscode-textmate-service-override/worker?worker";
 import "@codingame/monaco-vscode-standalone-languages";
 import * as typescript from "@codingame/monaco-vscode-standalone-typescript-language-features";
-import { whenReady as typescriptGrammarReady } from "@codingame/monaco-vscode-typescript-basics-default-extension";
+import { grammarsReady } from "./grammars";
 import grammar from "@openchart/tea-editor/syntaxes/tea.tmLanguage.json?url";
 import widgetTypes from "virtual:widget-types";
 import workflowTypes from "virtual:workflow-types";
@@ -72,7 +72,7 @@ export const monacoReady = new MonacoVscodeApiWrapper({
     // mounted before this barrier silently loses its initial setTheme request.
     const themes =
       await import("@codingame/monaco-vscode-theme-defaults-default-extension");
-    await Promise.all([themes.whenReady(), typescriptGrammarReady()]);
+    await Promise.all([themes.whenReady(), grammarsReady()]);
     loader.config({ monaco });
     typescript.typescriptDefaults.setCompilerOptions({
       target: typescript.ScriptTarget.ESNext,
