@@ -832,12 +832,109 @@ describe("Codex adapter", () => {
     },
   );
 
-  it.each([false, true])(
-    "projects a followed-up child into a fresh delegate (finished parent: %s)",
-    async (nested) => {
+  it("projects an adopted child's host call at root until the child binds", async () => {
+    const { fake, model } = setup();
+    const outcome = { output: "verified", attachments: [] };
+    const execute = vi.fn(async () => outcome);
+    let reply: Message | undefined;
+    onTurn(fake, async (thread, turn) => {
+      const root = { threadId: thread, turnId: turn };
+      const spawn = (id: string) => ({
+        type: "collabAgentToolCall",
+        id,
+        tool: "spawnAgent",
+        status: "inProgress",
+        senderThreadId: thread,
+        prompt: "review",
+      });
+      for (const id of ["spawn_a", "spawn_b"])
+        fake.notify("item/started", { ...root, item: spawn(id) });
+      for (const id of ["child_a", "child_b"])
+        fake.notify("thread/started", {
+          thread: { id, parentThreadId: thread },
+        });
+      // Both threads belong to this request, but neither spawn has named its receiver.
+      reply = await fake.ask("item/tool/call", {
+        threadId: "child_a",
+        turnId: "turn_a",
+        callId: "early_call",
+        tool: "lookup",
+        arguments: {},
+      });
+      for (const [id, child] of [
+        ["spawn_a", "child_a"],
+        ["spawn_b", "child_b"],
+      ] as const)
+        fake.notify("item/completed", {
+          ...root,
+          item: {
+            ...spawn(id),
+            status: "completed",
+            receiverThreadIds: [child],
+          },
+        });
+      fake.notify("item/completed", {
+        threadId: "child_a",
+        turnId: "turn_a",
+        item: {
+          type: "dynamicToolCall",
+          id: "early_call",
+          tool: "lookup",
+          arguments: {},
+          status: "completed",
+          success: true,
+        },
+      });
+      fake.notify("turn/completed", completed("child_a", "turn_a"));
+      fake.notify("turn/completed", completed("child_b", "turn_b"));
+      fake.notify("turn/completed", completed(thread, turn));
+    });
+    const events = await collect(
+      conformProviderStream(
+        streamText({
+          model,
+          messages: [{ role: "user", content: "review" }],
+          providerOptions: {
+            "codex-app-server": {
+              tools: {
+                lookup: {
+                  description: "Lookup",
+                  inputSchema: z.object({}),
+                  execute,
+                  toModelOutput: () => "verified",
+                },
+              },
+            },
+          } as never,
+          maxRetries: 0,
+        }).fullStream,
+      ),
+    );
+    expect(reply).toMatchObject({ result: { success: true } });
+    expect(execute).toHaveBeenCalledOnce();
+    const toolEvents = events.filter(
+      (event) =>
+        (event.type === "tool-call" || event.type === "tool-result") &&
+        event.toolCallId === "early_call",
+    );
+    expect(toolEvents.map((event) => [event.type, owner(event)])).toEqual([
+      ["tool-call", "root"],
+      ["tool-result", "root"],
+    ]);
+    expect(toolEvents.at(-1)).toMatchObject({ output: outcome });
+  });
+
+  it.each(["root", "finished", "active", "followed-up"] as const)(
+    "projects a followed-up child into a fresh delegate (parent: %s)",
+    async (parentState) => {
       const { fake, model } = setup();
+      const nested = parentState !== "root";
       const outcome = { output: "verified", attachments: [], title: "Lookup" };
       const execute = vi.fn(async () => outcome);
+      const requests = vi.fn(async () => ({
+        answers: { mode: { answers: ["Fast"] } },
+      }));
+      let staleQuestionReply: Message | undefined;
       const tools = {
         lookup: {
           description: "Lookup",
@@ -885,13 +982,26 @@ describe("Codex adapter", () => {
           item: agentMessage("first_answer", "first answer"),
         });
         fake.notify("turn/completed", completed(child.threadId, child.turnId));
-        if (nested)
+        if (parentState === "finished" || parentState === "followed-up")
           fake.notify(
             "turn/completed",
             completed(parent.threadId, parent.turnId),
           );
+        const currentParent =
+          parentState === "followed-up"
+            ? { ...parent, turnId: "parent_followup" }
+            : parent;
+        if (parentState === "followed-up") {
+          activity(root, parent.threadId, "followup_parent", "interacted");
+          start(currentParent);
+        }
         // An interaction alone is not evidence that another child turn began.
-        activity(root, child.threadId, "message_only", "interacted");
+        activity(
+          parentState === "finished" ? root : currentParent,
+          child.threadId,
+          "message_only",
+          "interacted",
+        );
         fake.notify("item/completed", {
           ...root,
           item: agentMessage("after_message", "after message"),
@@ -913,6 +1023,12 @@ describe("Codex adapter", () => {
             arguments: {},
           }),
         ).toMatchObject({ result: { success: false } });
+        staleQuestionReply = await fake.ask("item/tool/requestUserInput", {
+          ...child,
+          itemId: "stale_question",
+          isBlocking: false,
+          questions: [{ id: "mode", header: "Mode", question: "Choose" }],
+        });
         fake.notify("item/completed", {
           ...resumed,
           item: agentMessage("second_start", "second turn working"),
@@ -942,6 +1058,11 @@ describe("Codex adapter", () => {
           "turn/completed",
           completed(resumed.threadId, resumed.turnId),
         );
+        if (parentState === "active" || parentState === "followed-up")
+          fake.notify(
+            "turn/completed",
+            completed(currentParent.threadId, currentParent.turnId),
+          );
         fake.notify("turn/completed", completed(thread, turn));
       });
       const events = await collect(
@@ -949,23 +1070,30 @@ describe("Codex adapter", () => {
           streamText({
             model,
             messages: [{ role: "user", content: "follow up" }],
-            providerOptions: { "codex-app-server": { tools } } as never,
+            providerOptions: {
+              "codex-app-server": { tools, requests },
+            } as never,
             maxRetries: 0,
           }).fullStream,
         ),
       );
       const delegates = events.filter(
-        (event) =>
+        (event): event is Extract<ModelStreamEvent, { type: "tool-call" }> =>
           event.type === "tool-call" &&
-          event.providerMetadata?.openchart?.openDelegate,
+          event.providerMetadata?.openchart?.openDelegate !== undefined,
       );
-      expect(delegates).toHaveLength(nested ? 3 : 2);
+      expect(delegates).toHaveLength(
+        parentState === "followed-up" ? 4 : nested ? 3 : 2,
+      );
       const resumed = delegates.at(-1)!;
-      expect(resumed.type).toBe("tool-call");
-      if (resumed.type !== "tool-call")
-        throw new Error("Missing resumed delegate");
       expect(resumed.toolCallId).not.toBe("spawn_child");
-      expect(owner(resumed)).toBe("root");
+      const expectedParent =
+        parentState === "active"
+          ? "spawn_parent"
+          : parentState === "followed-up"
+            ? delegates.at(-2)!.toolCallId
+            : "root";
+      expect(owner(resumed)).toBe(expectedParent);
       expect(events.indexOf(resumed)).toBeGreaterThan(
         events.findIndex(
           (event) =>
@@ -983,6 +1111,8 @@ describe("Codex adapter", () => {
         `finish-step:${resumed.toolCallId}`,
       ]);
       expect(execute).toHaveBeenCalledOnce();
+      expect(staleQuestionReply).toMatchObject({ result: { answers: {} } });
+      expect(requests).not.toHaveBeenCalled();
       expect(
         events.find(
           (event) =>

@@ -298,7 +298,8 @@ export class CodexLanguageModel implements LanguageModelV4 {
           );
         const isQuestion =
           serverRequest.method === "item/tool/requestUserInput";
-        if (isQuestion) translator.questionRequested(serverRequest.params);
+        if (isQuestion && !translator.questionRequested(serverRequest.params))
+          return declineServerRequest(serverRequest.method);
         try {
           const answer =
             (await request.requests?.(serverRequest, {

@@ -229,8 +229,9 @@ export class TurnTranslator {
 
   /**
    * Opens a host tool in its native turn before execution. Follow-up turns get
-   * their own delegate; closed or unknown scopes return false without emitting.
-   * The caller must decline those requests. Request teardown owns cleanup.
+   * their own delegate; closed scopes return false without emitting. Threads
+   * awaiting delegate binding retain root projection. The caller must decline
+   * rejected requests. Request teardown owns cleanup.
    * @example if (!translator.hostToolCalled(thread, turn, id, name, input)) return declined;
    */
   hostToolCalled(
@@ -241,17 +242,18 @@ export class TurnTranslator {
     input: unknown,
   ): boolean {
     if (this.done) return false;
-    const scope = this.scopeForTurn(threadId, turnId);
-    if (
-      scope === undefined ||
-      (scope !== null && this.delegates.get(scope)!.finished)
-    )
-      return false;
+    const scope = this.scopeForTurn(threadId, turnId) ?? null;
+    if (scope !== null && this.delegates.get(scope)!.finished) return false;
     this.toolCall(callId, tool, input, scope, "provider-mcp");
     return true;
   }
 
-  /** Records native questions and answers so new threads retain the user's decisions. */
+  /**
+   * Records an accepted native question in its turn before the host is asked.
+   * Closed scopes return false; the caller must decline without asking the host.
+   * Request teardown owns cleanup; answers complete via questionAnswered.
+   * @example if (!translator.questionRequested(params)) return declined;
+   */
   questionRequested(
     input: {
       threadId: string;
@@ -260,19 +262,17 @@ export class TurnTranslator {
       questions: unknown;
     },
     toolName = "request_user_input",
-  ): void {
-    if (this.done) return;
-    const scope = this.scopeForTurn(input.threadId, input.turnId);
-    if (
-      scope !== undefined &&
-      (scope === null || !this.delegates.get(scope)!.finished)
-    )
-      this.toolCall(
-        input.itemId,
-        toolName,
-        { questions: input.questions },
-        scope,
-      );
+  ): boolean {
+    if (this.done) return false;
+    const scope = this.scopeForTurn(input.threadId, input.turnId) ?? null;
+    if (scope !== null && this.delegates.get(scope)!.finished) return false;
+    this.toolCall(
+      input.itemId,
+      toolName,
+      { questions: input.questions },
+      scope,
+    );
+    return true;
   }
 
   /** Completes the native clarification without treating it as an OpenChart host tool. */
