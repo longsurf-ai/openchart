@@ -509,8 +509,28 @@ export function FileTree({
     enabled: searching,
   });
   const root = listings[0]!;
+  // A folder renamed or deleted while expanded lists as missing; close it and
+  // its descendants instead of reporting it.
+  useEffect(() => {
+    const gone = directories.filter(
+      (path, position) =>
+        path && listings[position]?.data?.status === "missing",
+    );
+    if (gone.length)
+      setExpanded((current) =>
+        current.filter(
+          (path) =>
+            !gone.some(
+              (folder) => path === folder || path.startsWith(`${folder}/`),
+            ),
+        ),
+      );
+  }, [directories, listings]);
   const failure = listings.find(
-    ({ data }) => data !== undefined && data.status !== "ready",
+    ({ data }, position) =>
+      data !== undefined &&
+      data.status !== "ready" &&
+      (position === 0 || data.status !== "missing"),
   )?.data;
   useErrorToast(
     failure?.status === "missing"

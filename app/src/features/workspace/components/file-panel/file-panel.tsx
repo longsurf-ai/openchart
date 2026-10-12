@@ -536,9 +536,17 @@ export function FilePanel(props: IDockviewPanelProps<FilePanelParams>) {
     ...workspaceFileQueryOptions(transport, workspaceId, path),
     enabled: !library,
   });
-  const viewer = library
+  const latest = library
     ? "code"
     : read.data && fileViewer(path, read.data.mediaType);
+  // A dirty draft keeps its editor even if the disk copy stops being text, so
+  // the edits survive and return as a conflict once the file reads as text.
+  const [viewer, setViewer] = useState(latest);
+  if (
+    latest !== viewer &&
+    !(props.params.dirty && viewer && isTextViewer(viewer))
+  )
+    setViewer(latest);
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   return (
     <div className="flex size-full min-h-0 flex-col">

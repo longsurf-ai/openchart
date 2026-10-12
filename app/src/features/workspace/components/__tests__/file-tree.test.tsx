@@ -143,6 +143,25 @@ test("lists a folder only once it is expanded", async () => {
   expect(folder).toHaveAttribute("aria-expanded", "true");
 });
 
+test("a folder that disappears while expanded closes instead of staying listed", async () => {
+  const { user } = setup([], ["src"]);
+  rpc.workspace.listDirectory.query.mockImplementation(
+    async ({ path }: { path: string }) =>
+      path === "src"
+        ? { status: "missing" }
+        : { status: "ready", entries: [], directories: ["src"] },
+  );
+  const folder = await row("src");
+  await user.click(folder);
+  await waitFor(() =>
+    expect(rpc.workspace.listDirectory.query).toHaveBeenLastCalledWith(
+      { workspaceId: "wsp_test", path: "src" },
+      expect.anything(),
+    ),
+  );
+  await waitFor(() => expect(folder).toHaveAttribute("aria-expanded", "false"));
+});
+
 test("folder rows add files without toggling, and menus target their own row", async () => {
   const create = vi.fn();
   const open = vi.fn();

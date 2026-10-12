@@ -374,6 +374,33 @@ test("clean files follow disk updates without a conflict banner", async () => {
   cleanup();
 });
 
+test("a draft survives its disk copy turning into bytes and returns as a conflict", async () => {
+  const { client, transport, cleanup } = setup();
+  const editor = await screen.findByRole("textbox", { name: "Code" });
+  fireEvent.change(editor, { target: { value: "draft" } });
+  const refresh = () =>
+    act(() =>
+      client.invalidateQueries({
+        queryKey: workspaceFileQueryOptions(transport, "wsp_test", "main.tea")
+          .queryKey,
+      }),
+    );
+  rpc.workspace.read.query.mockResolvedValue({
+    ...disk("binary"),
+    mediaType: "application/octet-stream",
+    base64: Buffer.from([0, 255]).toString("base64"),
+  });
+  await refresh();
+  // The editor stays mounted and reports the undecodable bytes.
+  await screen.findByText("Couldn’t open main.tea");
+  expect(screen.getByRole("textbox", { name: "Code" })).toHaveValue("draft");
+  rpc.workspace.read.query.mockResolvedValue(disk("external"));
+  await refresh();
+  await screen.findByRole("button", { name: "Merge with AI" });
+  expect(screen.getByRole("textbox", { name: "Code" })).toHaveValue("draft");
+  cleanup();
+});
+
 test("existing failed-save refresh reveals the conflict and preserves the original draft", async () => {
   const { cleanup } = setup();
   const editor = await screen.findByRole("textbox", { name: "Code" });

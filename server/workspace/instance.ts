@@ -662,16 +662,24 @@ export const makeWorkspace = Effect.fn("Workspace.acquire")(function* (
               workspaceId: id,
               path: locked,
             });
-          if (to.toLowerCase().startsWith(`${from.toLowerCase()}/`))
-            return yield* new WorkspacePathInvalid({
-              workspaceId: id,
-              path: to,
-            });
           const source = yield* checkedPath(from, "any");
           const current = yield* info(source);
           if (!current)
             return yield* new EntryMissing({ workspaceId: id, path: from });
           const target = yield* checkedPath(to, "any");
+          // A folder never moves inside itself. Comparing the target's existing
+          // ancestors by inode holds on case-sensitive and case-insensitive disks.
+          const parts = to.split("/");
+          for (let depth = parts.length - 1; depth > 0; depth--) {
+            const ancestor = yield* info(
+              path.join(root, ...parts.slice(0, depth)),
+            );
+            if (ancestor?.ino === current.ino && ancestor.dev === current.dev)
+              return yield* new WorkspacePathInvalid({
+                workspaceId: id,
+                path: to,
+              });
+          }
           const existing = yield* info(target);
           // A case-only rename on a case-insensitive disk finds the source
           // itself; on a case-sensitive disk another entry must not be replaced.
