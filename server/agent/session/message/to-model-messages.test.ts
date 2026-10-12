@@ -543,23 +543,27 @@ describe("model-message replay", () => {
     },
   );
 
-  test("skips failed reasoning-only messages", async () => {
-    const input = message(
-      "assistant",
-      [
-        { type: "step-start" },
-        {
-          type: "reasoning",
-          text: "Unfinished reasoning",
-          time: { start: 1, end: 2 },
-        },
-      ],
-      { error: timeoutError },
-    );
-    expect(await Effect.runPromise(toModelMessages([input], model))).toEqual(
-      [],
-    );
-  });
+  test.each(["", "  "])(
+    "skips failed reasoning with empty text %j",
+    async (text) => {
+      const input = message(
+        "assistant",
+        [
+          { type: "step-start" },
+          {
+            type: "reasoning",
+            text: "Unfinished reasoning",
+            time: { start: 1, end: 2 },
+          },
+          { type: "text", text },
+        ],
+        { error: timeoutError },
+      );
+      expect(await Effect.runPromise(toModelMessages([input], model))).toEqual(
+        [],
+      );
+    },
+  );
 
   test.each([
     ["openai", "gpt-test"],

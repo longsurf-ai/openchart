@@ -55,7 +55,9 @@ export const toModelMessages = Effect.fn("toModelMessages")(function* (
         !(
           // Failed turns still own committed text and tool outcomes.
           msg.parts.some(
-            (part) => part.type !== "step-start" && part.type !== "reasoning",
+            (part) =>
+              part.type === "tool" ||
+              (part.type === "text" && part.text.trim().length > 0),
           )
         )
       )
