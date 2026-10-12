@@ -9,11 +9,12 @@ import type { FormulaSource, WatchlistSave } from "../api/queries";
 
 /** The symbol search app composition supplies; features never import each other. */
 export type SymbolPickerProps = {
+  initialQuery?: string;
   onSelect: (listing: ProviderListing) => void | Promise<void>;
   onClose: () => void;
 };
 
-/** App composition provides the symbol search dialog for adding rows. */
+/** App composition provides the symbol search dialog for rows and formula inputs. */
 export const WatchlistSymbolPicker =
   createContext<ComponentType<SymbolPickerProps> | null>(null);
 

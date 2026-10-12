@@ -27,6 +27,7 @@ import type {
   Watchlist,
 } from "../api/queries";
 import type { Column } from "../utils/tree";
+import { WatchlistSymbolPicker } from "./context";
 
 const CodeEditor = lazy(() =>
   import("@openchart/app/components/ui/code-editor").then((module) => ({
@@ -77,6 +78,7 @@ export function FormulaColumnDialog({
   const [codePath, setCodePath] = useState<string>(target.source.path);
   const id = useId();
   const openCode = useContext(WorkspaceFileNavigation);
+  const symbolPicker = useContext(WatchlistSymbolPicker);
   const definition = useTeaDefinition(
     metric
       ? { entry: target.source.path, sources: metric.snapshot }
@@ -266,6 +268,7 @@ export function FormulaColumnDialog({
                   (definition.compiled.definition.parameters.length > 0 ||
                     Object.keys(overrides).length > 0) ? (
                     <TeaParameterFields
+                      symbolPicker={symbolPicker}
                       parameters={definition.compiled.definition.parameters}
                       value={overrides}
                       onChange={setOverrides}

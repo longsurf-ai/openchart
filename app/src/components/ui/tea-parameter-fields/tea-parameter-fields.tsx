@@ -1,6 +1,9 @@
-// Purpose: Render Tea parameter controls for the chart's Indicator inputs.
-import { useId } from "react";
+// Purpose: Render shared Tea parameter controls without owning persistence.
+import { useId, useState, type ComponentType } from "react";
+import { parseTickerId, tickerId } from "@openchart/feed";
+import type { ProviderListing } from "@openchart/market";
 import * as Tea from "@openchart/tea";
+import { Search } from "lucide-react";
 import { Button } from "@openchart/app/components/ui/button";
 import { Input } from "@openchart/app/components/ui/input";
 import { Switch } from "@openchart/app/components/ui/form/switch";
@@ -10,12 +13,19 @@ import { DropdownControl } from "@openchart/app/components/ui/settings/dropdown-
 // An `input.source` picks one of the Bars columns.
 const sourceOptions = Tea.barsSchema.fields.map((field) => field.name);
 
+type SymbolPicker = ComponentType<{
+  initialQuery?: string;
+  onSelect: (listing: ProviderListing) => void | Promise<void>;
+  onClose: () => void;
+}>;
+
 /** Render declarations and explicit overrides without owning a form or persistence. @example <TeaParameterFields parameters={node.parameters} value={draft} onChange={setDraft} /> */
 export function TeaParameterFields({
   parameters,
   value: draft,
   onChange,
   choices = {},
+  symbolPicker,
   disabled = false,
 }: {
   parameters: readonly Tea.Parameter[];
@@ -29,6 +39,8 @@ export function TeaParameterFields({
   choices?: Readonly<
     Record<string, readonly { readonly value: string; readonly name: string }[]>
   >;
+  /** Host search dialog for `input.symbol`; selections become provider-qualified ticker ids. The host owns search, errors and cleanup. Without a picker, symbols use text entry. */
+  symbolPicker?: SymbolPicker | null;
   disabled?: boolean;
 }) {
   const id = useId();
@@ -117,6 +129,14 @@ export function TeaParameterFields({
                         disabled={disabled}
                       />
                     </div>
+                  ) : parameter.control === "symbol" && symbolPicker ? (
+                    <SymbolField
+                      id={fieldId}
+                      Picker={symbolPicker}
+                      value={String(value ?? "")}
+                      onChange={(next) => set(parameter.name, next)}
+                      disabled={disabled}
+                    />
                   ) : (
                     <Input
                       id={fieldId}
@@ -148,6 +168,53 @@ export function TeaParameterFields({
             </Button>
           </div>
         ))}
+    </>
+  );
+}
+
+function SymbolField({
+  id,
+  Picker,
+  value,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  Picker: SymbolPicker;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        id={id}
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-40 justify-start font-normal"
+        title={value || undefined}
+        aria-haspopup="dialog"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        <Search className="size-3.5 text-muted-foreground" />
+        <span className="truncate">{value || "Select symbol"}</span>
+      </Button>
+      {open ? (
+        <Picker
+          initialQuery={parseTickerId(value)?.symbol ?? value}
+          onClose={() => setOpen(false)}
+          onSelect={(listing) => {
+            const ticker = tickerId(listing);
+            if (!ticker)
+              throw new Error("This source does not support script symbols.");
+            onChange(ticker);
+            setOpen(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }

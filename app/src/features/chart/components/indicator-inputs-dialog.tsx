@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from "@openchart/app/components/ui/dialog";
 import { useWidgetControls } from "@openchart/app/hooks/use-widget";
+import { SymbolPicker } from "./symbol-picker";
 
 interface IndicatorInputsProps {
   compiled: Pick<Tea.CompileResponse, "definition" | "declaration">;
@@ -78,6 +79,7 @@ export function IndicatorInputsForm({
       }}
     >
       <TeaParameterFields
+        symbolPicker={SymbolPicker}
         parameters={definition.parameters.map((parameter) =>
           parameter.chartDefault && resolved?.[parameter.name] !== undefined
             ? { ...parameter, value: resolved[parameter.name] }
