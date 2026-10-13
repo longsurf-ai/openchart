@@ -10,6 +10,8 @@ import type { GridLayoutProps } from "react-grid-layout";
 
 import { widgetRegistry } from "@openchart/app/app/widgets/widget-registry";
 import { CopilotControlsProvider } from "@openchart/app/app/agent/copilot-controls";
+import { AgentProvider } from "@openchart/app/lib/agent/provider";
+import type { Agent } from "@openchart/app/lib/agent/use-agent";
 import { TooltipProvider } from "@openchart/app/components/ui/tooltip";
 import {
   chartDetail,
@@ -173,25 +175,31 @@ function setup(widgets: Dashboard["widgets"]) {
   client.setQueryData(chartList(transport, dashboard.id).queryKey, [saved]);
   client.setQueryData(chartDetail(transport, saved.id).queryKey, saved);
   localStorage.clear();
+  const agent = {
+    submitPrompt: { mutateAsync: vi.fn() },
+    getOrCreateBoundSession: { mutateAsync: vi.fn() },
+  } as unknown as Agent;
   render(
     <QueryClientProvider client={client}>
-      <FeedReactContext.Provider value={feed}>
-        <TooltipProvider>
-          {/* The same scopes DashboardPage gives its widgets. */}
-          <ChartSelectionProvider>
-            <WidgetIntentProvider>
-              <CopilotControlsProvider value={null}>
-                <DashboardView
-                  id={dashboard.id}
-                  transport={transport}
-                  registry={(kind) => registry[kind]}
-                  renderHeader={() => null}
-                />
-              </CopilotControlsProvider>
-            </WidgetIntentProvider>
-          </ChartSelectionProvider>
-        </TooltipProvider>
-      </FeedReactContext.Provider>
+      <AgentProvider agent={agent}>
+        <FeedReactContext.Provider value={feed}>
+          <TooltipProvider>
+            {/* The same scopes DashboardPage gives its widgets. */}
+            <ChartSelectionProvider>
+              <WidgetIntentProvider>
+                <CopilotControlsProvider value={null}>
+                  <DashboardView
+                    id={dashboard.id}
+                    transport={transport}
+                    registry={(kind) => registry[kind]}
+                    renderHeader={() => null}
+                  />
+                </CopilotControlsProvider>
+              </WidgetIntentProvider>
+            </ChartSelectionProvider>
+          </TooltipProvider>
+        </FeedReactContext.Provider>
+      </AgentProvider>
     </QueryClientProvider>,
   );
   return { patch, user: userEvent.setup() };
