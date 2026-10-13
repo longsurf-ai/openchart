@@ -61,6 +61,9 @@ for relative in files(ROOT):
     if name.endswith(".md") and FORBIDDEN_HEADING.search(text):
         errors.append(f"{name}: internal planning section")
     text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda match: chr(int(match[1], 16)), text)
+    # This reviewed fixture verifies sentence boundaries in Chinese research replies.
+    if name == "app/src/features/watchlist/__tests__/semantic-answer.test.ts":
+        text = text.replace('"增长稳健。利润率改善。", "增长稳健。"', "")
     if name != "scripts/check-public-content.py" and HAN.search(text):
         errors.append(f"{name}: Chinese internal text needs review")
 
