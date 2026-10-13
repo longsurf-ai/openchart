@@ -118,16 +118,18 @@ export function paintMeasurement(input: {
       ? ""
       : ` ${stats.ticks.toLocaleString(Locale.get().locale)}`;
   const performance = stats.performance;
+  const rangeSummary = `${stats.bars.toLocaleString(Locale.get().locale)} ${stats.bars === 1 ? "bar" : "bars"}, ${measurementDuration(stats.seconds)}`;
   const lines = cagr
     ? [
         `CAGR ${performance?.cagrPercent === undefined ? "—" : Locale.percent(performance.cagrPercent)}`,
         `Volatility ${performance?.volatilityPercent === undefined ? "—" : Locale.percent(performance.volatilityPercent).replace(/^\+/, "")}`,
         `Return ${performance?.returnPercent === undefined ? "—" : Locale.percent(performance.returnPercent)}`,
         `Sharpe (rf 0%) ${performance?.sharpe === undefined ? "—" : performance.sharpe.toLocaleString(Locale.get().locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        rangeSummary,
       ]
     : [
         `${delta} (${percent})${ticks}`,
-        `${stats.bars.toLocaleString(Locale.get().locale)} ${stats.bars === 1 ? "bar" : "bars"}, ${measurementDuration(stats.seconds)}`,
+        rangeSummary,
         `Vol ${stats.volume === undefined ? "—" : Locale.compact(stats.volume) + (stats.partialVolume ? " (partial)" : "")}`,
       ];
   ctx.font = font;

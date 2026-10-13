@@ -46,7 +46,8 @@ partial; projected empty margins are not market data.
 
 CAGR uses the same click-move-click or drag-release gesture to select main-price
 bar times, regardless of pointer height or which pane is clicked. A translucent
-time band covers the entire plot, with a four-line readout to its right. Drag
+time band covers the entire plot, with a five-line readout to its right showing
+performance, bar intervals at the current resolution and elapsed calendar time. Drag
 either boundary to adjust a completed range. Endpoints snap to loaded bars;
 reverse selection measures the same chronological interval. The range remains
 chart-local and shares Measure's cancellation, clearing and lifecycle.

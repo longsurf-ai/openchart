@@ -156,12 +156,14 @@ it.each([false, true])(
                 "Volatility percent(30.0)",
                 "Return percent(8.0)",
                 "Sharpe (rf 0%) 0,33",
+                "2 bars, 365d 6h",
               ]
             : [
                 "CAGR +8.00%",
                 "Volatility 30.00%",
                 "Return +8.00%",
                 "Sharpe (rf 0%) 0.33",
+                "2 bars, 365d 6h",
               ],
         ),
       );
