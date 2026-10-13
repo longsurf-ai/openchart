@@ -1,5 +1,12 @@
 /// <reference types="vitest/jsdom" />
 // Purpose: Prove the Watchlist widget renders its tree, live metrics, collapse, sort, row removal through the Resource, and raises ViewChart for rows.
+import {
+  AuiConfig,
+  AuiProvider,
+  ModelContextClient,
+  type AssistantClient,
+} from "@assistant-ui/react";
+import { createRef } from "react";
 import { defineId } from "@openchart/identifier";
 import { BarColumns, type ProviderListing } from "@openchart/market";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -286,6 +293,8 @@ function setup(
     holdControls: () => () => {},
     placeBeside: vi.fn(),
   });
+  const assistant = createRef<AssistantClient>();
+  const context = AuiConfig({ modelContext: ModelContextClient() });
   const mount = () =>
     render(
       <QueryClientProvider client={client}>
@@ -302,9 +311,17 @@ function setup(
           </WidgetContext.Provider>
         </WidgetIntentProvider>
       </QueryClientProvider>,
+      {
+        wrapper: ({ children }) => (
+          <AuiProvider config={context} ref={assistant}>
+            {children}
+          </AuiProvider>
+        ),
+      },
     );
   const view = mount();
   return {
+    assistant,
     patch,
     remove,
     create,
@@ -483,9 +500,22 @@ test("empty unnamed sections still offer the empty-list action", async () => {
 });
 
 test("switching persists locally across remounts without reading or writing Dashboard", async () => {
-  const { user, storageKey, view, mount, dashboardGet, dashboardPatch } =
-    setup();
+  const {
+    assistant,
+    user,
+    storageKey,
+    view,
+    mount,
+    dashboardGet,
+    dashboardPatch,
+  } = setup();
   await user.click(await screen.findByRole("button", { name: /Markets/ }));
+  const modelContext = assistant.current!.modelContext;
+  expect(JSON.parse(modelContext.getModelContext().system!)).toEqual({
+    view: "watchlist",
+    watchlistId: "wtl_test",
+    name: "Markets",
+  });
   await user.click(
     await screen.findByRole("menuitemradio", { name: "Crypto" }),
   );
@@ -493,9 +523,22 @@ test("switching persists locally across remounts without reading or writing Dash
   expect(
     JSON.parse(localStorage.getItem(storageKey)!).state.selectedWatchlistId,
   ).toBe("wtl_other");
+  expect(JSON.parse(modelContext.getModelContext().system!)).toEqual({
+    view: "watchlist",
+    watchlistId: "wtl_other",
+    name: "Crypto",
+  });
   view.unmount();
+  expect(modelContext.getModelContext().system).toBeUndefined();
   const { unmount } = mount();
   await screen.findByRole("button", { name: /Crypto/ });
+  expect(
+    JSON.parse(assistant.current!.modelContext.getModelContext().system!),
+  ).toEqual({
+    view: "watchlist",
+    watchlistId: "wtl_other",
+    name: "Crypto",
+  });
   unmount();
   localStorage.removeItem(storageKey);
   mount();
@@ -520,7 +563,7 @@ test("a deleted saved selection falls back to an available list", async () => {
 });
 
 test("successful deletion selects another list, and deleting the last leaves creation available", async () => {
-  const { remove, user } = setup();
+  const { assistant, remove, user } = setup();
   await user.click(await screen.findByRole("button", { name: /Markets/ }));
   await user.click(
     await screen.findByRole("menuitem", { name: "Delete watchlist" }),
@@ -537,6 +580,9 @@ test("successful deletion selects another list, and deleting the last leaves cre
     await screen.findByRole("button", { name: "Delete watchlist" }),
   );
   await screen.findByText("Choose a watchlist or create a new one.");
+  expect(
+    assistant.current!.modelContext.getModelContext().system,
+  ).toBeUndefined();
   expect(remove).toHaveBeenNthCalledWith(1, { id: "wtl_test" });
   expect(remove).toHaveBeenNthCalledWith(2, { id: "wtl_other" });
 });
@@ -585,7 +631,7 @@ test("an empty widget creates and selects its first Watchlist with starter colum
 });
 
 test("a failed rename retains its draft and allows retry", async () => {
-  const { patch, user } = setup();
+  const { assistant, client, transport, patch, user } = setup();
   patch.mockRejectedValueOnce(new Error("offline"));
   await user.click(await screen.findByRole("button", { name: /Markets/ }));
   await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
@@ -600,9 +646,24 @@ test("a failed rename retains its draft and allows retry", async () => {
   await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(submit).toBeEnabled());
   expect(input).toHaveValue("My markets");
+  expect(
+    JSON.parse(assistant.current!.modelContext.getModelContext().system!).name,
+  ).toBe("Markets");
+  patch.mockResolvedValueOnce({
+    ...client.getQueryData(watchlistDetail(transport, "wtl_test").queryKey),
+    name: "My markets",
+    revision: 4,
+  });
   await user.click(submit);
   await waitFor(() => expect(dialog).not.toBeInTheDocument());
   expect(patch).toHaveBeenCalledTimes(2);
+  expect(
+    JSON.parse(assistant.current!.modelContext.getModelContext().system!),
+  ).toEqual({
+    view: "watchlist",
+    watchlistId: "wtl_test",
+    name: "My markets",
+  });
 });
 
 test("dropping unrelated data on a column does not reorder columns", async () => {

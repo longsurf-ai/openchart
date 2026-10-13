@@ -1,4 +1,5 @@
 // Purpose: Adapt a Dashboard placement to one Watchlist and own its dialogs, switching, and lifecycle actions.
+import { useAssistantContext } from "@assistant-ui/react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -142,6 +143,15 @@ function WatchlistSession({
   const currentWatchlist = useQuery(
     watchlistDetail(transport, watchlistId),
   ).data;
+  useAssistantContext({
+    disabled: !currentWatchlist,
+    getContext: () =>
+      JSON.stringify({
+        view: "watchlist",
+        watchlistId: currentWatchlist?.id,
+        name: currentWatchlist?.name,
+      }),
+  });
   const latestColumn = currentWatchlist?.columns.find(
     (column) => column.id === formula?.column?.id,
   );

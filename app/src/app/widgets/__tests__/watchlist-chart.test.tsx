@@ -1,4 +1,9 @@
 // Purpose: A Dashboard Watchlist row shows its listing on the Dashboard's chart through the ViewChart intent.
+import {
+  AuiConfig,
+  AuiProvider,
+  ModelContextClient,
+} from "@assistant-ui/react";
 import { defineId } from "@openchart/identifier";
 import { ProviderId, type ProviderListing } from "@openchart/market";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -172,6 +177,7 @@ function setup(widgets: Dashboard["widgets"]) {
   client.setQueryData(chartList(transport, dashboard.id).queryKey, [saved]);
   client.setQueryData(chartDetail(transport, saved.id).queryKey, saved);
   localStorage.clear();
+  const context = AuiConfig({ modelContext: ModelContextClient() });
   render(
     <QueryClientProvider client={client}>
       <FeedReactContext.Provider value={feed}>
@@ -190,6 +196,11 @@ function setup(widgets: Dashboard["widgets"]) {
         </TooltipProvider>
       </FeedReactContext.Provider>
     </QueryClientProvider>,
+    {
+      wrapper: ({ children }) => (
+        <AuiProvider config={context}>{children}</AuiProvider>
+      ),
+    },
   );
   return { patch, user: userEvent.setup() };
 }
