@@ -7,6 +7,18 @@
   container: library / inline-size;
 }
 
+.indicator-library-inset {
+  @apply px-4 lg:px-5;
+}
+
+.indicator-library-script-location {
+  display: none;
+}
+
+.indicator-library-script-location-inline {
+  display: block;
+}
+
 .indicator-library-sidebar {
   display: none;
 }
@@ -24,6 +36,16 @@
 @container library (min-width: theme(maxWidth.md)) {
   .indicator-library-gallery {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container library (min-width: theme(screens.sm)) {
+  .indicator-library-script-location {
+    display: table-cell;
+  }
+
+  .indicator-library-script-location-inline {
+    display: none;
   }
 }
 

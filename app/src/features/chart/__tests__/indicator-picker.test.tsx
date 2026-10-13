@@ -574,12 +574,12 @@ it.each([
   {
     workspaceId: "wsp_test",
     path: "research/averages/saved.tea",
-    name: /^saved\.tea · default/,
+    name: /^Open saved\.tea · default/,
   },
   {
     workspaceId: "wsp_other",
     path: "indicators/builtin/sma.tea",
-    name: /^sma\.tea · research/,
+    name: /^Open sma\.tea · research/,
   },
 ])(
   "opens $workspaceId/$path from My scripts directly in Workspace",
@@ -593,14 +593,14 @@ it.each([
       ["indicators/builtin/sma.tea"],
     );
     navigate("My scripts");
-    await screen.findByRole("button", { name: /^sma\.tea/ });
+    await screen.findByRole("button", { name: /^Open sma\.tea/ });
     // Only the other Workspace's file remains; default originals, including
     // the chart's own built-ins, are excluded.
-    expect(screen.getAllByRole("button", { name: /^sma\.tea/ })).toHaveLength(
-      1,
-    );
     expect(
-      screen.queryByRole("button", { name: /^volume-profile-range\.tea/ }),
+      screen.getAllByRole("button", { name: /^Open sma\.tea/ }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole("button", { name: /^Open volume-profile-range\.tea/ }),
     ).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name }));
     expect(openFile).toHaveBeenCalledExactlyOnceWith({ workspaceId, path });
@@ -615,6 +615,122 @@ it.each([
     expect(rpc.resources.macro.addIndicator.mutate).not.toHaveBeenCalled();
   },
 );
+
+it.each([
+  { workspaceId: "wsp_test", workspaceName: "default", search: false },
+  { workspaceId: "wsp_other", workspaceName: "research", search: false },
+  { workspaceId: "wsp_other", workspaceName: "research", search: true },
+])(
+  "adds the exact $workspaceId script directly from the table (search: $search)",
+  async ({ workspaceId, workspaceName, search }) => {
+    const path = "research/averages/saved.tea";
+    const { rpc, resource, cell, openFile, close } = setupLibrary(
+      [path],
+      [path],
+    );
+    if (search)
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "Search or describe a study" }),
+        { target: { value: "saved" } },
+      );
+    else navigate("My scripts");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: `Add saved.tea · ${workspaceName} / ${path} to chart`,
+      }),
+    );
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(
+      rpc.resources.macro.addIndicator.mutate,
+    ).toHaveBeenCalledExactlyOnceWith({
+      chartId: resource.id,
+      expectedRevision: resource.revision,
+      cellId: cell.id,
+      source: { workspaceId, path },
+      parameterOverrides: {},
+    });
+    expect(openFile).not.toHaveBeenCalled();
+    expect(rpc.indicators.install.mutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("study-preview")).not.toBeInTheDocument();
+  },
+);
+
+it("asks for required script inputs and adds only after they are saved", async () => {
+  const path = "research/averages/saved.tea";
+  const { rpc, close, openFile } = setupLibrary([path]);
+  const study = compiled();
+  mocks.compile.mockResolvedValue({
+    ...study,
+    definition: {
+      ...study.definition,
+      parameters: [{ ...lengthParameter, defaultValue: null }],
+    },
+  });
+  navigate("My scripts");
+  fireEvent.click(
+    await screen.findByRole("button", { name: /^Add saved\.tea/ }),
+  );
+  const length = await screen.findByRole("spinbutton", { name: "Length" });
+  expect(close).not.toHaveBeenCalled();
+  expect(rpc.resources.macro.addIndicator.mutate).not.toHaveBeenCalled();
+  fireEvent.change(length, { target: { value: "21" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  expect(rpc.resources.macro.addIndicator.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      source: { workspaceId: "wsp_test", path },
+      parameterOverrides: { length: 21 },
+    }),
+  );
+  expect(openFile).not.toHaveBeenCalled();
+});
+
+it("disables table actions while adding and closes only after the chart save completes", async () => {
+  const path = "research/averages/saved.tea";
+  const { rpc, resource, close } = setupLibrary([path], [path]);
+  let finish!: (value: { chart: ChartResource }) => void;
+  rpc.resources.macro.addIndicator.mutate.mockReturnValueOnce(
+    new Promise<{ chart: ChartResource }>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  navigate("My scripts");
+  const add = await screen.findByRole("button", {
+    name: /^Add saved\.tea · default/,
+  });
+  fireEvent.click(add);
+  await waitFor(() =>
+    expect(rpc.resources.macro.addIndicator.mutate).toHaveBeenCalledOnce(),
+  );
+  for (const button of screen.getAllByRole("button", {
+    name: /^(Add|Open) saved\.tea/,
+  }))
+    expect(button).toBeDisabled();
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.click(add);
+  expect(rpc.resources.macro.addIndicator.mutate).toHaveBeenCalledOnce();
+  await act(async () => finish({ chart: { ...resource, revision: 2 } }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+});
+
+it("keeps the script table open after a failed save and retries on an explicit Add click", async () => {
+  const path = "research/averages/saved.tea";
+  const { rpc, close } = setupLibrary([path]);
+  rpc.resources.macro.addIndicator.mutate.mockRejectedValueOnce(
+    new Error("Save unavailable"),
+  );
+  navigate("My scripts");
+  const add = await screen.findByRole("button", { name: /^Add saved\.tea/ });
+  fireEvent.click(add);
+  await waitFor(() =>
+    expect(rpc.resources.macro.addIndicator.mutate).toHaveBeenCalledOnce(),
+  );
+  await waitFor(() => expect(add).toBeEnabled());
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.click(add);
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  expect(rpc.resources.macro.addIndicator.mutate).toHaveBeenCalledTimes(2);
+});
 
 it("retains chosen inputs after a failed chart save and retries only on the next explicit click", async () => {
   const { rpc, close } = setupLibrary();
@@ -647,7 +763,9 @@ it("opens personal files from library search without preparing a preview", async
     screen.getByRole("textbox", { name: "Search or describe a study" }),
     { target: { value: "helper" } },
   );
-  fireEvent.click(await screen.findByRole("button", { name: /^helper\.tea/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /^Open helper\.tea/ }),
+  );
   expect(openFile).toHaveBeenCalledExactlyOnceWith({
     workspaceId: "wsp_other",
     path,
@@ -680,7 +798,7 @@ it.each([
     navigate("My scripts");
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: /^helper\.tea/ }),
+      await screen.findByRole("button", { name: /^Open helper\.tea/ }),
     ).toBeInTheDocument();
     rpc.workspace.listTree.query.mockResolvedValue({
       status: "ready",

@@ -1,7 +1,14 @@
 // Purpose: Discover studies through visual examples and natural-language prompts, with chart-owned attachment actions.
 import { useContext, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, Compass, FileCode2, Library } from "lucide-react";
+import {
+  ArrowRight,
+  Compass,
+  ExternalLink,
+  FileCode2,
+  Library,
+  Plus,
+} from "lucide-react";
 import type * as Tea from "@openchart/tea";
 import { Button } from "@openchart/app/components/ui/button";
 import "./indicator-library.css";
@@ -158,6 +165,8 @@ export function IndicatorLibraryContent({
     onClose();
     navigate({ workspaceId, path });
   };
+  const addSource = (source: Tea.WorkspaceSources) =>
+    adder.add(() => Promise.resolve(source));
   const preview = (
     key: string,
     source: Tea.WorkspaceSources | undefined,
@@ -277,8 +286,8 @@ export function IndicatorLibraryContent({
             }}
             className="flex min-h-0 flex-1 flex-col"
           >
-            <header className="shrink-0 space-y-3 px-4 pb-3 pr-12 pt-4 lg:px-5 lg:pr-12">
-              <h1 className="font-studio text-lg font-medium">
+            <header className="indicator-library-inset shrink-0 space-y-3 pb-3 pt-4">
+              <h1 className="pr-8 font-studio text-lg font-medium">
                 {personal
                   ? "My scripts"
                   : scope === "All indicators"
@@ -314,8 +323,8 @@ export function IndicatorLibraryContent({
               className="mt-0 min-h-0 flex-1 overflow-y-auto"
             >
               <main
-                className="space-y-5 px-4 pb-5 lg:px-5"
-                aria-busy={loading || opener.isPending}
+                className="indicator-library-inset space-y-5 pb-5"
+                aria-busy={loading || busy}
               >
                 {loading ? (
                   <p
@@ -348,7 +357,8 @@ export function IndicatorLibraryContent({
                       <ScriptRows
                         files={custom}
                         busy={busy}
-                        onSelect={openSource}
+                        onOpen={openSource}
+                        onAdd={addSource}
                       />
                     ) : !failed ? (
                       <EmptyLibrary query={needle} personal />
@@ -397,7 +407,8 @@ export function IndicatorLibraryContent({
                         <ScriptRows
                           files={custom}
                           busy={busy}
-                          onSelect={openSource}
+                          onOpen={openSource}
+                          onAdd={addSource}
                         />
                       </section>
                     ) : null}
@@ -467,36 +478,107 @@ function StudyPreview({
 function ScriptRows({
   files,
   busy,
-  onSelect,
+  onOpen,
+  onAdd,
 }: {
   files: readonly (Tea.WorkspaceSources & { root: string })[];
   busy: boolean;
-  onSelect: (file: Tea.WorkspaceSources) => void;
+  onOpen: (file: Tea.WorkspaceSources) => void;
+  onAdd: (file: Tea.WorkspaceSources) => void;
 }) {
   return (
-    <div className="divide-y rounded-lg border">
-      {files.map((file) => (
-        <button
-          key={`${file.workspaceId}:${file.path}`}
-          type="button"
-          aria-label={`${file.path.split("/").at(-1)} · ${file.root.split("/").at(-1)} / ${file.path}`}
-          title={`${file.root}/${file.path}`}
-          disabled={busy}
-          onClick={() => onSelect(file)}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-        >
-          <FileCode2 className="size-5 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">
-              {file.path.split("/").at(-1)}
-            </span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {file.root.split("/").at(-1)} / {file.path}
-            </span>
-          </span>
-          <ArrowRight className="size-4 text-muted-foreground" />
-        </button>
-      ))}
+    <div className="overflow-hidden rounded-lg border">
+      <table
+        className="w-full table-fixed text-left"
+        aria-label="Workspace scripts"
+      >
+        <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
+          <tr>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Script
+            </th>
+            <th
+              scope="col"
+              className="indicator-library-script-location w-2/5 px-4 py-3 font-medium"
+            >
+              Location
+            </th>
+            <th scope="col" className="w-48 px-4 py-3 text-right font-medium">
+              Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {files.map(({ workspaceId, path, root }) => {
+            const filename = path.split("/").at(-1);
+            const location = `${root.split("/").at(-1)} / ${path}`;
+            const label = `${filename} · ${location}`;
+            const source = { workspaceId, path };
+            return (
+              <tr
+                key={`${workspaceId}:${path}`}
+                className="transition-colors hover:bg-muted/50"
+              >
+                <td className="px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <FileCode2
+                      aria-hidden="true"
+                      className="size-5 shrink-0 text-muted-foreground"
+                    />
+                    <div className="min-w-0">
+                      <span
+                        className="block truncate text-sm font-medium"
+                        title={filename}
+                      >
+                        {filename}
+                      </span>
+                      <span
+                        className="indicator-library-script-location-inline truncate text-xs text-muted-foreground"
+                        title={`${root}/${path}`}
+                      >
+                        {location}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+                <td className="indicator-library-script-location px-4 py-3">
+                  <span
+                    className="block truncate text-xs text-muted-foreground"
+                    title={`${root}/${path}`}
+                  >
+                    {location}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label={`Open ${label}`}
+                      disabled={busy}
+                      onClick={() => onOpen(source)}
+                    >
+                      <ExternalLink aria-hidden="true" />
+                      Open
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      aria-label={`Add ${label} to chart`}
+                      disabled={busy}
+                      onClick={() => onAdd(source)}
+                    >
+                      <Plus aria-hidden="true" />
+                      Add
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

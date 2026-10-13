@@ -179,9 +179,12 @@ cells and all their children.
   reading guide, recreation prompt and compiled Inputs when the study has them;
   defaults that follow the chart show the values the preview ran with.
   My scripts excludes the default Workspace's `indicators/builtin/` originals,
-  including chart built-ins. Selecting a file there or in search
-  results closes the library and opens the exact Workspace file directly,
-  without compiling or attaching it to the chart. Catalog studies retain their
+  including chart built-ins. Files there and in search results appear in a compact
+  Script, Location and Actions table aligned with the search field; narrow layouts
+  show the location below the filename. Open closes the library and opens the exact
+  Workspace file without compiling or attaching it. Add uses the shared attachment
+  flow, asks for required inputs and closes only after the chart save succeeds.
+  Catalog studies retain their
   previews, and Open source opens their exact Workspace file the same way.
   Duplicate actions copy disk bytes beside their source with create-only writes,
   preserving relative imports.
