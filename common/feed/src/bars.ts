@@ -125,7 +125,7 @@ export const BarsRequest = TimeRange.mapFields(
 export type BarsRequest = typeof BarsRequest.Type;
 
 /** Native source columns that include the market Bar vocabulary; times strictly ascend. */
-const barsDataFrame = dataFrameCodec
+const BarsDataFrame = dataFrameCodec
   .pipe(
     Schema.refine(
       (frame): frame is DataFrame<BarColumns> => hasColumns(frame, BarColumns),
@@ -148,25 +148,23 @@ const barsDataFrame = dataFrameCodec
     ),
   );
 
-/** Native Dataset columns, including countBack expansion and proven look-behind. */
-const snapshot = Schema.Struct({
+/** Complete sorted history with native columns, countBack expansion and proven coverage. */
+export const BarsSnapshot = Schema.Struct({
   range: TimeRange.mapFields(
     (fields) => ({ ...fields, to: Schema.Int }),
     { unsafePreserveChecks: true }, // Narrowing to preserves the ordering check.
   ).annotate(strict),
-  data: barsDataFrame,
+  data: BarsDataFrame,
   hasMoreBefore: Schema.Boolean,
-});
-/** Feed checks coverage; the timeseries codec owns frame structure and ordering. */
-export const BarsSnapshotCheck = Schema.makeFilter<typeof snapshot.Type>(
-  (snapshot) =>
-    [...snapshot.data].every(
-      ({ time }) => time >= snapshot.range.from && time < snapshot.range.to,
-    ),
-  { message: "Snapshot times must be inside its range" },
+}).check(
+  Schema.makeFilter(
+    (snapshot) =>
+      [...snapshot.data].every(
+        ({ time }) => time >= snapshot.range.from && time < snapshot.range.to,
+      ),
+    { message: "Snapshot times must be inside its range" },
+  ),
 );
-/** Complete sorted history and its proven coverage. */
-export const BarsSnapshot = snapshot.check(BarsSnapshotCheck);
 export type BarsSnapshot = typeof BarsSnapshot.Type;
 
 /** Supported combinations, avoiding a misleading Cartesian product. A source lists its default first for each resolution. */
@@ -198,6 +196,6 @@ export type BarsChannelRequest = typeof BarsChannelRequest.Type;
 /** One snapshot must precede every update on the same channel. */
 export const BarsMessage = Schema.Union([
   Schema.Struct({ type: Schema.Literal("snapshot"), snapshot: BarsSnapshot }),
-  Schema.Struct({ type: Schema.Literal("updates"), data: barsDataFrame }),
+  Schema.Struct({ type: Schema.Literal("updates"), data: BarsDataFrame }),
 ]);
 export type BarsMessage = typeof BarsMessage.Type;

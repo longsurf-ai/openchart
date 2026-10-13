@@ -46,8 +46,18 @@ const sentences = {
     `${providerName(failure.provider)} was reconfigured. Load the data again.`,
   "Client.Cancelled": () => "The request was cancelled.",
   "Client.Disconnected": () => "The connection to the data service was lost.",
-  "Client.InvalidResponse": () =>
-    "The data service returned a response that couldn't be read.",
+  "Client.InvalidResponse": (failure) => {
+    switch (failure.issue) {
+      case "duplicate-bars-snapshot":
+        return "Received a second bars snapshot; only one snapshot is allowed per channel.";
+      case "bars-updates-before-snapshot":
+        return "Received bars updates before the initial snapshot; a snapshot must arrive first.";
+      case "bars-updates-for-history":
+        return 'Received bars updates for a historical request; only requests ending at "now" allow updates.';
+      default:
+        return "The data service returned a response that couldn't be read.";
+    }
+  },
   "Client.Internal": () => "Something went wrong while loading data.",
 } satisfies {
   readonly [T in (FeedReason | ClientFailure)["_tag"]]: (

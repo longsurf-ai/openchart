@@ -108,7 +108,8 @@ export interface QueryOptions {
  *   so a remount (for example returning to a Dashboard) reattaches without reloading.
  *
  * current.data and each update are DataFrames with the source columns and labels.
- * Install data first, then subscribe to updates. Updates replay in order; they
+ * Install data first, then subscribe to updates. A late subscription receives one
+ * consolidated batch of the latest revisions, then original live batches. Updates
  * do not mutate the snapshot or trigger React renders. Use current.request to label the bars, even while B is loading.
  *
  * How it works (observable-hooks connects this RxJS flow to React):

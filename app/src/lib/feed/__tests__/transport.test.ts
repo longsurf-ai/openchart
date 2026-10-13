@@ -221,7 +221,7 @@ describe("Feed transport", () => {
     },
   );
 
-  it("replays every post-snapshot batch independently for delayed subscribers", async () => {
+  it("retains every distinct updated bar for delayed subscribers", async () => {
     let channel: Channel | undefined;
     const { client } = await start((_input, opened) => {
       channel = opened;

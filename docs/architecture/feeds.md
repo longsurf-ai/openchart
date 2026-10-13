@@ -66,7 +66,7 @@ Feed-selection API and demo toggles have been removed.
   affect only their channel; duplicate names fail during registration.
   See [Hose routing](hose.md) for registration and the two `type` fields.
 - `app/src/lib/feed/transport.ts` wires typed tRPC/Hose operations and version
-  observation. `bars.ts` owns window observations, snapshot/update ordering, bounded replay and live view sharing. Native
+  observation. `bars/` separates window observation, message ordering, compacted replay, and live channel sharing. Native
   WebSocket wiring and cancellable Observable/request channels belong to
   `common/hose`; app hooks own React lifecycle.
 - `packages/react` wraps the unchanged V1 core. It accepts structural bar data and
@@ -129,15 +129,19 @@ its request and snapshot; later batches go only to view.updates. Rows in update 
 replace matching timestamps, including source-provided corrections.
 
 Closing a channel completes its updates. A retained
-view still replays accepted batches after the original snapshot, then completes:
+view still replays the latest accepted revision of each updated bar in one consolidated
+DataFrame after the original snapshot, then completes:
 it displays the last accepted state without keeping the old source alive. Errors
-retain accepted replay followed by the error. Buffers remain bounded, overflow
-fails explicitly, and neither the view nor its replay can reopen a stopped channel.
+retain accepted replay followed by the error. Attached readers receive original live
+batches. Each update is merged once into the shared replay checkpoint, preserving
+distinct timestamps, native columns, labels, and gaps. Returning consumers merge
+that checkpoint once instead of replaying every intermediate tick. The replay
+limit is 50,000 distinct updated bars; overflow fails before dropping any bars, and neither the view nor its replay can reopen a stopped channel.
 Subscribing to view.updates opens no additional channel.
 
 The client shares open live views. A request joins the newest open view with the
 same series and end when that view starts no later and asks for at least as many
-bars; replayed updates cover the time in between. That view stays open for 5
+bars; consolidated replay covers the time in between. That view stays open for 5
 minutes after its last subscriber leaves, so a chart that remounts (for example
 after switching Dashboards) reattaches without reloading. A view replaced by a
 wider request closes as soon as it is unwatched. Failed and finished views,

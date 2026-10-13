@@ -18,17 +18,37 @@ it("keeps shared RPC, Feed and Tea payloads in their transport owners and erases
     "src/lib/feed/transport.ts",
     "src/lib/tea/index.ts",
   ]);
+  const cacheImports = new Map([
+    ["src/lib/feed/bars/index.ts", ["Option"]],
+    ["src/lib/feed/bars/channel.ts", ["Match", "Option"]],
+    ["src/lib/feed/bars/replay.ts", ["Option"]],
+    ["src/lib/feed/bars/sharing.ts", ["MutableHashMap", "Option"]],
+  ]);
   const load = createRequire(import.meta.url);
   for await (const file of glob("src/**/*.{ts,tsx}", { cwd: app })) {
-    if (/\.test\.tsx?$/.test(file)) continue;
+    if (/\.test(?:-utils)?\.tsx?$/.test(file)) continue;
     const source = await readFile(resolve(app, file), "utf8");
     // Drawing boundaries decode shared input with Schema; no Effect runtime in components.
     if (
       !transports.has(file) &&
       file !== "src/lib/feed/contracts.ts" &&
-      !drawingInputs.has(file)
+      !drawingInputs.has(file) &&
+      !cacheImports.has(file)
     )
       expect(source).not.toMatch(/(?:from\s+|import\s*)['"]effect(?:\/|['"])/);
+    if (cacheImports.has(file)) {
+      const dataImport = /import\s*\{([^}]+)\}\s*from\s*['"]effect['"]/;
+      expect(
+        source
+          .match(dataImport)?.[1]
+          ?.split(",")
+          .map((name) => name.trim())
+          .sort(),
+      ).toEqual(cacheImports.get(file));
+      expect(source.replace(dataImport, "")).not.toMatch(
+        /(?:from\s+|import\s*(?:\(\s*)?)['"]effect(?:\/|['"])/,
+      );
+    }
     if (drawingInputs.has(file)) {
       const schemaImport = /import\s*\{\s*Schema\s*\}\s*from\s*['"]effect['"]/;
       expect(source).toMatch(schemaImport);

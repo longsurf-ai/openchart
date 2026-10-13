@@ -45,7 +45,7 @@ Component-private hooks stay beside their component. Features never import each 
 
 - Runtime imports use common packages, never server/platform implementations.
   The server edge is types-only AppRouter in shared transport. No Effect runtime;
-  Feed and Tea contracts may use Effect Schema. Chart drawing style menus and Chart Explain
+  Feed and Tea contracts may use Effect Schema; Feed caching may use Effect data utilities. Chart drawing style menus and Chart Explain
   may import only `Schema` from `effect` to decode shared drawing input. Other Effect APIs remain forbidden in components; additional
   Schema exceptions require an explicit owner rule and boundary check.
 - Desktop injects the required AppHost and configured Clerk provider through bootstrap.

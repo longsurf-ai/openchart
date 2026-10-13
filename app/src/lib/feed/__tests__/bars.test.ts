@@ -1,13 +1,11 @@
 // Purpose: Verify Bars channel ownership, frozen replay after unsubscribe, and live view sharing, without a browser or server.
 import {
   type BarsMessage,
-  BarsRequest,
+  type BarsRequest,
   ClientFailures,
   FeedError,
   FeedReasons,
 } from "@openchart/feed";
-import { BarColumns } from "@openchart/market";
-import { defineDataFrame } from "@openchart/timeseries";
 import { Schema } from "effect";
 import { Observable, of, Subject, take } from "rxjs";
 import { afterEach, assert, expect, it, vi } from "vitest";
@@ -23,46 +21,7 @@ import {
   UseBarsResult,
 } from "@openchart/app/lib/feed/contracts";
 
-const request = Schema.decodeUnknownSync(BarsRequest)({
-  provider: "binance",
-  listing: {
-    symbol: "BTCUSDT",
-    name: "Bitcoin",
-    class: "crypto",
-    venue: "BINANCE",
-    currency: "USDT",
-  },
-  resolution: "1m",
-  session: "24h",
-  adjustment: "raw",
-  from: 0,
-  to: "now",
-  countBack: 1,
-});
-// Native columns sit beside the required Bar vocabulary.
-const NativeBars = defineDataFrame({
-  ...BarColumns,
-  final: Schema.Boolean,
-  asOf: Schema.Finite,
-});
-const frame = (close = 2, times = [1]) =>
-  NativeBars.create({
-    labels: { symbol: "BTCUSDT" },
-    rows: times.map((time) => ({
-      time,
-      open: 1,
-      high: 2,
-      low: 1,
-      close,
-      volume: 1,
-      final: false,
-      asOf: 10,
-    })),
-  });
-const snapshot: BarsMessage = {
-  type: "snapshot",
-  snapshot: { data: frame(), range: { from: 0, to: 10 }, hasMoreBefore: false },
-};
+import { frame, request, snapshot } from "./bars.test-utils";
 
 it("provides completed updates for finite history and freezes its snapshot", () => {
   const complete = vi.fn();
@@ -122,7 +81,7 @@ it("stops input on unsubscribe while retaining the final accepted view for late 
     next: (batch) => replay.push(batch.get(0)!.close as number),
     complete,
   });
-  expect(replay).toEqual([3, 4]);
+  expect(replay).toEqual([4]);
   expect(complete).toHaveBeenCalledOnce();
   expect(teardown).toHaveBeenCalledOnce();
 });
@@ -135,7 +94,7 @@ it("stops even synchronous producers when the outer owner takes only one view", 
   )
     .pipe(take(1))
     .subscribe((view) => views.push(view));
-  const next = vi.fn();
+  const next = vi.fn<(data: BarsView["data"]) => void>();
   const complete = vi.fn();
   views[0]!.updates.subscribe({ next, complete });
   expect(next).not.toHaveBeenCalled();
@@ -143,12 +102,41 @@ it("stops even synchronous producers when the outer owner takes only one view", 
 });
 
 it.each([
-  "empty",
-  "updates-first",
-  "duplicate",
-  "finite-updates",
-  "overflow",
-] as const)("reports %s through the outer error channel", (mode) => {
+  ["empty", new ClientFailures.InvalidResponse()],
+  [
+    "updates-first",
+    expect.objectContaining({
+      _tag: "Client.InvalidResponse",
+      issue: "bars-updates-before-snapshot",
+      message:
+        "Received bars updates before the initial snapshot; a snapshot must arrive first.",
+    }),
+  ],
+  [
+    "duplicate",
+    expect.objectContaining({
+      _tag: "Client.InvalidResponse",
+      issue: "duplicate-bars-snapshot",
+      message:
+        "Received a second bars snapshot; only one snapshot is allowed per channel.",
+    }),
+  ],
+  [
+    "finite-updates",
+    expect.objectContaining({
+      _tag: "Client.InvalidResponse",
+      issue: "bars-updates-for-history",
+      message:
+        'Received bars updates for a historical request; only requests ending at "now" allow updates.',
+    }),
+  ],
+  [
+    "overflow",
+    new FeedError({
+      reason: new FeedReasons.ResyncRequired({ provider: request.provider }),
+    }),
+  ],
+] as const)("reports %s through the outer error channel", (mode, expected) => {
   const messages: BarsMessage[] =
     mode === "empty"
       ? []
@@ -173,15 +161,7 @@ it.each([
     of(...messages),
     mode === "finite-updates" ? { ...request, to: 10 } : request,
   ).subscribe({ error });
-  expect(error).toHaveBeenCalledWith(
-    mode === "overflow"
-      ? new FeedError({
-          reason: new FeedReasons.ResyncRequired({
-            provider: request.provider,
-          }),
-        })
-      : new ClientFailures.InvalidResponse(),
-  );
+  expect(error).toHaveBeenCalledWith(expected);
 });
 
 it("local schemas preserve snapshot checks and restrict loading policy", () => {
@@ -274,6 +254,36 @@ it("keeps the newest live view open after its last subscriber leaves, then close
   expect(opened[0]!.closed).toBe(true);
   expect(watch(observe(request)).view).not.toBe(first.view);
   expect(opened).toHaveLength(2);
+});
+
+it("catches up after an idle dashboard revisit in one batch without reopening the channel", () => {
+  vi.useFakeTimers();
+  const { opened, observe } = channels();
+  const first = watch(observe(request));
+  first.subscription.unsubscribe();
+  const input = opened[0]!.input;
+  input.next({ type: "updates", data: frame(3, [1]) });
+  input.next({ type: "updates", data: frame(4, [1, 2]) });
+  input.next({ type: "updates", data: frame(5, [2, 3]) });
+  vi.advanceTimersByTime(BARS_KEEP_MS - 1);
+
+  const again = watch(observe(request));
+  const next = vi.fn<(data: BarsView["data"]) => void>();
+  const reader = again.view.updates.subscribe(next);
+  expect(opened).toHaveLength(1);
+  expect(next).toHaveBeenCalledOnce();
+  expect(
+    Array.from(next.mock.calls[0]![0], (row) => [row.time, row.close]),
+  ).toEqual([
+    [1, 4],
+    [2, 5],
+    [3, 5],
+  ]);
+  input.next({ type: "updates", data: frame(6, [3]) });
+  expect(next).toHaveBeenCalledTimes(2);
+  expect(next.mock.calls[1]![0].numRows).toBe(1);
+  reader.unsubscribe();
+  again.subscription.unsubscribe();
 });
 
 it("opens a new channel for wider requests and closes a replaced view once unwatched", () => {

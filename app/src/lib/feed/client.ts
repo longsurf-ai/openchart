@@ -25,7 +25,7 @@ export interface IBarsFeed {
   /**
    * Subscribe to one window. Subscribers share an open live view that covers the
    * request, and it stays open for a few minutes after the last one leaves (see
-   * `shareBarsViews` in [bars.ts](./bars.ts)). Unsubscribe to cancel.
+   * `shareBarsViews` in [bars/sharing.ts](./bars/sharing.ts)). Unsubscribe to cancel.
    * @example const sub = feed.observe(request).subscribe(show);
    */
   observe(request: BarsRequest): Observable<BarsView>;

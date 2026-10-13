@@ -44,13 +44,23 @@ export class Disconnected extends Schema.TaggedError<Disconnected>()(
 }
 
 /**
- * The backend answered with something the client could not decode.
+ * The backend response could not be decoded or violated the channel protocol.
+ * An optional issue identifies a known violation for the shared wording function.
  *
  * @example new InvalidResponse();
+ * @example new InvalidResponse({ issue: "duplicate-bars-snapshot" });
  */
 export class InvalidResponse extends Schema.TaggedError<InvalidResponse>()(
   "Client.InvalidResponse",
-  {},
+  {
+    issue: Schema.optionalKey(
+      Schema.Literals([
+        "duplicate-bars-snapshot",
+        "bars-updates-before-snapshot",
+        "bars-updates-for-history",
+      ]),
+    ),
+  },
 ) {
   /** The same response would fail again. */
   get isRetryable(): boolean {

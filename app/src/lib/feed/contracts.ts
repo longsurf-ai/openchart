@@ -2,17 +2,16 @@
 import {
   BarsRequest,
   BarsSnapshot,
-  BarsSnapshotCheck,
   ClientFailure,
   FeedError,
 } from "@openchart/feed";
 import { Predicate, Schema } from "effect";
 import { isObservable, type Observable } from "rxjs";
 
-const action = Schema.declare<() => void>((value): value is () => void =>
+const RetryAction = Schema.declare<() => void>((value): value is () => void =>
   Predicate.isFunction(value),
 );
-const updates = Schema.declare<Observable<BarsSnapshot["data"]>>(
+const BarsUpdates = Schema.declare<Observable<BarsSnapshot["data"]>>(
   (value): value is Observable<BarsSnapshot["data"]> => isObservable(value),
 );
 
@@ -25,32 +24,39 @@ export const UseBarsOptions = Schema.Struct({
 });
 export type UseBarsOptions = typeof UseBarsOptions.Type;
 
-/** A snapshot and replayable updates; its outer subscription owns the channel. */
-export const BarsView = Schema.Struct({
-  ...BarsSnapshot.fields,
-  request: BarsRequest,
-  updates,
-}).check(BarsSnapshotCheck);
+/**
+ * An immutable snapshot and compacted updates, owned by the outer subscription.
+ * Late readers receive the latest revision of each updated bar in one batch, then
+ * original live batches. Intermediate revisions are not a historical tick log.
+ */
+export const BarsView = BarsSnapshot.mapFields(
+  (fields) => ({
+    ...fields,
+    request: BarsRequest,
+    updates: BarsUpdates,
+  }),
+  { unsafePreserveChecks: true }, // Snapshot fields are unchanged.
+);
 export type BarsView = typeof BarsView.Type;
 
-const retained = Schema.Union([BarsView, Schema.Undefined]);
+const RetainedBarsView = Schema.Union([BarsView, Schema.Undefined]);
 /** React observes window transitions, while bars are delivered directly to the renderer. */
 export const UseBarsResult = Schema.Union([
   Schema.Struct({
     status: Schema.Literal("loading"),
-    current: retained,
-    retry: action,
+    current: RetainedBarsView,
+    retry: RetryAction,
   }),
   Schema.Struct({
     status: Schema.Literal("ready"),
     current: BarsView,
-    retry: action,
+    retry: RetryAction,
   }),
   Schema.Struct({
     status: Schema.Literal("error"),
-    current: retained,
+    current: RetainedBarsView,
     error: Schema.Union([FeedError, ClientFailure]),
-    retry: action,
+    retry: RetryAction,
   }),
 ]);
 export type UseBarsResult = typeof UseBarsResult.Type;
