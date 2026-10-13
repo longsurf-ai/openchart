@@ -121,9 +121,9 @@ export function paintMeasurement(input: {
   const lines = cagr
     ? [
         `CAGR ${performance?.cagrPercent === undefined ? "—" : Locale.percent(performance.cagrPercent)}`,
-        `Volatility ${performance?.volatilityPercent === undefined ? "—" : Locale.price(performance.volatilityPercent, 2) + "%"}`,
+        `Volatility ${performance?.volatilityPercent === undefined ? "—" : Locale.percent(performance.volatilityPercent).replace(/^\+/, "")}`,
         `Return ${performance?.returnPercent === undefined ? "—" : Locale.percent(performance.returnPercent)}`,
-        `Sharpe (rf 0%) ${performance?.sharpe === undefined ? "—" : Locale.price(performance.sharpe, 2)}`,
+        `Sharpe (rf 0%) ${performance?.sharpe === undefined ? "—" : performance.sharpe.toLocaleString(Locale.get().locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       ]
     : [
         `${delta} (${percent})${ticks}`,
