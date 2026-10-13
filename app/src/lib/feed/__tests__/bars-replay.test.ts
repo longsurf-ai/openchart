@@ -11,17 +11,20 @@ import { expect, it, vi } from "vitest";
 import { createBarsReplay } from "../bars/replay";
 import { frame, request } from "./bars.test-utils";
 
-it("replays one current revision after more than 50,000 ticks of the same bar", () => {
+it("does not count repeated revisions toward the distinct-bar limit", () => {
   const replay = createBarsReplay(request.provider);
-  const tick = frame(3);
-  for (let index = 0; index < 50_001; index++) replay.next(tick);
-  replay.next(frame(4));
+  const times = Array.from({ length: 25_001 }, (_, index) => index);
+  // More than 50,000 incoming rows still represent only 25,001 distinct bars.
+  replay.next(frame(3, times));
+  replay.next(frame(4, times));
 
-  const next = vi.fn();
+  const next = vi.fn<(data: BarsSnapshot["data"]) => void>();
   replay.updates.pipe(take(1)).subscribe(next);
   expect(next).toHaveBeenCalledOnce();
-  expect(Array.from(next.mock.calls[0]![0])).toEqual(Array.from(frame(4)));
-}, 20_000);
+  expect(
+    Array.from(next.mock.calls[0]![0], ({ time, close }) => [time, close]),
+  ).toEqual(times.map((time) => [time, 4]));
+});
 
 it("preserves every distinct bar, corrections, gaps and native columns in one replay", () => {
   const replay = createBarsReplay(request.provider);
