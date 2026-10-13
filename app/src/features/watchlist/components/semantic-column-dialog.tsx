@@ -31,7 +31,7 @@ export function SemanticColumnDialog({
   onClose: () => void;
 }) {
   const id = useId();
-  const [original] = useState(column);
+  const [original] = useState<Watchlist["columns"][number] | undefined>(column);
   const initial =
     original?.metric.kind === "semantic" ? original.metric : undefined;
   const [title, setTitle] = useState(column?.title ?? "");
@@ -84,8 +84,10 @@ export function SemanticColumnDialog({
                         throw new Error("This column was deleted.");
                       if (
                         original &&
-                        replaceEqualDeep(original, current.columns[index]) !==
-                          original
+                        replaceEqualDeep<unknown>(
+                          original,
+                          current.columns[index],
+                        ) !== original
                       )
                         throw new Error(
                           "This column changed while you were editing. Reopen it to load the saved settings.",
