@@ -38,8 +38,22 @@ export namespace Drawing {
    * Decoding rejects unknown tools. No resources are acquired.
    * @example state.drawings.activeTool = "measurement";
    */
-  export const Tool = Schema.Union([Type, Schema.Literal("measurement")]);
+  export const Tool = Schema.Union([
+    Type,
+    Schema.Literals(["measurement", "cagr_measurement"]),
+  ]);
   export type Tool = typeof Tool.Type;
+
+  /** Identify tools that use chart-local measurement gestures rather than saved drawings.
+   * Pure; accepts absent selection, owns no resources and cannot fail.
+   * Hosts share this predicate with core for focus, completion and cancellation.
+   * @example if (Drawing.isMeasurementTool(state.drawings.activeTool)) canvas.focus();
+   */
+  export function isMeasurementTool(
+    tool: Tool | null | undefined,
+  ): tool is "measurement" | "cagr_measurement" {
+    return tool === "measurement" || tool === "cagr_measurement";
+  }
 
   export const Anchor = Schema.Struct({
     time: Data.Time,

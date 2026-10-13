@@ -29,7 +29,7 @@ Smaller presets keep their hidden cells for reuse when expanding the grid again.
 
 The drawing rail stays visible and floats over the chart. Drag its top handle
 to move it within the widget; react-draggable owns its position and gestures.
-The Measurement group in the drawing rail contains Measure and Volume Profile. Select Measure, or hold Shift for the first click in a plot. A click sets
+The Measurement group in the drawing rail contains Measure, CAGR and Volume Profile. Select Measure, or hold Shift for the first click in a plot. A click sets
 the start; release both Shift and the mouse to follow the pointer, then click
 again to fix the endpoint. Dragging also works: drag and release to finish.
 The readout shows price change, percent, ticks, bar intervals, elapsed calendar
@@ -43,6 +43,24 @@ selected supports repeated measurements. Shift measurement replaces Shift plot
 panning; axis gestures are unchanged. Measurements stay local to each mounted
 cell and never become Drawing Resources. Missing volume is unavailable or
 partial; projected empty margins are not market data.
+
+CAGR uses the same click-move-click or drag-release gesture to select main-price
+bar times, regardless of pointer height or which pane is clicked. A translucent
+time band covers the entire plot, with a four-line readout to its right. Drag
+either boundary to adjust a completed range. Endpoints snap to loaded bars;
+reverse selection measures the same chronological interval. The range remains
+chart-local and shares Measure's cancellation, clearing and lifecycle.
+
+Return and CAGR use the first and last selected closes from the current source
+and adjustment mode, without adding dividends. CAGR uses elapsed epoch seconds
+divided by a 365.25-day year. Volatility uses the sample standard deviation of
+arithmetic close-to-close bar returns, annualized by the square root of observed
+return count / elapsed years. Sharpe uses their mean / sample standard deviation
+with the same annualization and a zero risk-free rate, shown on the card.
+Statistics depend on the current bar resolution. Missing/nonpositive prices or
+unloaded endpoints show unavailable metrics; fewer than two returns cannot
+estimate volatility, and zero volatility leaves Sharpe unavailable.
+
 Auto/Log and axis
 settings stay beside their individual vertical axes, with A/L in a separate
 hover/focus row above the compact settings buttons. A clock button opens the

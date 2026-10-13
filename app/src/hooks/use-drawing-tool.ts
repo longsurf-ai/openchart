@@ -1,5 +1,5 @@
 // Purpose: Keep tool buttons and core drawing completion on one state owner.
-import type { Drawing } from "@openchart/chart-core";
+import { Drawing } from "@openchart/chart-core";
 import { useCallback } from "react";
 import { useStore } from "zustand";
 
@@ -29,7 +29,7 @@ export function useDrawingTool(chart: ChartRuntime) {
   const clearMeasurement = useCallback(() => {
     chart.mutate((state) => {
       delete state.measurement;
-      if (state.drawings.activeTool === "measurement")
+      if (Drawing.isMeasurementTool(state.drawings.activeTool))
         state.drawings.activeTool = null;
     });
   }, [chart]);

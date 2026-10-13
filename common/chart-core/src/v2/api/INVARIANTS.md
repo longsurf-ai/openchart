@@ -69,3 +69,6 @@ Public entry point for the v2 chart runtime. Wires a canvas element to the chart
   a later mouseup to restore a cleared range.
   Keyboard cancellation belongs to the focused chart or its open measurement
   menu; Escape in another chart or unrelated popup must preserve this range.
+  CAGR shares this lifecycle, snaps to loaded main-series times and ignores
+  pointer height. Completed endpoints drag only through paint-owned hit regions;
+  reversed selections keep chronological statistics and never synthesize prices.

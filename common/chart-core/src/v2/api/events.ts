@@ -152,6 +152,7 @@ export function setupEvents(config: EventsConfig): EventsController {
   let chartExplainDrag: ChartExplainDragState = null;
   let measurementDrag: {
     tool: Drawing.Tool | null | undefined;
+    endpoint?: "start" | "end";
     start: Action.Point;
     mode: "pressed" | "tracking";
     moved: boolean;
@@ -2157,11 +2158,12 @@ export function setupEvents(config: EventsConfig): EventsController {
     state: Chart.State,
     seriesId: string,
     point: Action.Point,
+    kind?: "cagr",
   ) {
     const series = getSeries(state, seriesId);
     const runtime = getRuntime();
     const scale = series && runtime.coord?.scales.y[Series.getYAxisId(series)];
-    if (!series?.data.length || !scale) return null;
+    if (!series?.data.length || (!scale && kind !== "cagr")) return null;
     const axis = getAxis(state.config.xAxis, Series.getXAxisId(series));
     if (axis.mode !== "ordinal" || (axis.field ?? "time") !== "time")
       return null;
@@ -2173,22 +2175,45 @@ export function setupEvents(config: EventsConfig): EventsController {
       xToSeriesIndex(state, series, x, layout) -
       Number(series.options.xOffset ?? 0);
     const xField = resolveField(series, "x", "time");
-    const row = series.data[index] as Record<string, unknown> | undefined;
+    const rowIndex =
+      kind === "cagr"
+        ? Math.max(0, Math.min(series.data.length - 1, Math.round(index)))
+        : index;
+    const row = series.data[rowIndex] as Record<string, unknown> | undefined;
     const time =
       Data.readTime(row?.[xField]) ??
-      projectedTimeForX({
-        state,
-        series,
-        layout,
-        xField,
-        x: makeIndexToSeriesX(state, series, layout)(index),
-      });
-    const price = rawValueAtY(
-      scale,
-      runtime.modeCache?.modeTransforms.get(seriesId),
-      y,
-    );
-    return time === null || price === undefined ? null : { time, price };
+      (kind === "cagr"
+        ? null
+        : projectedTimeForX({
+            state,
+            series,
+            layout,
+            xField,
+            x: makeIndexToSeriesX(state, series, layout)(index),
+          }));
+    const price =
+      kind === "cagr"
+        ? readNumber(row, series, "value", "close")
+        : rawValueAtY(
+            scale!,
+            runtime.modeCache?.modeTransforms.get(seriesId),
+            y,
+          );
+    return time == null || price === undefined ? null : { time, price };
+  }
+
+  function measurementEndpointAt(point: Action.Point) {
+    const measurement = getState().measurement;
+    if (measurement?.kind !== "cagr" || measurement.phase !== "complete")
+      return;
+    return getRuntime().measurementHitRegions?.find(
+      (bounds) =>
+        bounds.endpoint &&
+        point.x >= bounds.x &&
+        point.x <= bounds.x + bounds.width &&
+        point.y >= bounds.y &&
+        point.y <= bounds.y + bounds.height,
+    )?.endpoint;
   }
 
   function releaseMeasurementDrag() {
@@ -2227,13 +2252,19 @@ export function setupEvents(config: EventsConfig): EventsController {
     ) {
       measurementDrag.moved = true;
     }
-    const end = measurementPoint(state, state.measurement.seriesId, point);
+    const end = measurementPoint(
+      state,
+      state.measurement.seriesId,
+      point,
+      state.measurement.kind,
+    );
     if (!end) {
       cancelMeasurement();
       return;
     }
     setState((s) => {
-      if (s.measurement) s.measurement.end = end;
+      if (s.measurement)
+        s.measurement[measurementDrag?.endpoint ?? "end"] = end;
       s.crosshair.visible = false;
     });
     scheduleRender("light");
@@ -2258,7 +2289,7 @@ export function setupEvents(config: EventsConfig): EventsController {
   function finishMeasurement(e: MouseEvent) {
     handleMeasurementDrag(e);
     if (!measurementDrag) return;
-    const toolbar = measurementDrag.tool === "measurement";
+    const toolbar = Drawing.isMeasurementTool(measurementDrag.tool);
     releaseMeasurementDrag();
     let autoCleared = false;
     setState((s) => {
@@ -2273,7 +2304,12 @@ export function setupEvents(config: EventsConfig): EventsController {
     scheduleRender("light");
   }
 
-  function beginMeasurement(state: Chart.State, point: Action.Point) {
+  function beginMeasurement(
+    state: Chart.State,
+    point: Action.Point,
+    kind?: "cagr",
+    endpoint?: "start" | "end",
+  ) {
     const layout = Chart.computeLayout(state.config);
     const paneId = paneIdAtY(state, layout, point.y);
     const candidates = paneSeriesIds(state, paneId)
@@ -2284,31 +2320,44 @@ export function setupEvents(config: EventsConfig): EventsController {
       );
     const main = ChartStateModel.mainSeries(state);
     const series =
-      candidates.find((item) => item.id === state.lockedSeriesId) ??
-      candidates.find((item) => item.id === main?.id) ??
-      candidates.find((item) => !item.parentId && item.type !== "Histogram") ??
-      candidates[0];
-    if (!series) return false;
-    const start = measurementPoint(state, series.id, point);
+      endpoint && state.measurement
+        ? getSeries(state, state.measurement.seriesId)
+        : kind === "cagr"
+          ? main && getSeries(state, main.id)
+          : (candidates.find((item) => item.id === state.lockedSeriesId) ??
+            candidates.find((item) => item.id === main?.id) ??
+            candidates.find(
+              (item) => !item.parentId && item.type !== "Histogram",
+            ) ??
+            candidates[0]);
+    if (!series || series.options.visible === false) return false;
+    const start = measurementPoint(state, series.id, point, kind);
     if (!start) return false;
     if (chartExplainDrag) cancelChartExplainDrag();
     drawingDrag = null;
     window.removeEventListener("mouseup", endDrawing);
     measurementDrag = {
       tool: state.drawings.activeTool,
+      endpoint,
       start: point,
       mode: "pressed",
-      moved: false,
+      moved: !!endpoint,
     };
     canvas.focus({ preventScroll: true });
     canvasHoveredAnnotationId = undefined;
     setState((s) => {
-      s.measurement = {
-        seriesId: series.id,
-        phase: "dragging",
-        start,
-        end: start,
-      };
+      if (endpoint && s.measurement) {
+        s.measurement.phase = "dragging";
+        s.measurement[endpoint] = start;
+        delete s.measurement.contextMenu;
+      } else
+        s.measurement = {
+          ...(kind ? { kind } : {}),
+          seriesId: series.id,
+          phase: "dragging",
+          start,
+          end: start,
+        };
       delete s.drawings.draft;
       delete s.drawings.hoveredId;
       delete s.drawings.selectedId;
@@ -2449,8 +2498,17 @@ export function setupEvents(config: EventsConfig): EventsController {
     const layout = Chart.computeLayout(state.config);
 
     if (
+      !e.shiftKey &&
+      (!state.drawings.activeTool ||
+        Drawing.isMeasurementTool(state.drawings.activeTool)) &&
+      measurementEndpointAt(pt)
+    ) {
+      setCanvasCursor("ew-resize");
+      return;
+    }
+    if (
       state.drawings.activeTool === "agent_session" ||
-      state.drawings.activeTool === "measurement" ||
+      Drawing.isMeasurementTool(state.drawings.activeTool) ||
       e.shiftKey ||
       state.annotationCreate?.phase === "armed"
     ) {
@@ -2836,10 +2894,31 @@ export function setupEvents(config: EventsConfig): EventsController {
       return;
     }
 
-    if (inPlot && (mods.shift || state.drawings.activeTool === "measurement")) {
+    const endpoint =
+      !mods.shift &&
+      (!state.drawings.activeTool ||
+        Drawing.isMeasurementTool(state.drawings.activeTool))
+        ? measurementEndpointAt(pt)
+        : undefined;
+    if (inPlot && endpoint) {
       e.preventDefault();
       suppressNextClick = true;
-      beginMeasurement(state, pt);
+      beginMeasurement(state, pt, "cagr", endpoint);
+      return;
+    }
+    if (
+      inPlot &&
+      (mods.shift || Drawing.isMeasurementTool(state.drawings.activeTool))
+    ) {
+      e.preventDefault();
+      suppressNextClick = true;
+      beginMeasurement(
+        state,
+        pt,
+        !mods.shift && state.drawings.activeTool === "cagr_measurement"
+          ? "cagr"
+          : undefined,
+      );
       return;
     }
     if (state.measurement) cancelMeasurement();
@@ -3210,7 +3289,7 @@ export function setupEvents(config: EventsConfig): EventsController {
     if (
       activeTool &&
       activeTool !== "agent_session" &&
-      activeTool !== "measurement" &&
+      !Drawing.isMeasurementTool(activeTool) &&
       !mods.alt
     ) {
       const anchor = pointToAnchor(pt, entry, { drawingType: activeTool });
@@ -3366,7 +3445,7 @@ export function setupEvents(config: EventsConfig): EventsController {
     if (measurementDrag && state.measurement) {
       e.preventDefault();
       setState((s) => {
-        if (s.drawings.activeTool === "measurement")
+        if (Drawing.isMeasurementTool(s.drawings.activeTool))
           s.drawings.activeTool = null;
       });
       cancelMeasurement();
@@ -3781,7 +3860,10 @@ export function setupEvents(config: EventsConfig): EventsController {
     const state = getState();
     ChartStateModel.assertModelReady(state);
     if (deleting && !state.measurement) return;
-    if (state.measurement || state.drawings.activeTool === "measurement") {
+    if (
+      state.measurement ||
+      Drawing.isMeasurementTool(state.drawings.activeTool)
+    ) {
       if (
         !state.measurement?.contextMenu &&
         document.activeElement !== canvas &&
@@ -3790,7 +3872,7 @@ export function setupEvents(config: EventsConfig): EventsController {
         return;
       e.preventDefault();
       setState((s) => {
-        if (s.drawings.activeTool === "measurement")
+        if (Drawing.isMeasurementTool(s.drawings.activeTool))
           s.drawings.activeTool = null;
       });
       cancelMeasurement();

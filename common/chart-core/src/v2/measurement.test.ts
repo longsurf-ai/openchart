@@ -110,3 +110,121 @@ describe("measurement statistics", () => {
     expect(measurementDuration(NaN)).toBe("—");
   });
 });
+
+describe("CAGR measurement statistics", () => {
+  const year = 365.25 * 86400;
+  function performance(
+    prices: Array<number | undefined>,
+    seconds = year,
+    reverse = false,
+  ) {
+    const s = ChartStateModel.resolvedSeries(
+      createState({
+        series: {
+          price: {
+            type: "Line",
+            fieldMap: { x: "timestamp", value: "adjustedClose" },
+            data: prices.map((price, index) => ({
+              timestamp:
+                1700000000 + (index * seconds) / Math.max(1, prices.length - 1),
+              adjustedClose: price,
+            })),
+          },
+        },
+      }),
+      "price",
+    )!;
+    const start = { time: 1700000000, price: 999 };
+    const end = { time: 1700000000 + seconds, price: -20 };
+    if (prices.length === 1) end.time = start.time;
+    const range = {
+      kind: "cagr" as const,
+      seriesId: "price",
+      phase: "complete" as const,
+      start: reverse ? end : start,
+      end: reverse ? start : end,
+    };
+    return { s, range, result: measurementStats(range, s)?.performance };
+  }
+
+  it.each([false, true])(
+    "uses chronological mapped closes in either drag direction (%s), not pointer prices",
+    (reverse) => {
+      const result = performance([100, 120, 108], year, reverse).result!;
+      // Returns are +20%, -10%: mean 5%, sample SD sqrt(0.045), two observations/year.
+      expect(result.returnPercent).toBeCloseTo(8, 12);
+      expect(result.cagrPercent).toBeCloseTo(8, 12);
+      expect(result.volatilityPercent).toBeCloseTo(30, 12);
+      expect(result.sharpe).toBeCloseTo(1 / 3, 12);
+    },
+  );
+
+  it("annualizes from actual elapsed dates and observed bar frequency", () => {
+    const result = performance([100, 120, 108], year / 2).result!;
+    expect(result.cagrPercent).toBeCloseTo(16.64, 12);
+    expect(result.volatilityPercent).toBeCloseTo(30 * Math.sqrt(2), 12);
+    expect(result.sharpe).toBeCloseTo(Math.sqrt(2) / 3, 12);
+  });
+
+  it("separates insufficient samples and zero volatility from valid endpoint returns", () => {
+    expect(performance([100]).result).toEqual({
+      returnPercent: 0,
+      cagrPercent: undefined,
+      volatilityPercent: undefined,
+      sharpe: undefined,
+    });
+    expect(performance([100, 120]).result).toMatchObject({
+      returnPercent: expect.closeTo(20),
+      cagrPercent: expect.closeTo(20),
+      volatilityPercent: undefined,
+      sharpe: undefined,
+    });
+    expect(performance([100, 100, 100]).result).toEqual({
+      returnPercent: 0,
+      cagrPercent: 0,
+      volatilityPercent: 0,
+      sharpe: undefined,
+    });
+    expect(performance([100, 110, 121]).result).toMatchObject({
+      returnPercent: expect.closeTo(21),
+      cagrPercent: expect.closeTo(21),
+      volatilityPercent: 0,
+      sharpe: undefined,
+    });
+  });
+
+  it.each([undefined, NaN, Infinity, 0, -1])(
+    "does not bridge missing or invalid closes (%s)",
+    (price) => {
+      expect(performance([100, price, 108]).result).toBeUndefined();
+    },
+  );
+
+  it("does not invent prices in blank margins or at interpolated timestamps", () => {
+    const { s, range } = performance([100, 120, 108]);
+    range.start.time -= year;
+    expect(measurementStats(range, s)?.performance).toBeUndefined();
+    range.start.time = 1700000000 + year / 4;
+    expect(measurementStats(range, s)?.performance).toBeUndefined();
+  });
+
+  it("recomputes held selections against updated closes and prepended history", () => {
+    const { s, range } = performance([100, 120, 108]);
+    s.data = [
+      { timestamp: 1700000000 - year / 2, adjustedClose: 80 },
+      ...s.data,
+    ];
+    expect(measurementStats(range, s)?.performance?.returnPercent).toBeCloseTo(
+      8,
+      12,
+    );
+    s.data = [
+      ...s.data.slice(0, -1),
+      { timestamp: range.end.time, adjustedClose: 120 },
+    ];
+    expect(measurementStats(range, s)?.performance?.returnPercent).toBeCloseTo(
+      20,
+      12,
+    );
+  });
+});

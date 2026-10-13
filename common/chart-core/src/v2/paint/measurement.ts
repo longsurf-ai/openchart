@@ -40,10 +40,15 @@ export function paintMeasurement(input: {
   if (!measurement || measurement.seriesId !== series.id) return;
   const stats = measurementStats(measurement, series);
   if (!stats) return;
+  const cagr = measurement.kind === "cagr";
   const x1 = input.xAt(stats.from);
   const x2 = input.xAt(stats.to);
-  const y1 = yAtRawValue(scale, transform, measurement.start.price);
-  const y2 = yAtRawValue(scale, transform, measurement.end.price);
+  const y1 = cagr
+    ? pane.y
+    : yAtRawValue(scale, transform, measurement.start.price);
+  const y2 = cagr
+    ? pane.y + pane.height
+    : yAtRawValue(scale, transform, measurement.end.price);
   if (
     y1 === undefined ||
     y2 === undefined ||
@@ -56,7 +61,8 @@ export function paintMeasurement(input: {
   const top = Math.max(pane.y, Math.min(y1, y2));
   const bottom = Math.min(pane.y + pane.height, Math.max(y1, y2));
   if (left > right || top > bottom) return;
-  const positive = stats.delta >= 0;
+  const positive =
+    (cagr ? (stats.performance?.returnPercent ?? 0) : stats.delta) >= 0;
   const color = Color.resolve(
     positive ? "var(--indicator-blue, #2962ff)" : "var(--down, #f64b60)",
   );
@@ -88,8 +94,21 @@ export function paintMeasurement(input: {
   ctx.setLineDash([]);
   ctx.beginPath();
   if (x1 !== x2) arrow(x1, cy, x2, cy);
-  if (y1 !== y2) arrow(cx, y1, cx, y2);
+  if (!cagr && y1 !== y2) arrow(cx, y1, cx, y2);
+  if (cagr) {
+    for (const x of [x1, x2]) {
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+    }
+  }
   ctx.stroke();
+  if (cagr) {
+    for (const x of [x1, x2]) {
+      ctx.beginPath();
+      ctx.arc(x, cy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   const delta = Locale.price(stats.delta, stats.precision);
   const percent =
@@ -98,11 +117,19 @@ export function paintMeasurement(input: {
     stats.ticks === undefined
       ? ""
       : ` ${stats.ticks.toLocaleString(Locale.get().locale)}`;
-  const lines = [
-    `${delta} (${percent})${ticks}`,
-    `${stats.bars.toLocaleString(Locale.get().locale)} ${stats.bars === 1 ? "bar" : "bars"}, ${measurementDuration(stats.seconds)}`,
-    `Vol ${stats.volume === undefined ? "—" : Locale.compact(stats.volume) + (stats.partialVolume ? " (partial)" : "")}`,
-  ];
+  const performance = stats.performance;
+  const lines = cagr
+    ? [
+        `CAGR ${performance?.cagrPercent === undefined ? "—" : Locale.percent(performance.cagrPercent)}`,
+        `Volatility ${performance?.volatilityPercent === undefined ? "—" : Locale.price(performance.volatilityPercent, 2) + "%"}`,
+        `Return ${performance?.returnPercent === undefined ? "—" : Locale.percent(performance.returnPercent)}`,
+        `Sharpe (rf 0%) ${performance?.sharpe === undefined ? "—" : Locale.price(performance.sharpe, 2)}`,
+      ]
+    : [
+        `${delta} (${percent})${ticks}`,
+        `${stats.bars.toLocaleString(Locale.get().locale)} ${stats.bars === 1 ? "bar" : "bars"}, ${measurementDuration(stats.seconds)}`,
+        `Vol ${stats.volume === undefined ? "—" : Locale.compact(stats.volume) + (stats.partialVolume ? " (partial)" : "")}`,
+      ];
   ctx.font = font;
   const lineHeight = state.config.chart.layout.fontSize + 6;
   const height = lines.length * lineHeight + 14;
@@ -112,9 +139,16 @@ export function paintMeasurement(input: {
   );
   const labelX = Math.max(
     pane.x + 4,
-    Math.min(pane.x + pane.width - width - 4, (left + right - width) / 2),
+    Math.min(
+      pane.x + pane.width - width - 4,
+      cagr ? right + 10 : (left + right - width) / 2,
+    ),
   );
-  const preferredY = positive ? top - height - 10 : bottom + 10;
+  const preferredY = cagr
+    ? cy - height / 2
+    : positive
+      ? top - height - 10
+      : bottom + 10;
   const labelY = Math.max(
     pane.y + 4,
     Math.min(pane.y + pane.height - height - 4, preferredY),
@@ -141,7 +175,7 @@ export function paintMeasurement(input: {
   ctx.restore();
 
   // Axis fills and labels paint last so ordinary ticks cannot cover the ruler.
-  if (yAxis) {
+  if (yAxis && !cagr) {
     ctx.save();
     ctx.beginPath();
     const clipX = Math.min(pane.x, yAxis.x);
@@ -242,5 +276,13 @@ export function paintMeasurement(input: {
       height: Math.max(1, bottom - top),
     },
     ...(hasLabel ? [{ x: labelX, y: labelY, width, height }] : []),
+    ...(cagr
+      ? (["start", "end"] as const).flatMap((endpoint, index) => {
+          const x = index === 0 ? x1 : x2;
+          return x >= pane.x && x <= pane.x + pane.width
+            ? [{ x: x - 4, y: top, width: 8, height: bottom - top, endpoint }]
+            : [];
+        })
+      : []),
   ];
 }

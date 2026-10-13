@@ -39,3 +39,6 @@ Stateless repaint pipeline that reads `Chart.State`, computes layout, coordinate
 - Measurement range/card hit regions come from their final painted rectangles.
   Clear them before the empty-series return; events must not reconstruct label
   bounds or let an underlying drawing win the ruler context menu.
+  CAGR covers the complete plot across panes, with its card to the right when
+  space permits. It highlights time only; price scales and pointer prices do not
+  determine performance. Card and endpoint hit regions follow clipped geometry.

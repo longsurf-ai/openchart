@@ -275,6 +275,8 @@ export namespace Chart {
      * Never serialize this state or create a Drawing resource from it.
      */
     measurement?: {
+      /** Absent for the price ruler; CAGR selects bar times and reads current closes. */
+      kind?: "cagr";
       seriesId: string;
       phase: "dragging" | "tracking" | "complete";
       start: { time: number; price: number };

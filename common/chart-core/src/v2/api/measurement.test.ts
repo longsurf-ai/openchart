@@ -14,7 +14,11 @@ afterEach(() => {
   cleanups.splice(0).forEach((cleanup) => cleanup());
 });
 
-function scenario(tool: Drawing.Tool | null = "measurement", log = false) {
+function scenario(
+  tool: Drawing.Tool | null = "measurement",
+  log = false,
+  indicator = false,
+) {
   const state = createState({
     id: "ruler",
     series: {
@@ -29,6 +33,18 @@ function scenario(tool: Drawing.Tool | null = "measurement", log = false) {
           volume: (i + 1) * 10,
         })),
       },
+      ...(indicator
+        ? {
+            indicator: {
+              type: "Line",
+              paneIndex: 1,
+              data: Array.from({ length: 20 }, (_, i) => ({
+                time: 1700000000 + i * 86400,
+                value: 5,
+              })),
+            },
+          }
+        : {}),
     },
   });
   state.drawings.activeTool = tool;
@@ -106,6 +122,101 @@ function scenario(tool: Drawing.Tool | null = "measurement", log = false) {
 }
 
 describe("measurement gestures", () => {
+  it("starts CAGR on the main price series even when a study is locked and clicked", () => {
+    const s = scenario("cagr_measurement", false, true);
+    s.state.lockedSeriesId = "indicator";
+    s.start(2, 5);
+    s.mouse("mouseup", 8, 5);
+    expect(s.state.measurement).toMatchObject({
+      kind: "cagr",
+      seriesId: "main",
+      start: { price: 110 },
+      end: { price: 110 },
+    });
+  });
+  it.each([false, true])(
+    "selects CAGR by time and actual main-series closes, ignoring pointer height (%s)",
+    (reverse) => {
+      const s = scenario("cagr_measurement", true);
+      const first = reverse ? 12 : 2;
+      const last = reverse ? 2 : 12;
+      s.start(first, 40);
+      s.mouse("mousemove", last, 150);
+      s.mouse("mouseup", last, 180);
+      expect(s.state.measurement).toMatchObject({
+        kind: "cagr",
+        phase: "complete",
+        start: { time: 1700000000 + first * 86400, price: 110 },
+        end: { time: 1700000000 + last * 86400, price: 110 },
+      });
+      expect(s.state.drawings.activeTool).toBeNull();
+      expect(s.autoClear).toHaveBeenCalledOnce();
+      expect(s.onAddDrawing).not.toHaveBeenCalled();
+    },
+  );
+
+  it("supports click-move-click CAGR selection and keeps endpoints within loaded bars", () => {
+    const s = scenario("cagr_measurement");
+    s.start(2, 40);
+    s.mouse("mouseup", 2, 40);
+    expect(s.state.measurement?.phase).toBe("tracking");
+    s.mouse("mousemove", 30, 150, false, window, 0);
+    expect(s.state.measurement?.end.time).toBe(1700000000 + 19 * 86400);
+    s.mouse("mousedown", 8, 180, false, s.canvas);
+    s.mouse("mouseup", 8, 180);
+    expect(s.state.measurement).toMatchObject({
+      kind: "cagr",
+      phase: "complete",
+      end: { time: 1700000000 + 8 * 86400, price: 110 },
+    });
+  });
+
+  it("edits either completed CAGR endpoint through paint-owned handles", () => {
+    const s = scenario("cagr_measurement");
+    s.start(2, 40);
+    s.mouse("mouseup", 8, 100);
+    const layout = Chart.computeLayout(s.state.config);
+    const xAt = (index: number) =>
+      layout.areaX +
+      ordinalIndexToX(s.state.config, s.axis, layout.areaWidth, 20, index);
+    for (const [endpoint, index, next] of [
+      ["start", 2, 4],
+      ["end", 8, 12],
+    ] as const) {
+      s.runtime.measurementHitRegions = [
+        {
+          x: xAt(index) - 4,
+          y: 0,
+          width: 8,
+          height: layout.areaHeight,
+          endpoint,
+        },
+      ];
+      s.start(index, 50);
+      s.mouse("mousemove", next, 160);
+      s.mouse("mouseup", next, 160);
+      expect(s.state.measurement?.[endpoint]).toEqual({
+        time: 1700000000 + next * 86400,
+        price: 110,
+      });
+      expect(s.state.measurement?.phase).toBe("complete");
+    }
+    expect(s.state.measurement?.start.time).toBe(1700000000 + 4 * 86400);
+    expect(s.onAddDrawing).not.toHaveBeenCalled();
+  });
+
+  it.each(["Escape", "Delete", "Backspace"])(
+    "cancels CAGR with %s and ignores the pending release",
+    (key) => {
+      const s = scenario("cagr_measurement");
+      s.start();
+      window.dispatchEvent(new KeyboardEvent("keydown", { key }));
+      s.mouse("mouseup", 8, 150);
+      expect(s.state.measurement).toBeUndefined();
+      expect(s.state.drawings.activeTool).toBeNull();
+    },
+  );
+
   it("updates live, holds the released range, never adds drawings and auto-clears the tool", () => {
     const s = scenario();
     const before = structuredClone(s.axis);

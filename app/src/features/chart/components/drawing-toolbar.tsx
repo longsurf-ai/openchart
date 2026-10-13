@@ -1,5 +1,5 @@
 // Purpose: Operate the focused chart's drawing tools from a vertical rail of grouped menus.
-import { v2, type Drawing } from "@openchart/chart-core";
+import { v2, Drawing } from "@openchart/chart-core";
 import { useQuery } from "@tanstack/react-query";
 import {
   GripHorizontal,
@@ -148,6 +148,11 @@ const groups: readonly { id: string; label: string; tools: readonly Tool[] }[] =
           id: "measurement",
           label: "Measure",
           shortcut: "Shift",
+          icon: "ruler",
+        },
+        {
+          id: "cagr_measurement",
+          label: "CAGR",
           icon: "ruler",
         },
         {
@@ -318,7 +323,9 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
                 className="chart-drawing-menu w-52"
                 onCloseAutoFocus={(event) => {
                   if (
-                    chart.store.getState().drawings.activeTool === "measurement"
+                    Drawing.isMeasurementTool(
+                      chart.store.getState().drawings.activeTool,
+                    )
                   ) {
                     event.preventDefault();
                     chart.renderer.canvas.focus({ preventScroll: true });
@@ -387,7 +394,7 @@ export function DrawingToolbar({ chart }: { chart: ChartRuntime }) {
           onClick={() =>
             chart.mutate((state) => {
               delete state.measurement;
-              if (state.drawings.activeTool === "measurement")
+              if (Drawing.isMeasurementTool(state.drawings.activeTool))
                 state.drawings.activeTool = null;
               for (const id of v2.ChartStateModel.drawingItems(state).map(
                 (item) => item.id,

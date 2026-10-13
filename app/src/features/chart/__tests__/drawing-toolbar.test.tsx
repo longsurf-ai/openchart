@@ -125,6 +125,24 @@ it("drags only from the handle, clamps to the parent and leaves drawing controls
   expect(store.getState().measurement).toBeUndefined();
   expect(store.getState().drawings.activeTool).toBeNull();
   await user.click(measure);
+  await user.click(screen.getByRole("menuitem", { name: "CAGR" }));
+  expect(store.getState().drawings.activeTool).toBe("cagr_measurement");
+  expect(canvas).toHaveFocus();
+  act(() =>
+    chart.mutate((state) => {
+      state.measurement = {
+        kind: "cagr",
+        seriesId: "main",
+        phase: "complete",
+        start: { time: 1, price: 1 },
+        end: { time: 2, price: 2 },
+      };
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "Delete measurement" }));
+  expect(store.getState().measurement).toBeUndefined();
+  expect(store.getState().drawings.activeTool).toBeNull();
+  await user.click(measure);
   await user.click(screen.getByRole("menuitem", { name: "Volume Profile" }));
   expect(store.getState().drawings.activeTool).toBe("volume_profile");
   const explain = screen.getByRole("button", { name: "Chart explain" });

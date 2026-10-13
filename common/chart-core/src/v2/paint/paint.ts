@@ -164,6 +164,7 @@ export interface RuntimeState {
     y: number;
     width: number;
     height: number;
+    endpoint?: "start" | "end";
   }[];
   floatingAxisOverlays?: Array<{
     axisId: string;
@@ -4779,7 +4780,10 @@ export function repaint(
         state,
         series,
         scale,
-        pane,
+        pane:
+          state.measurement.kind === "cagr"
+            ? { x: areaX, y: 0, width: areaWidth, height: areaHeight }
+            : pane,
         font,
         transform: modeTransforms.get(series.id),
         xAt: seriesRuntime.xFn,
