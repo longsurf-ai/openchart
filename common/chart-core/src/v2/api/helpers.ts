@@ -36,7 +36,8 @@ export function computeVisibleExtent(
   const len = Math.max(1, ...allSeries.map((series) => series.data.length));
   const { valid: range } = TimeScale.visibleRange(ts, len);
   const axisSeries = allSeries.filter(
-    (series) => Series.getYAxisId(series) === axisId,
+    (series) =>
+      Series.getYAxisId(series) === axisId && series.options.visible !== false,
   );
 
   let min = Infinity;

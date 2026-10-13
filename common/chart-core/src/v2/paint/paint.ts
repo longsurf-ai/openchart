@@ -1090,8 +1090,9 @@ function computeExtents(
 } {
   const x = { min: 0, max: 100 };
   const y: Record<string, { min: number; max: number }> = {};
+  const visibleSeries = all.filter(isVisible);
 
-  for (const s of all) {
+  for (const s of visibleSeries) {
     const def = SeriesRegistry.get(s.type);
     if (!def) continue;
     const scaleId = Series.getYAxisId(s);
@@ -1135,7 +1136,7 @@ function computeExtents(
   if (Object.keys(y).length === 0) y.right = { min: 0, max: 100 };
 
   const axisSeriesMap = new Map<string, Series.State[]>();
-  for (const series of all) {
+  for (const series of visibleSeries) {
     const axisId = Series.getYAxisId(series);
     const list = axisSeriesMap.get(axisId) ?? [];
     list.push(series);
@@ -1176,7 +1177,7 @@ function computeExtents(
       y[axis.id]!.min = Math.min(0, y[axis.id]!.min);
       y[axis.id]!.max = Math.max(0, y[axis.id]!.max);
     }
-    if (y[axis.id] && y[axis.id]!.min === Infinity) {
+    if (!y[axis.id] || y[axis.id]!.min === Infinity) {
       y[axis.id] = { min: 0, max: 100 };
     }
   }
@@ -1249,7 +1250,7 @@ function computeModeExtentSignature(
     // revision/interior rewrite); range covers pan/zoom; the rest covers
     // identity and axis binding.
     parts.push(
-      `s|${s.id}|${s.type}|${Series.getYAxisId(s)}|${dataRevisionId(s.data)}|${JSON.stringify(s.fieldMap ?? null)}|${range ? `${range.from}-${range.to}` : ""}|${(s.options as { base?: number }).base ?? ""}`,
+      `s|${s.id}|${s.type}|${Series.getYAxisId(s)}|${dataRevisionId(s.data)}|${JSON.stringify(s.fieldMap ?? null)}|${range ? `${range.from}-${range.to}` : ""}|${(s.options as { base?: number }).base ?? ""}|${isVisible(s)}`,
     );
   }
   return parts.join(";");

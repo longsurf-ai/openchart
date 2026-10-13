@@ -141,17 +141,20 @@ export namespace Mapping {
 
   function mapWheel(action: Action.Wheel, ctx: Context): Command[] {
     void ctx;
+    // Shift-wheel may report the scroll direction on the horizontal axis.
+    const wheelDelta = action.delta.y || action.delta.x;
     switch (action.region.type) {
       case "canvas":
         if (action.mods.ctrl || action.mods.meta)
           return [{ effect: "zoomX", dy: action.delta.y, x: action.point.x }];
         if (action.mods.shift)
-          return [{ effect: "translateX", dx: action.delta.y }];
+          return [{ effect: "translateX", dx: wheelDelta }];
         if (Math.abs(action.delta.y) > Math.abs(action.delta.x))
           return [{ effect: "zoomX", dy: action.delta.y, x: action.point.x }];
         return [{ effect: "translateX", dx: action.delta.x }];
       case "yscale": {
-        const factor = action.delta.y > 0 ? 1.1 : 0.9;
+        if (wheelDelta === 0) return [{ effect: "none" }];
+        const factor = wheelDelta > 0 ? 1.1 : 0.9;
         return [{ effect: "zoomY", scale: action.region.scale, factor }];
       }
       case "xscale":

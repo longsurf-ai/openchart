@@ -8,6 +8,60 @@ import { Action } from "./action";
 const shift = { ...Action.noMods, shift: true };
 
 describe("Mapping", () => {
+  describe("Y-axis wheel zoom", () => {
+    it.each([
+      { delta: { x: 0, y: 100 }, mods: Action.noMods, factor: 1.1 },
+      { delta: { x: 0, y: -100 }, mods: Action.noMods, factor: 0.9 },
+      { delta: { x: 100, y: 0 }, mods: shift, factor: 1.1 },
+      { delta: { x: -100, y: 0 }, mods: shift, factor: 0.9 },
+      { delta: { x: -100, y: 100 }, mods: shift, factor: 1.1 },
+    ])(
+      "preserves the wheel direction for $delta",
+      ({ delta, mods, factor }) => {
+        const action = Action.wheel(
+          { type: "yscale", scale: "price" },
+          { x: 790, y: 120 },
+          delta,
+          mods,
+        );
+        expect(Mapping.map(action, { config: Mapping.defaults })).toEqual([
+          { effect: "zoomY", scale: "price", factor },
+        ]);
+      },
+    );
+
+    it("leaves the axis unchanged when both wheel deltas are zero", () => {
+      const action = Action.wheel(
+        { type: "yscale", scale: "price" },
+        { x: 790, y: 120 },
+        { x: 0, y: 0 },
+        shift,
+      );
+      expect(Mapping.map(action, { config: Mapping.defaults })).toEqual([
+        { effect: "none" },
+      ]);
+    });
+  });
+
+  describe("canvas Shift-wheel pan", () => {
+    it.each([
+      { delta: { x: 0, y: 100 }, dx: 100 },
+      { delta: { x: 0, y: -100 }, dx: -100 },
+      { delta: { x: 100, y: 0 }, dx: 100 },
+      { delta: { x: -100, y: 0 }, dx: -100 },
+    ])("preserves the wheel direction for $delta", ({ delta, dx }) => {
+      const action = Action.wheel(
+        { type: "canvas" },
+        { x: 150, y: 120 },
+        delta,
+        shift,
+      );
+      expect(Mapping.map(action, { config: Mapping.defaults })).toEqual([
+        { effect: "translateX", dx },
+      ]);
+    });
+  });
+
   describe("translateXY mode", () => {
     it("emits both translateX and translateY commands", () => {
       const action = Action.drag(
