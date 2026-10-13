@@ -19,10 +19,11 @@ Owns transcript persistence/projection; Session operations expose data actions.
 - `to-model-messages.ts` projects selected history without reads/execution/mutation.
   Preserve tool pairing, interrupted outcomes, media, provider metadata, and text
   order. Dig-in framing never consumes sibling text.
-- `transcript-text.ts` serializes that projection using the recorded model and
-  SDK reasoning pruning. Reads/search share it; search loads whole messages,
-  including evidence. `transcriptLike` prefilters stored Part JSON for Session
-  listing and message matches; projected JSON determines relevance.
+- `transcript-text.ts` serializes that projection with the recorded model,
+  pruning reasoning; nested `read_transcript` outputs become source-Session
+  pointers. Reads/search share it; search loads whole messages with evidence.
+  `transcriptLike` prefilters stored Part JSON for listing and message matches;
+  projected JSON determines relevance.
 - `evidence.ts` owns bounded blocks/hashes/serialization; commit before replay
   or returning references. `visibility.ts` owns synthetic text visibility;
   model history retains the context excluded from display pages.
