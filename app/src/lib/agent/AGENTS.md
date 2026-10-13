@@ -15,7 +15,7 @@
   retain handles for effect reactivation.
 - `use-session-snapshot.ts` adapts session handles to React;
   `session-progress.ts` derives active Run progress without storing it.
-  `use-bound-session.ts` reads an opaque binding and observes its Session.
+  `use-bound-session.ts` observes a binding's Session and workflow span.
   Mounting never creates or submits a Session.
 - `use-session-read.ts` acknowledges displayed ended Runs when visible/focused.
   Persisted watermarks confirm reads; Session updates refresh the directory. No local read store.

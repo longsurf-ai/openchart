@@ -60,6 +60,7 @@ test.each<{
         const allStarted = yield* Deferred.make<void>();
         return yield* run(definition, part.args).pipe(
           Effect.provideService(Workflow.Service, {
+            getResource: () => Effect.die("Unexpected Resource read"),
             parentPrompt: { agent: "analyst", model, parts },
             settings: { concurrency: 3 },
             agent: (input, onSession, options) =>

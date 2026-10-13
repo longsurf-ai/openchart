@@ -28,7 +28,10 @@ import { finishStep } from "@openchart/server/agent/session/operations/finish-st
 import { interruptUnfinished } from "@openchart/server/agent/session/operations/interrupt-unfinished";
 import { Context, Layer } from "effect";
 
+import { bindExisting } from "./operations/bind-existing";
+
 const operations = {
+  bindExisting,
   get,
   list,
   readTranscriptPage,

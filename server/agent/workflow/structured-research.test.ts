@@ -91,6 +91,7 @@ test.each([
         const allStarted = yield* Deferred.make<void>();
         return yield* run(definition, part.args).pipe(
           Effect.provideService(Workflow.Service, {
+            getResource: () => Effect.die("Unexpected Resource read"),
             parentPrompt: { agent: "analyst", model, parts },
             settings: { concurrency: 5 },
             agent: (input, onSession, options) =>
@@ -212,6 +213,7 @@ test.each(
         command === "thesis-killer" ? { thesis } : { question },
       ).pipe(
         Effect.provideService(Workflow.Service, {
+          getResource: () => Effect.die("Unexpected Resource read"),
           parentPrompt: {
             agent: "analyst",
             model: { providerID: "codex", modelID: "tier4" },

@@ -2,8 +2,14 @@
 
 import type { Invocation } from "@openchart/server/agent/prompt/execute";
 import { Session } from "@openchart/server/agent/session";
+import { Database } from "@openchart/server/db";
+import {
+  Transactor,
+  type ResourceDefinition,
+} from "@openchart/server/lib/resource";
+import { ResourceName, resources } from "@openchart/server/resources/catalog";
 import { assertExists, assertTrue } from "@openchart/utils/assert";
-import { Cause, Effect, Semaphore } from "effect";
+import { Cause, Effect, Schema, Semaphore } from "effect";
 import { Workflow } from "./workflow";
 import { ChildFailed, SessionNotOwned } from "./errors";
 import { immutable } from "./authoring/shared/immutable";
@@ -29,11 +35,30 @@ export const makeWorkflowHost = <E, R>(
 ) =>
   Effect.gen(function* () {
     const session = yield* Session.Service;
+    const database = yield* Database.Service;
     const services = yield* Effect.context<R | SessionServices>();
     const children = new Map<string, Semaphore.Semaphore>();
     return Workflow.Service.of({
       parentPrompt: invocationContext.input,
       settings: immutable(settings),
+      getResource: Effect.fnUntraced(
+        function* (name: string, id: string) {
+          const resourceName =
+            yield* Schema.decodeUnknownEffect(ResourceName)(name);
+          const definition: ResourceDefinition | undefined = resources.find(
+            (resource) => resource.name === resourceName,
+          );
+          assertExists(
+            definition,
+            "A validated Resource must exist in the catalog",
+          );
+          const resourceId = yield* Schema.decodeUnknownEffect(definition.id)(
+            id,
+          );
+          return yield* Transactor.run(definition.transitions.get(resourceId));
+        },
+        Effect.provideService(Database.Service, database),
+      ),
       agent: (input, onSession, options) =>
         Effect.gen(function* () {
           let childId = options?.sessionId;

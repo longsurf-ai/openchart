@@ -67,6 +67,7 @@ const makeRuntime = () =>
             Layer.provideMerge(NodeFileSystem.layer),
           ),
           Layer.succeed(Workflow.Service, {
+            getResource: () => Effect.die("Unexpected Resource read"),
             settings: { concurrency: 5 },
             parentPrompt: {
               agent: "analyst",
@@ -528,6 +529,7 @@ test("create_schedule reuses Schedule creation and inherits each invocation's ex
     const output = await runtime.runPromise(
       invoke("create_schedule", scheduleInput).pipe(
         Effect.provideService(Workflow.Service, {
+          getResource: () => Effect.die("Unexpected Resource read"),
           parentPrompt,
           settings: { concurrency: 5 },
           agent: () => Effect.die("Creation must not execute the target"),

@@ -109,11 +109,24 @@ export const WatchlistSemanticCellPluginInput = Schema.Struct({
 export type WatchlistSemanticCellPluginInput =
   typeof WatchlistSemanticCellPluginInput.Type;
 
+/** Cell address; preparation reads the current listing. Legacy inputs remain readable. */
+export const WatchlistResearchCellInput = Schema.Struct({
+  type: Schema.Literal("watchlist_semantic_cell"),
+  watchlistId: Schema.NonEmptyString,
+  columnId: Schema.NonEmptyString,
+  itemId: Schema.NonEmptyString,
+})
+  .mapFields(Struct.map(Schema.mutableKey))
+  .annotate({ parseOptions: { onExcessProperty: "error" } });
+/** Current cell address, independent of whether a workflow or a direct prompt starts research. */
+export type WatchlistResearchCellInput = typeof WatchlistResearchCellInput.Type;
+
 /** Canonical plugin input schema for agent transcript content. */
 export const PluginInput = Schema.Union([
   AlertTriggerPluginInputSchema,
   ChartExplainPluginInputSchema,
   WatchlistSemanticCellPluginInput,
+  WatchlistResearchCellInput,
 ]).annotate({ identifier: "PluginInput" });
 /** Parsed plugin input value. */
 export type PluginInput = typeof PluginInput.Type;

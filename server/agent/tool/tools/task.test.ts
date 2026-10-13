@@ -49,6 +49,7 @@ function fixture(profile: AgentProfile.Override = {}) {
       }),
   };
   const host = Workflow.Service.of({
+    getResource: () => Effect.die("Unexpected Resource read"),
     parentPrompt: { agent: "analyst", model: parentModel, parts: [] },
     settings: { concurrency: 5 },
     agent: (prompt, onSession, options) =>

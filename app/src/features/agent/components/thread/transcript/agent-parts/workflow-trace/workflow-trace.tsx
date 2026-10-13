@@ -1,7 +1,8 @@
 // Purpose: Connect persisted workflow Activity spans to the waterfall and host panel.
 import { useEffect, useMemo, useState } from "react";
 import { useAgentView } from "@openchart/app/features/agent/components/agent-view/agent-view-context";
-import { groupTrace, otelTrace, toWaterfall } from "./otel-trace";
+import { otelTrace } from "@openchart/app/lib/agent/workflow-trace";
+import { groupTrace, toWaterfall } from "./otel-trace";
 import { TraceWaterfall } from "./trace-waterfall";
 
 /** Render the trace carried by an ordinary workflow tool Activity. @example <WorkflowTrace trace={activity.details.trace} /> */

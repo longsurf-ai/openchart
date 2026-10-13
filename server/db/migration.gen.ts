@@ -551,4 +551,11 @@ export const migrations = [
     checksum:
       "d5428c8e5e80fdbbe30710110fcc085a6ab1600b34d04a6dc2d9a40f12921f7c",
   },
+  {
+    ...(await import("./migration/20261013035000_watchlist-research-text"))
+      .default,
+    filename: "20261013035000_watchlist-research-text.ts",
+    checksum:
+      "42c2b525246188a9b34f4265928991edeb6e7962b59557ba3ed5c96d78c27371",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];

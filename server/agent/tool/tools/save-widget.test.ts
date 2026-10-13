@@ -22,6 +22,7 @@ const context: Tool.Context = {
 };
 // No selected Workspace: the tool saves from the default one.
 const workflow = Workflow.Service.of({
+  getResource: () => Effect.die("Unexpected Resource read"),
   settings: { concurrency: 5 },
   parentPrompt: {
     agent: "analyst",

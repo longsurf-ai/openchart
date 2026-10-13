@@ -49,6 +49,7 @@ import {
   WatchlistSymbolPicker,
   WatchlistFormulaPicker,
   type FormulaValues,
+  type SemanticValues,
   type WatchlistAction,
 } from "./context";
 import { WatchlistDialog } from "./watchlist-dialog";
@@ -66,11 +67,15 @@ function WatchlistPlacement({ children }: PropsWithChildren) {
     if (watchlistId !== undefined && selected.data !== null) return;
     // A saved choice can be on an unloaded page. Only a confirmed missing
     // detail clears it; Query's null entries also exclude deleted defaults.
-    const next = lists.data?.find(
-      (item) =>
-        client.getQueryData(watchlistDetail(transport, item.id).queryKey) !==
-        null,
-    )?.id;
+    const next =
+      lists.data?.[
+        lists.data.findIndex(
+          (item) =>
+            client.getQueryData(
+              watchlistDetail(transport, item.id).queryKey,
+            ) !== null,
+        )
+      ]?.id;
     if (next !== watchlistId) view.setState({ selectedWatchlistId: next });
   }, [watchlistId, selected.data, lists.data, client, transport, view]);
   return (
@@ -130,6 +135,9 @@ function WatchlistSession({
   const [formulaValues] = useState(
     () => new BehaviorSubject<FormulaValues>({}),
   );
+  const [semanticValues] = useState(
+    () => new BehaviorSubject<SemanticValues>({}),
+  );
   const FormulaPicker = useContext(WatchlistFormulaPicker);
   const [pickingFormula, setPickingFormula] = useState(false);
   const [formula, setFormula] = useState<{
@@ -142,9 +150,12 @@ function WatchlistSession({
   const currentWatchlist = useQuery(
     watchlistDetail(transport, watchlistId),
   ).data;
-  const latestColumn = currentWatchlist?.columns.find(
-    (column) => column.id === formula?.column?.id,
-  );
+  const latestColumn =
+    currentWatchlist?.columns[
+      currentWatchlist.columns.findIndex(
+        (column) => column.id === formula?.column?.id,
+      )
+    ];
   const columnChanged =
     formula?.column !== undefined &&
     currentWatchlist !== undefined &&
@@ -157,7 +168,10 @@ function WatchlistSession({
       const current = client.getQueryData(
         watchlistDetail(transport, watchlistId).queryKey,
       );
-      const column = current?.columns.find((item) => item.id === columnId);
+      const column =
+        current?.columns[
+          current.columns.findIndex((item) => item.id === columnId)
+        ];
       if (column?.metric.kind !== "formula" || !current) return;
       const source = column.metric.source;
       setFormula((draft) =>
@@ -181,6 +195,7 @@ function WatchlistSession({
       quotes,
       crosshair,
       formulaValues,
+      semanticValues,
       addFormula: () => {
         if (formula && !formula.column) setFormula({ ...formula, open: true });
         else setPickingFormula(true);
@@ -197,6 +212,7 @@ function WatchlistSession({
       quotes,
       crosshair,
       formulaValues,
+      semanticValues,
       configureFormula,
       formula,
       switchTo,
@@ -267,9 +283,12 @@ function WatchlistSession({
               expectedColumn: formula.column,
               expectedRevision,
             });
-            const column = updated.columns.find(
-              (column) => column.id === formula.column?.id,
-            );
+            const column =
+              updated.columns[
+                updated.columns.findIndex(
+                  (column) => column.id === formula.column?.id,
+                )
+              ];
             if (column)
               setFormula({ ...formula, column, revision: updated.revision });
             return updated;

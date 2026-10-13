@@ -24,3 +24,4 @@
   gets none.
 - Cross-feature integration tests live here; route/action tests stay with
   `app/dashboard`.
+- `watchlist-agent.tsx` supplies shared Composer and Agent navigation; Watchlist owns research.

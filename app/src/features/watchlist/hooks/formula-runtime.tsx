@@ -84,10 +84,10 @@ export function FormulaRuntime({
   values: BehaviorSubject<FormulaValues>;
 }) {
   const [from] = useState(() => Date.now());
-  const columns = useMemo(
+  const columns = useMemo<Watchlist["columns"]>(
     () =>
-      watchlist.columns.filter(
-        (column) =>
+      watchlist.columns.filter<Watchlist["columns"][number]>(
+        (column): column is Watchlist["columns"][number] =>
           column.visible !== false && column.metric.kind === "formula",
       ),
     [watchlist.columns],

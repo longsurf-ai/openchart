@@ -1,6 +1,6 @@
 // Purpose: Page through Watchlists inside the widget's selection menu.
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import {
   DropdownMenuItem,
@@ -41,7 +41,7 @@ export function WatchlistMenuItems({
   return (
     <>
       <DropdownMenuRadioGroup value={selectedId} onValueChange={onPick}>
-        {list.data?.map((watchlist) => (
+        {list.data?.map<ReactNode>((watchlist) => (
           <DropdownMenuRadioItem key={watchlist.id} value={watchlist.id}>
             <span className="truncate">{watchlist.name}</span>
           </DropdownMenuRadioItem>

@@ -1,0 +1,41 @@
+/* V1's single-line research preview: overflow rolls only on hover or focus. */
+[data-slot="semantic-cell-text"] {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+[data-slot="semantic-cell-text"][data-rollable] {
+  mask-image: linear-gradient(to right, black calc(100% - 22px), transparent);
+}
+
+[data-slot="semantic-cell-text-track"] {
+  display: flex;
+  width: max-content;
+  column-gap: 1rem;
+  padding-right: 1rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="semantic-cell"]:is(:hover, :focus-within)
+    [data-slot="semantic-cell-text"][data-rollable]
+    [data-slot="semantic-cell-text-track"] {
+    animation: semantic-cell-roll var(--semantic-cell-roll-duration) linear
+      infinite;
+  }
+}
+
+@keyframes semantic-cell-roll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="semantic-cell-text-track"] > [aria-hidden] {
+    display: none;
+  }
+}

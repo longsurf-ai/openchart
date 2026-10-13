@@ -1,7 +1,8 @@
+import type { ReactNode } from "react";
 // Purpose: Show one Watchlist's name, shared column header, and tree, with in-card loading and failure states.
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useStore } from "zustand";
 
 import { Button } from "@openchart/app/components/ui/button";
@@ -21,9 +22,11 @@ import {
   minimumGridWidth,
 } from "../utils/columns";
 import { hasVisibleRows, moveColumn, type Column } from "../utils/tree";
-import { useWatchlistPlacement } from "./context";
+import { useWatchlistPlacement, WatchlistPromptEditor } from "./context";
 import { FormulaRuntime } from "../hooks/formula-runtime";
 import { WatchlistHeader } from "./header";
+import { SemanticProvider } from "./semantic-context";
+import { SemanticColumnMenu } from "./semantic-column-menu";
 import { WatchlistTree } from "./watchlist-tree";
 
 const COLUMN_TYPE = "application/x-openchart-watchlist-column";
@@ -31,6 +34,7 @@ const COLUMN_TYPE = "application/x-openchart-watchlist-column";
 /** The widget's content: in-card states, then the header and tree. */
 export function WatchlistView() {
   const { transport } = useWidget();
+  const researchEnabled = useContext(WatchlistPromptEditor) !== null;
   const { watchlistId } = useWatchlistPlacement();
   const query = useQuery(watchlistDetail(transport, watchlistId));
   if (!watchlistId)
@@ -66,21 +70,28 @@ export function WatchlistView() {
         </p>
       </div>
     );
-  return <Loaded watchlist={query.data} />;
+  return researchEnabled ||
+    query.data.columns.some((column) => column.metric.kind === "semantic") ? (
+    <SemanticProvider watchlist={query.data}>
+      <Loaded watchlist={query.data} />
+    </SemanticProvider>
+  ) : (
+    <Loaded watchlist={query.data} />
+  );
 }
 
 function Loaded({ watchlist }: { watchlist: Watchlist }) {
   const { addSymbol, view, formulaValues } = useWatchlistPlacement();
   useEffect(() => migrateWatchlistSort(view, watchlist), [view, watchlist]);
-  const columns = watchlist.columns.filter(
-    (column) => column.visible !== false,
+  const columns = watchlist.columns.filter<Column>(
+    (column): column is Column => column.visible !== false,
   );
   const empty = !hasVisibleRows(watchlist.sections);
   const tableStyle = {
     gridTemplateColumns: gridTemplate(columns),
     minWidth: minimumGridWidth(columns),
     "--watchlist-metric-space": columns.length
-      ? `max(${columns.map(columnWidth).join(", ")})`
+      ? `max(${columns.map<string>(columnWidth).join(", ")})`
       : "0px",
   };
   return (
@@ -125,56 +136,62 @@ function ColumnHeader({ columns }: { columns: readonly Column[] }) {
       <span role="columnheader" className="sticky left-0 z-10 bg-inherit pl-2">
         Symbol
       </span>
-      {columns.map((column, index) => {
+      {columns.map<ReactNode>((column, index) => {
         const columnId = column.id;
         const sorted = sort?.columnId === columnId ? sort.direction : undefined;
         return (
-          <button
-            key={columnId}
-            type="button"
-            role="columnheader"
-            aria-sort={
-              sorted === "asc"
-                ? "ascending"
-                : sorted === "desc"
-                  ? "descending"
-                  : "none"
-            }
-            title={`${columnTitle(column)} · drag to reorder`}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData(COLUMN_TYPE, columnId);
-              event.dataTransfer.effectAllowed = "move";
-            }}
-            onDragOver={(event) => {
-              if (!event.dataTransfer.types.includes(COLUMN_TYPE)) return;
-              event.preventDefault();
-              setOver(index);
-            }}
-            onDragLeave={() => setOver(undefined)}
-            onDrop={(event) => {
-              setOver(undefined);
-              const fromId = event.dataTransfer.getData(COLUMN_TYPE);
-              if (!fromId) return;
-              event.preventDefault();
-              save.mutate((current) => moveColumn(current, fromId, columnId));
-            }}
-            onClick={() =>
-              view.setState({ sort: nextSort(view.getState().sort, columnId) })
-            }
-            className={cn(
-              "flex h-full items-center justify-end gap-0.5 pr-3 outline-none hover:text-foreground focus-visible:text-foreground",
-              sorted && "text-foreground",
-              over === index && "bg-accent",
-            )}
-          >
-            {sorted === "asc" ? (
-              <ArrowUp aria-hidden className="size-3" />
-            ) : sorted === "desc" ? (
-              <ArrowDown aria-hidden className="size-3" />
+          <div key={columnId} className="flex h-full min-w-0 items-center">
+            <button
+              type="button"
+              role="columnheader"
+              aria-sort={
+                sorted === "asc"
+                  ? "ascending"
+                  : sorted === "desc"
+                    ? "descending"
+                    : "none"
+              }
+              title={`${columnTitle(column)} · drag to reorder`}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData(COLUMN_TYPE, columnId);
+                event.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes(COLUMN_TYPE)) return;
+                event.preventDefault();
+                setOver(index);
+              }}
+              onDragLeave={() => setOver(undefined)}
+              onDrop={(event) => {
+                setOver(undefined);
+                const fromId = event.dataTransfer.getData(COLUMN_TYPE);
+                if (!fromId) return;
+                event.preventDefault();
+                save.mutate((current) => moveColumn(current, fromId, columnId));
+              }}
+              onClick={() =>
+                view.setState({
+                  sort: nextSort(view.getState().sort, columnId),
+                })
+              }
+              className={cn(
+                "flex h-full min-w-0 flex-1 items-center justify-end gap-0.5 pr-3 outline-none hover:text-foreground focus-visible:text-foreground",
+                sorted && "text-foreground",
+                over === index && "bg-accent",
+              )}
+            >
+              {sorted === "asc" ? (
+                <ArrowUp aria-hidden className="size-3" />
+              ) : sorted === "desc" ? (
+                <ArrowDown aria-hidden className="size-3" />
+              ) : null}
+              <span className="truncate">{columnLabel(column)}</span>
+            </button>
+            {column.metric.kind === "semantic" ? (
+              <SemanticColumnMenu column={column} />
             ) : null}
-            <span className="truncate">{columnLabel(column)}</span>
-          </button>
+          </div>
         );
       })}
     </div>

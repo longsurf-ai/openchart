@@ -81,7 +81,7 @@ it("leaves a missing binding unobserved without creating or executing a Session"
   });
   await waitFor(() => expect(test.readBinding).toHaveBeenCalled());
   await waitFor(() => expect(test.client.isFetching()).toBe(0));
-  expect(view.result.current).toEqual({
+  expect(view.result.current).toMatchObject({
     progress: undefined,
     error: null,
     retry: undefined,

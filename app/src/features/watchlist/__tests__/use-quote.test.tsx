@@ -59,6 +59,7 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
       quotes,
       crosshair: new BehaviorSubject<number | null>(null),
       formulaValues: new BehaviorSubject({}),
+      semanticValues: new BehaviorSubject({}),
       addFormula: vi.fn(),
       configureFormula: vi.fn(),
       save: {} as WatchlistSave,

@@ -31,6 +31,7 @@ test("bounds every agent call, preserves ordering, and isolates expected child f
   const result = await Effect.runPromise(
     run(definition, {}).pipe(
       Effect.provideService(Workflow.Service, {
+        getResource: () => Effect.die("Unexpected Resource read"),
         parentPrompt: prompt,
         settings: { concurrency: 2 },
         agent: () =>
@@ -86,6 +87,7 @@ test.each([1, 2, 5])(
     await Effect.runPromise(
       run(direct, {}).pipe(
         Effect.provideService(Workflow.Service, {
+          getResource: () => Effect.die("Unexpected Resource read"),
           parentPrompt: prompt,
           settings: { concurrency },
           agent: () =>
@@ -136,6 +138,7 @@ test.each(["parallel", "direct"] as const)(
           const fiber = yield* Effect.forkChild(
             run(cancellable, {}).pipe(
               Effect.provideService(Workflow.Service, {
+                getResource: () => Effect.die("Unexpected Resource read"),
                 parentPrompt: prompt,
                 settings: { concurrency: 2 },
                 agent: () =>
@@ -210,6 +213,7 @@ test("cancellation during argument preparation never enters the workflow", async
           ),
         ).pipe(
           Effect.provideService(Workflow.Service, {
+            getResource: () => Effect.die("Unexpected Resource read"),
             parentPrompt: prompt,
             settings: { concurrency: 2 },
             agent: () => Effect.die("Must not start"),
@@ -236,6 +240,7 @@ test("concurrent workflows sharing a host each own their concurrency allowance",
         { concurrency: "unbounded" },
       ).pipe(
         Effect.provideService(Workflow.Service, {
+          getResource: () => Effect.die("Unexpected Resource read"),
           parentPrompt: prompt,
           settings: { concurrency: 2 },
           agent: () =>
@@ -275,6 +280,7 @@ test("defects propagate instead of becoming successful parallel outcomes", async
   const exit = await Effect.runPromise(
     run(definition, {}).pipe(
       Effect.provideService(Workflow.Service, {
+        getResource: () => Effect.die("Unexpected Resource read"),
         parentPrompt: prompt,
         settings: { concurrency: 5 },
         agent: () => Effect.die(new Error("Invariant violated")),
@@ -309,6 +315,7 @@ test("persists decoded arguments before execution and freezes detached inputs", 
       }),
     ).pipe(
       Effect.provideService(Workflow.Service, {
+        getResource: () => Effect.die("Unexpected Resource read"),
         parentPrompt: prompt,
         settings: { concurrency: 5 },
         agent: () => Effect.die("Unexpected agent"),
@@ -332,6 +339,7 @@ test("rejects reserved context and invalid concurrency", async () => {
     const exit = await Effect.runPromise(
       run(definition, {}).pipe(
         Effect.provideService(Workflow.Service, {
+          getResource: () => Effect.die("Unexpected Resource read"),
           parentPrompt: prompt,
           settings: { concurrency },
           agent: () => Effect.die("Must not start"),

@@ -77,6 +77,7 @@ async function invoke(
         )
         .pipe(
           Effect.provideService(Workflow.Service, {
+            getResource: () => Effect.die("Unexpected Resource read"),
             parentPrompt: {
               agent: "analyst",
               model: {

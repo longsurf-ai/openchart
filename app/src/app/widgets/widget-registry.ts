@@ -20,6 +20,7 @@ import {
   customWidgetDefinition,
 } from "./custom/custom-widget";
 
+import { WatchlistAgent } from "./watchlist-agent";
 import { WorkspaceChartActions } from "./workspace-chart-actions";
 import { WorkspaceFileBeside } from "./workspace-file-beside";
 import { FormulaCodePicker } from "./formula-code-picker";
@@ -35,7 +36,7 @@ function ChartProvider({ children }: PropsWithChildren) {
 
 const WatchlistPlacement = watchlistWidget.Provider!;
 
-/** Watchlists select market rows and Formula code, execute shared calculations, and open code beside themselves. */
+/** Watchlists compose symbol/code pickers, Agent prompts/navigation, and adjacent Workspace files. */
 function WatchlistProvider({ children }: PropsWithChildren) {
   return createElement(
     WorkspaceFileBeside,
@@ -46,7 +47,11 @@ function WatchlistProvider({ children }: PropsWithChildren) {
       createElement(
         WatchlistFormulaPicker.Provider,
         { value: FormulaCodePicker },
-        createElement(WatchlistPlacement, null, children),
+        createElement(
+          WatchlistAgent,
+          null,
+          createElement(WatchlistPlacement, null, children),
+        ),
       ),
     ),
   );

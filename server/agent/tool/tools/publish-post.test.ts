@@ -105,6 +105,7 @@ async function invocation(intent = "chat:publish-test") {
     ask,
   };
   const workflow = Workflow.Service.of({
+    getResource: () => Effect.die("Unexpected Resource read"),
     settings: { concurrency: 5 },
     parentPrompt: {
       ...prompt,

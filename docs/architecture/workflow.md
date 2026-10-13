@@ -21,7 +21,11 @@ the authoring import above to this index; ESLint rejects imports of individual
 primitives or shared helpers from workflow programs. `runtime.ts` owns invocation
 execution. `workflow.ts` is the sole service entrypoint, exported
 as `@openchart/server/agent/workflow`. Its `Workflow.Service` supplies parent prompt,
-settings, and child-agent execution. The existing
+settings, Resource reads, and child-agent execution. `makeWorkflowHost` owns
+`getResource(name, id)` reads through the shared Resource catalog and database;
+the authoring primitive `resource.get(name, id, schema)` decodes the returned entity. Reads resolve
+current state during execution without a separate `resource_read` permission
+check. Workflow execution and child-agent permissions retain their own checks. The existing
 `WorkflowPart` in `server/agent/contracts` remains the shared invocation contract.
 Executable programs and Effect services stay server-owned.
 

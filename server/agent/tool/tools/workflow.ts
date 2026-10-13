@@ -30,8 +30,6 @@ export const WorkflowTool = Tool.define(
       // The same registration feeds durable links and the model-facing index.
       // Collect per invocation so repeated turns deduplicate without leaking siblings.
       const childSessionIds = new Set<string>();
-      // Arguments are durable execution facts. The authored program cannot replace
-      // this snapshot or silently reread mutable feature configuration.
       const result = yield* run(
         definition,
         input.args,

@@ -7,8 +7,9 @@ Dashboards never own that selection.
   share the root's revision and cascade with it. Sections use
   `parent_section_id`; positions are per sibling list.
 - column.ts owns inline JSON columns: stable IDs, optional titles, shared
-  visibility (legacy defaults true), built-ins and Formula snapshots/settings.
-  Hide retains configuration; remove deletes it. Results are never persisted.
+  visibility (legacy defaults true), built-ins, Formula settings and semantic prompts.
+  Hide retains configuration; remove deletes it. Results are never persisted;
+  a semantic cell shows its bound Agent Session's final reply.
 - Formula transitions compile outside the write transaction, validate output
   and overrides, then recheck revision before saving. Configure uses saved
   code; Reload captures source/import edits. Generic patches validate structure
@@ -17,7 +18,7 @@ Dashboards never own that selection.
   defaults out of recursion so Agent JSON Schema export works.
 - Invariants require unique column/section/item IDs, one listing across the
   tree, and one column per built-in metric, including hidden columns. Formula
-  columns may repeat.
+  and semantic columns may repeat.
 - Store assembles depth-first, replaces the tree on save, and rereads writes.
   Moving a row or subtree uses one RFC 6902 `move`.
 - Widths, sorting, collapse, density, and decimals are widget view state.

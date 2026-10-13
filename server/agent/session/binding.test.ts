@@ -14,6 +14,58 @@ import { eq } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 import { Session } from "./session";
 
+test("binding existing workflow children preserves creation order and creates no extra execution", () => {
+  const publish = vi.fn<Publisher.Interface["publish"]>(() => Effect.void);
+  const layer = Layer.mergeAll(
+    Session.layer,
+    Database.layer(":memory:", () => Effect.void),
+    Events.layer,
+    Layer.succeed(Publisher.Service, { publish }),
+  );
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service;
+      const { db } = yield* Database.Service;
+      const parent = yield* sessions.create({ title: "Root" });
+      const old = yield* sessions.create({
+        kind: "delegate",
+        parentId: parent.id,
+      });
+      const latest = yield* sessions.create({
+        kind: "delegate",
+        parentId: parent.id,
+      });
+      yield* db
+        .update(agentSessions)
+        .set({ createdAt: old.createdAt + 1 })
+        .where(eq(agentSessions.id, latest.id));
+      yield* sessions.bindExisting({ sessionId: latest.id, key: "cell" });
+      yield* sessions.bindExisting({ sessionId: old.id, key: "cell" });
+      yield* sessions.bindExisting({ sessionId: old.id, key: "cell" });
+      expect((yield* sessions.getSessionByBinding({ key: "cell" }))?.id).toBe(
+        latest.id,
+      );
+      expect(
+        Exit.isFailure(
+          yield* Effect.exit(
+            sessions.bindExisting({ sessionId: old.id, key: "other-cell" }),
+          ),
+        ),
+      ).toBe(true);
+      expect(yield* db.select().from(agentSessionBindings)).toHaveLength(1);
+      expect(yield* db.select().from(agentSessions)).toHaveLength(3);
+      expect(yield* db.select().from(agentRun)).toHaveLength(0);
+      expect(publish).toHaveBeenCalledWith({
+        type: "session.updated",
+        session: expect.objectContaining({
+          id: latest.id,
+          bindingId: expect.any(String),
+        }),
+      });
+    }).pipe(Effect.provide(layer)),
+  );
+});
+
 test("concurrent binding resolution creates one Session, preserves titles, and chooses the newest history", () => {
   const publish = vi.fn<Publisher.Interface["publish"]>(() => Effect.void);
   const layer = Layer.mergeAll(

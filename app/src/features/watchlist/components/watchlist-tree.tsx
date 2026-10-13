@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 // Purpose: Render a Watchlist's sections and rows as one collapsible, draggable tree sharing column tracks.
 import {
   dragAndDropFeature,
@@ -46,7 +47,12 @@ import {
   type Quote,
 } from "../hooks/use-quote";
 import type { WatchlistView } from "../stores/view";
-import { formatFormula, formatMetric, metricTone } from "../utils/columns";
+import {
+  columnTitle,
+  formatFormula,
+  formatMetric,
+  metricTone,
+} from "../utils/columns";
 import {
   indexWatchlist,
   moveOperation,
@@ -55,7 +61,12 @@ import {
   type Column,
   type WatchlistNode,
 } from "../utils/tree";
-import { useWatchlistPlacement, type FormulaValues } from "./context";
+import {
+  useWatchlistPlacement,
+  type FormulaValues,
+  type SemanticValues,
+} from "./context";
+import { SemanticCell } from "./semantic-cell";
 import { Sparkline } from "./sparkline";
 import { LiveNumber } from "./live-number";
 
@@ -63,6 +74,7 @@ import {
   useFormulaCells,
   useSortFormulaValues,
 } from "../hooks/use-formula-cells";
+import { useSortSemanticValues } from "../hooks/use-semantic-values";
 
 type Item = Extract<WatchlistNode, { kind: "item" }>["item"];
 type Sort = NonNullable<WatchlistView["sort"]>;
@@ -77,10 +89,12 @@ function sortRows(
   sort: Sort,
   column: Column | undefined,
   formulas: FormulaValues,
+  research: SemanticValues,
 ): string[] {
   const value = (id: string) => {
     const node = nodes.get(id);
     if (node?.kind !== "item" || !column) return undefined;
+    if (column.metric.kind === "semantic") return research[id]?.[column.id];
     if (column.metric.kind === "formula") {
       const cell = formulas[node.id]?.[column.id];
       return cell?.status === "ready" && Number.isFinite(cell.value)
@@ -99,7 +113,11 @@ function sortRows(
     const b = value(right);
     if (a === undefined || b === undefined)
       return a === b ? 0 : a === undefined ? 1 : -1;
-    return sort.direction === "asc" ? a - b : b - a;
+    const comparison =
+      typeof a === "number" && typeof b === "number"
+        ? a - b
+        : String(a).localeCompare(String(b));
+    return sort.direction === "asc" ? comparison : -comparison;
   });
 }
 
@@ -115,12 +133,18 @@ export function WatchlistTree({
   const chart = useIntent(viewChart);
   const collapsed = useStore(view, (state) => state.collapsed);
   const sort = useStore(view, (state) => state.sort);
-  const sortColumn = columns.find((column) => column.id === sort?.columnId);
+  const sortColumn =
+    columns[columns.findIndex((column) => column.id === sort?.columnId)];
   // Only the active sort's stream can rebuild the tree.
   const quotes = useSortQuotes(
-    !!sortColumn && sortColumn.metric.kind !== "formula",
+    !!sortColumn &&
+      sortColumn.metric.kind !== "formula" &&
+      sortColumn.metric.kind !== "semantic",
   );
   const formulas = useSortFormulaValues(sortColumn?.metric.kind === "formula");
+  const research = useSortSemanticValues(
+    sortColumn?.metric.kind === "semantic",
+  );
   const nodes = useMemo(() => indexWatchlist(watchlist), [watchlist]);
   const children = useMemo(() => {
     const result = new Map<string, string[]>();
@@ -136,13 +160,14 @@ export function WatchlistTree({
             sort,
             sortColumn,
             formulas,
+            research,
           ),
           ...node.children.slice(rows),
         ]);
       }
     }
     return result;
-  }, [nodes, sort, quotes, sortColumn, formulas]);
+  }, [nodes, sort, quotes, sortColumn, formulas, research]);
   // Unnamed sections have no heading to collapse, so they always stay open.
   const expandedItems = useMemo(
     () =>
@@ -450,7 +475,12 @@ function QuoteCells({
   item: Item;
   columns: readonly Column[];
 }) {
-  if (!columns.some((column) => column.metric.kind !== "formula"))
+  if (
+    !columns.some(
+      (column) =>
+        column.metric.kind !== "formula" && column.metric.kind !== "semantic",
+    )
+  )
     return <MetricCells item={item} columns={columns} />;
   return <DailyQuoteCells item={item} columns={columns} />;
 }
@@ -525,10 +555,24 @@ function MetricCells({
   // Crosshair quotes change built-ins; Formula values remain on their latest bar.
   const [hovered, setHovered] = useState<number>();
   const shown = quoteAt(quote, hovered);
-  const firstBuiltin = columns.find(
-    (column) => column.metric.kind !== "formula",
-  )?.id;
-  return columns.map((column) => {
+  const firstBuiltin =
+    columns[
+      columns.findIndex(
+        (column) =>
+          column.metric.kind !== "formula" && column.metric.kind !== "semantic",
+      )
+    ]?.id;
+  return columns.map<ReactNode>((column) => {
+    if (column.metric.kind === "semantic") {
+      return (
+        <SemanticCell
+          key={column.id}
+          columnId={column.id}
+          itemId={item.id}
+          title={columnTitle(column)}
+        />
+      );
+    }
     if (column.metric.kind === "formula") {
       const cell = formulas?.[column.id];
       const text =

@@ -12,7 +12,7 @@ type Item = Section["items"][number];
 export type Column = Watchlist["columns"][number];
 
 /** Built-in quote metrics; formula columns have their own program definition. */
-export type Metric = Exclude<Column["metric"]["kind"], "formula">;
+export type Metric = Exclude<Column["metric"]["kind"], "formula" | "semantic">;
 
 /** Every metric in display-menu order. */
 export const METRICS = [

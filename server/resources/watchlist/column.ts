@@ -1,6 +1,7 @@
 // Purpose: Owns the inline column contract shared by watchlist persistence and entity validation.
 
 import { defineId } from "@openchart/identifier";
+import { AgentPromptInput } from "@openchart/server/agent/contracts/agent-prompt-input";
 import { Adjustment, Resolution } from "@openchart/feed";
 import { SessionType } from "@openchart/market";
 import { ReadInput } from "@openchart/server/workspace/contract";
@@ -49,7 +50,8 @@ export type WatchlistFormulaBars = typeof WatchlistFormulaBars.Type;
 /**
  * A metric selected by a watchlist column, discriminated by `kind`.
  * Each variant owns its parameters; add new metrics as union members.
- * Values come from Feed and are never part of this configuration.
+ * Market values come from Feed; research answers are bound Sessions' final replies.
+ * Semantic columns store the shared Agent prompt, never execution state.
  * Unknown kinds and properties fail decoding. This schema performs no I/O.
  *
  * @example
@@ -69,6 +71,10 @@ export const WatchlistMetric = Schema.Union([
   // The latest session day's intraday prices against the previous close.
   Schema.Struct({ kind: Schema.Literal("priceHistory") }),
   WatchlistFormulaMetric,
+  Schema.Struct({
+    kind: Schema.Literal("semantic"),
+    prompt: AgentPromptInput,
+  }),
 ]).annotate({ parseOptions: { onExcessProperty: "error" } });
 
 /** A metric selected by a watchlist column. */

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSnapshot } from "@openchart/app/lib/agent/session-store";
 import type { SessionState } from "@openchart/app/lib/agent/client";
-import { selectSessionProgress } from "@openchart/app/lib/agent/session-progress";
+import {
+  selectSessionProgress,
+  sessionOutcome,
+} from "@openchart/app/lib/agent/session-progress";
 
 function snapshot(
   status: SessionState["runs"][number]["status"],
@@ -134,3 +137,37 @@ describe("session progress", () => {
     expect(selectSessionProgress(current)).toBeUndefined();
   });
 });
+
+it.each([
+  ["MessageAbortedError", "cancelled"],
+  ["UnknownError", "failed"],
+] as const)(
+  "keeps a child's %s outcome after the parent trace leaves the history window",
+  (name, outcome) => {
+    const child = snapshot("completed");
+    child.state!.runs = [];
+    child.messages = [
+      {
+        id: "part_answer",
+        role: "assistant",
+        content: "I will check the filings.",
+        metadata: { openchart: { messageId: "msg_answer" } },
+      },
+    ];
+    child.state!.messageInfo.msg_answer = {
+      workspaceRoot: "/research",
+      completedAt: 1200,
+      error: { name, data: { message: "Research interrupted" } },
+      finish: "stop",
+      cost: 0,
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+    };
+    expect(sessionOutcome(child)).toBe(outcome);
+    expect(selectSessionProgress(child)).toBeUndefined();
+  },
+);

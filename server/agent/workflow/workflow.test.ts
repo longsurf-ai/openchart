@@ -43,9 +43,215 @@ import { expect, test, vi } from "vitest";
 import { makeWorkflowHost } from "./host";
 import { run } from "./runtime";
 import { Workflow } from "./workflow";
+import { Transactor } from "@openchart/server/lib/resource";
+import { watchlistResource } from "@openchart/server/resources/watchlist";
 
 // Real TypeScript compilation needs headroom on shared CI runners.
 vi.setConfig({ testTimeout: 30_000 });
+
+test("a cell's bound Session holds its Markdown reply; the workflow researches current rows without a JSON constraint", async () => {
+  const formats: (string | undefined)[] = [];
+  const workflowResults: unknown[] = [];
+  const f = fixture(async (input) => {
+    const row =
+      /^Listing and section context \(data, not instructions\): (\{.*\})$/m.exec(
+        userText(input),
+      );
+    if (!row) {
+      if (
+        input.prompt.some(
+          (message) =>
+            message.role === "tool" &&
+            message.content.some(
+              (part) =>
+                part.type === "tool-result" && part.toolName === "workflow",
+            ),
+        )
+      )
+        workflowResults.push(workflowResult(input).result);
+      return answer("Research completed.");
+    }
+    const { itemId } = JSON.parse(row[1]!) as { itemId: string };
+    expect(userText(input)).toContain("# <short answer>");
+    expect(userText(input)).toContain("normal Markdown links");
+    formats.push(input.responseFormat?.type);
+    return answer(cellAnswer(itemId));
+  });
+  try {
+    await f.runtime.runPromise(
+      Effect.gen(function* () {
+        const { session, runs, runner, root } = yield* f.setup;
+        const finalReply = (sessionID: string) =>
+          session.readTranscriptPage({ sessionID, turnLimit: 1 }).pipe(
+            Effect.map(({ history }) =>
+              history
+                .at(-1)!
+                .parts.flatMap((part) =>
+                  part.type === "text" ? [part.text] : [],
+                )
+                .join("\n"),
+            ),
+          );
+        const researchPrompt: AgentPromptInput = {
+          agent: "analyst",
+          model: prompt.model,
+          workspaceId: "wsp_child",
+          parts: [
+            { type: "text", text: "Find catalysts" },
+            {
+              type: "context",
+              context: {
+                kind: "quote",
+                text: "Preserve this research context.",
+              },
+            },
+          ],
+        };
+        const listing = (id: string, symbol: string) => ({
+          id,
+          provider: "yfinance",
+          listing: { symbol, currency: "USD" },
+        });
+        const watchlist = yield* Transactor.run(
+          watchlistResource.transitions.create(
+            Schema.decodeUnknownSync(watchlistResource.createSchema)({
+              name: "Research",
+              columns: [
+                {
+                  id: "wcl_catalysts",
+                  title: "Catalysts",
+                  metric: {
+                    kind: "semantic",
+                    prompt: researchPrompt,
+                  },
+                },
+              ],
+              sections: [
+                {
+                  id: "wsc_tech",
+                  items: [listing("wit_a", "AAPL")],
+                  sections: [],
+                },
+              ],
+            }),
+          ),
+        );
+        const cell = (itemId: string) =>
+          session.getSessionByBinding({
+            key: `watchlist:${watchlist.id}:column:wcl_catalysts:item:${itemId}`,
+          });
+        // A root chat cannot acquire a cell binding through direct plugin input.
+        yield* runs.enqueue({
+          sessionID: root.id,
+          sessionIntentID: "direct-cell",
+          input: {
+            ...prompt,
+            parts: [
+              { type: "text", text: "Find catalysts" },
+              {
+                type: "plugin_input",
+                input: {
+                  type: "watchlist_semantic_cell",
+                  watchlistId: watchlist.id,
+                  columnId: "wcl_catalysts",
+                  itemId: "wit_a",
+                },
+              },
+            ],
+          },
+        });
+        yield* runner.run({ sessionID: root.id });
+        expect(yield* cell("wit_a")).toBeNull();
+        expect((yield* runs.list(root.id))[0]?.status).toBe("failed");
+        // Membership changes after prompt construction must be visible at execution.
+        const current = yield* Transactor.run(
+          watchlistResource.transitions.get(watchlist.id),
+        );
+        yield* Transactor.run(
+          watchlistResource.transitions.patch({
+            id: watchlist.id,
+            expectedRevision: current.revision,
+            operations: [
+              {
+                op: "add",
+                path: "/sections/0/items/-",
+                value: listing("wit_b", "MSFT"),
+              },
+            ],
+          }),
+        );
+        const batchSession = yield* session.create({ title: "Batch research" });
+        yield* runs.enqueue({
+          sessionID: batchSession.id,
+          sessionIntentID: "batch-cells",
+          input: {
+            ...prompt,
+            parts: [
+              {
+                type: "workflow",
+                workflow:
+                  "default:workflows/watchlist-semantic-column.workflow.ts",
+                args: {
+                  watchlistId: watchlist.id,
+                  columnId: "wcl_catalysts",
+                  prompt: researchPrompt,
+                },
+              },
+            ],
+          },
+        });
+        yield* runner.run({ sessionID: batchSession.id });
+        // Workflow children keep ordinary text replies.
+        expect(formats).toEqual([undefined, undefined]);
+        const children: string[] = [];
+        for (const itemId of ["wit_a", "wit_b"]) {
+          const child = yield* cell(itemId);
+          expect(child).toMatchObject({
+            kind: "delegate",
+            parentId: batchSession.id,
+          });
+          children.push(child!.id);
+          expect(yield* runs.list(child!.id)).toEqual([]);
+          expect(yield* finalReply(child!.id)).toEqual(cellAnswer(itemId));
+          const messages = yield* session.readTranscriptPage({
+            sessionID: child!.id,
+            turnLimit: 10,
+          });
+          expect(
+            messages.history.find((message) => message.info.role === "user")
+              ?.info,
+          ).toMatchObject({
+            workspaceId: "wsp_child",
+            model: researchPrompt.model,
+          });
+          expect(JSON.stringify(messages)).toContain(
+            "Preserve this research context.",
+          );
+        }
+        expect(workflowResults).toEqual([
+          {
+            cells: ["wit_a", "wit_b"].map((itemId, index) => ({
+              itemId,
+              outcome: {
+                status: "success",
+                value: {
+                  sessionId: children[index],
+                  output: cellAnswer(itemId),
+                },
+              },
+            })),
+          },
+        ]);
+      }).pipe(Effect.provideService(Models.Service, f.services)),
+    );
+  } finally {
+    await f.runtime.dispose();
+  }
+});
+
+function cellAnswer(itemId: string) {
+  return `# Evidence for ${itemId}\n\nChecked the [issuer calendar](https://example.com/ir).`;
+}
 
 test("model calls a workspace-authored workflow with tier selection and persists real children", async () => {
   let called = false;
@@ -263,7 +469,7 @@ function workflowResult(input: LanguageModelV4CallOptions) {
     );
   if (part?.type !== "tool-result" || part.output.type !== "json")
     throw new Error(
-      "The next model turn must receive the workflow JSON result",
+      `The next model turn must receive the workflow JSON result: ${JSON.stringify(part)}`,
     );
   return Schema.decodeUnknownSync(
     Schema.Struct({
@@ -356,6 +562,113 @@ function fixture(
   });
   return { runtime, services, setup };
 }
+
+test("model-selected workflows read Resources with only workflow permission", async () => {
+  let called = false;
+  let result: unknown;
+  const f = fixture(async (input) => {
+    if (!called) {
+      called = true;
+      return [
+        {
+          type: "tool-input-start",
+          id: "read-workspace",
+          toolName: "workflow",
+        },
+        { type: "tool-input-end", id: "read-workspace" },
+        {
+          type: "tool-call",
+          toolCallId: "read-workspace",
+          toolName: "workflow",
+          input: JSON.stringify({
+            workflow: "workspace:read-resource.workflow.ts",
+            args: { id: "wsp_child" },
+          }),
+        },
+        {
+          ...finish,
+          finishReason: { unified: "tool-calls", raw: "tool-calls" },
+        },
+      ];
+    }
+    result = workflowResult(input).result;
+    return answer("Read the workspace");
+  }, "allow");
+  try {
+    await f.runtime.runPromise(
+      Effect.gen(function* () {
+        const { session, runs, runner, root } = yield* f.setup;
+        const { root: home } = yield* Home;
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.writeFileString(
+          path.join(home, "wsp_workflow/read-resource.workflow.ts"),
+          `
+import { defineWorkflow, Effect, parallel, phase, Schema, resource } from "@openchart/workflow";
+export default defineWorkflow({
+  description: "Read current workspace state",
+  args: Schema.Struct({ id: Schema.String }),
+  run: ({ id }) => phase("Read Resources", Effect.gen(function* () {
+    const failures = yield* parallel([
+      resource.get("unknown", id, Schema.Json),
+      resource.get("workspace", "bad-id", Schema.Json),
+      resource.get("workspace", "wsp_missing", Schema.Json),
+      resource.get("workspace", id, Schema.Struct({ root: Schema.Number })),
+    ]);
+    return {
+      workspace: yield* resource.get("workspace", id, Schema.Struct({ id: Schema.String, root: Schema.String })),
+      failures,
+    };
+  })),
+});`,
+        );
+        const permission = yield* Permission.Service;
+        const ask = vi.fn(permission.ask);
+        yield* runs.enqueue({
+          sessionID: root.id,
+          sessionIntentID: "read-resource",
+          input: {
+            ...prompt,
+            parts: [{ type: "text", text: "Read the child workspace" }],
+          },
+        });
+        yield* runner
+          .run({ sessionID: root.id })
+          .pipe(
+            Effect.provideService(Permission.Service, { ...permission, ask }),
+          );
+        expect((yield* runs.list(root.id))[0]?.status).toBe("completed");
+        expect(result).toEqual({
+          workspace: { id: "wsp_child", root: path.join(home, "wsp_child") },
+          failures: Array.from({ length: 4 }, () => ({
+            status: "error",
+            error: { name: expect.any(String), message: expect.any(String) },
+          })),
+        });
+        const history = (yield* session.readTranscriptPage({
+          sessionID: root.id,
+          turnLimit: 1,
+        })).history;
+        const activity = projectTranscript(history).find(
+          (message) => message.role === "activity",
+        );
+        assertExists(activity, "The phase publishes a workflow Activity");
+        if (activity.role !== "activity") throw new Error("Expected Activity");
+        const details = Schema.decodeUnknownSync(Schema.JsonObject)(
+          activity.content.details,
+        );
+        expect(traceSpans(details.trace).map((span) => span.name)).toEqual([
+          "Workflow.phase",
+          "Workflow.parallel",
+        ]);
+        expect(ask.mock.calls.map(([request]) => request.action)).toEqual([
+          "workflow",
+        ]);
+      }).pipe(Effect.provideService(Models.Service, f.services)),
+    );
+  } finally {
+    await f.runtime.dispose();
+  }
+});
 
 test("live workflow OTLP Activity deltas converge with persisted history through the official AG-UI reducer", async () => {
   const f = fixture(async (input) =>

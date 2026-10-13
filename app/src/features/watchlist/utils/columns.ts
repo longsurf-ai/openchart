@@ -4,8 +4,9 @@ import type { Column, Metric } from "./tree";
 
 /** Header label and fixed track width per metric. */
 export const COLUMNS: Readonly<
-  Record<Metric, { label: string; title: string; width: string }>
+  Record<Metric | "semantic", { label: string; title: string; width: string }>
 > = {
+  semantic: { label: "AI research", title: "AI research", width: "17rem" },
   price: { label: "Last", title: "Last price", width: "5.25rem" },
   change: { label: "Chg", title: "Change", width: "5rem" },
   changePercent: { label: "Chg%", title: "Change %", width: "5.25rem" },
@@ -22,7 +23,9 @@ export type ScalarMetric = Exclude<Metric, "priceHistory">;
 
 /** Shared tracks reserve full symbol text, logos and indentation; quote and Formula columns keep their widths. */
 export function gridTemplate(columns: readonly Column[]): string {
-  return ["minmax(max-content, 1fr)", ...columns.map(columnWidth)].join(" ");
+  return ["minmax(max-content, 1fr)", ...columns.map<string>(columnWidth)].join(
+    " ",
+  );
 }
 
 /** Fixed quote or Formula track width, with no I/O or cleanup. @example columnWidth({ metric: { kind: "price" } }) */
@@ -34,7 +37,7 @@ export function columnWidth(column: Pick<Column, "metric">): string {
 
 /** Minimum shared width for the header and rows; narrow widgets scroll both together. Pure CSS projection with no lifecycle or failures. @example minimumGridWidth(columns) */
 export function minimumGridWidth(columns: readonly Column[]): string {
-  return `calc(${["6rem", ...columns.map(columnWidth)].join(" + ")})`;
+  return `calc(${["6rem", ...columns.map<string>(columnWidth)].join(" + ")})`;
 }
 
 /** User titles take precedence; formula labels fall back to the script filename and chosen output. @example columnTitle(column) */
@@ -54,7 +57,7 @@ export function columnTitle(column: Column): string {
 export function columnLabel(column: Column): string {
   return (
     column.title ??
-    (column.metric.kind === "formula"
+    (column.metric.kind === "formula" || column.metric.kind === "semantic"
       ? columnTitle(column)
       : COLUMNS[column.metric.kind].label)
   );

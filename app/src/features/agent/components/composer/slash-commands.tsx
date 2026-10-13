@@ -74,6 +74,23 @@ export function ComposerDirectiveChip(props: DirectiveChipProps) {
   );
 }
 
+/** Height above the bottom-anchored menu that neither the window nor a clipping ancestor hides. */
+function visibleHeightAbove(menu: HTMLElement, style: CSSStyleDeclaration) {
+  let top = 0;
+  for (let node = menu.parentElement; node; node = node.parentElement) {
+    const nodeStyle = getComputedStyle(node);
+    if (/auto|scroll|hidden|clip/.test(nodeStyle.overflowY))
+      top = Math.max(top, node.getBoundingClientRect().top + node.clientTop);
+    // Ancestors outside a fixed box, such as a portaled dialog, do not clip it.
+    if (nodeStyle.position === "fixed") break;
+  }
+  // Mirror the gap below the menu so it never touches the clipping edge.
+  return Math.max(
+    0,
+    menu.getBoundingClientRect().bottom - top - parseFloat(style.marginBottom),
+  );
+}
+
 function CommandItems({ commands }: { commands: Agent["commands"] }) {
   const { items, highlightedIndex, isLoading } =
     unstable_useTriggerPopoverScopeContext();
@@ -87,19 +104,24 @@ function CommandItems({ commands }: { commands: Agent["commands"] }) {
       menu.querySelectorAll<HTMLElement>('[role="option"]'),
     ).slice(0, 5);
     const lastRow = rows[4];
-    if (!lastRow) {
-      menu.style.maxHeight = "";
-      return;
-    }
 
-    // Keep the existing, potentially wrapped row heights; only cap the viewport.
+    // Keep the existing, potentially wrapped row heights; only cap the viewport
+    // at five rows and at the space a host such as a dialog leaves visible.
     const measure = () => {
       const style = getComputedStyle(menu);
-      menu.style.maxHeight = `${lastRow.offsetTop + lastRow.offsetHeight + parseFloat(style.paddingBottom) + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth)}px`;
+      const fiveRows = lastRow
+        ? lastRow.offsetTop +
+          lastRow.offsetHeight +
+          parseFloat(style.paddingBottom) +
+          parseFloat(style.borderTopWidth) +
+          parseFloat(style.borderBottomWidth)
+        : Infinity;
+      menu.style.maxHeight = `${Math.min(fiveRows, visibleHeightAbove(menu, style))}px`;
     };
     measure();
     const observer = new ResizeObserver(measure);
     rows.forEach((row) => observer.observe(row));
+    if (menu.offsetParent) observer.observe(menu.offsetParent);
     return () => observer.disconnect();
   }, [items]);
 

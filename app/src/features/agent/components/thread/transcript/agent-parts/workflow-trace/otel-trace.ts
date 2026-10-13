@@ -1,5 +1,8 @@
-// Purpose: Decode the consumed OTLP JSON fields and derive waterfall props.
-import { z } from "zod";
+// Purpose: Derive waterfall props from decoded workflow OTLP spans.
+import {
+  spanStatus,
+  type OtelSpan,
+} from "@openchart/app/lib/agent/workflow-trace";
 import type {
   TraceEntry,
   TracePhase,
@@ -7,42 +10,6 @@ import type {
   TraceSpan,
 } from "./trace-waterfall";
 
-const nanoTime = z.string().regex(/^\d+$/).transform(BigInt);
-const span = z.object({
-  traceId: z.string().min(1),
-  spanId: z.string().min(1),
-  parentSpanId: z.string().optional(),
-  name: z.string(),
-  startTimeUnixNano: nanoTime,
-  endTimeUnixNano: nanoTime,
-  status: z.object({ code: z.number(), message: z.string().optional() }),
-  attributes: z.array(
-    z.object({
-      key: z.string(),
-      value: z.object({
-        stringValue: z.string().optional(),
-        boolValue: z.boolean().optional(),
-      }),
-    }),
-  ),
-});
-
-/** Read only the OTLP fields needed by this view; retain the full payload in Activity. */
-export const otelTrace = z
-  .object({
-    resourceSpans: z.array(
-      z.object({
-        scopeSpans: z.array(z.object({ spans: z.array(span) })),
-      }),
-    ),
-  })
-  .transform((trace) =>
-    trace.resourceSpans.flatMap((resource) =>
-      resource.scopeSpans.flatMap((scope) => scope.spans),
-    ),
-  );
-
-type OtelSpan = z.infer<typeof span>;
 export type WorkflowTraceSpan = TraceSpan & {
   sessionID?: string;
   isPhase: boolean;
@@ -101,14 +68,7 @@ export function toWaterfall(source: OtelSpan[], now: number) {
       depth,
       startMs: milliseconds(item.startTimeUnixNano - origin),
       durationMs: milliseconds(end - item.startTimeUnixNano),
-      status:
-        item.endTimeUnixNano === 0n
-          ? "running"
-          : attributes.get("openchart.cancelled")?.boolValue
-            ? "cancelled"
-            : item.status.code === 2
-              ? "failed"
-              : "completed",
+      status: spanStatus(item),
     };
   });
   return {

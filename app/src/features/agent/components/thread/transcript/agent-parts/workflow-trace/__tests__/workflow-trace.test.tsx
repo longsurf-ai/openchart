@@ -3,10 +3,8 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { AgentViewProvider } from "@openchart/app/features/agent/components/agent-view/agent-view-context";
-import {
-  otelTrace,
-  toWaterfall,
-} from "@openchart/app/features/agent/components/thread/transcript/agent-parts/workflow-trace/otel-trace";
+import { toWaterfall } from "@openchart/app/features/agent/components/thread/transcript/agent-parts/workflow-trace/otel-trace";
+import { otelTrace } from "@openchart/app/lib/agent/workflow-trace";
 import { WorkflowTrace } from "@openchart/app/features/agent/components/thread/transcript/agent-parts/workflow-trace/workflow-trace";
 import { createTransport } from "@openchart/app/lib/transport/transport";
 

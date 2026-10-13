@@ -8,18 +8,45 @@ export type SessionProgress = {
   lines: string[];
 };
 
+type Run = NonNullable<SessionSnapshot["state"]>["runs"][number];
+
+/** The running Run, else the first queued one; terminal or unobserved state has none. @example activeRun(snapshot.state) */
+export function activeRun(state: SessionSnapshot["state"]): Run | undefined {
+  return (
+    state?.runs.find((run) => run.status === "running") ??
+    state?.runs.find((run) => run.status === "queued")
+  );
+}
+
+/** Reads the latest Assistant's durable completion, independent of its parent's paginated trace. @example sessionOutcome(snapshot) === "cancelled" */
+export function sessionOutcome(snapshot: SessionSnapshot) {
+  for (let index = snapshot.messages.length - 1; index >= 0; index--) {
+    const message = snapshot.messages[index]!;
+    if (message.role !== "assistant" || message.subagentRunId !== undefined)
+      continue;
+    const id = message.metadata?.openchart?.messageId ?? message.id;
+    const info = snapshot.state?.messageInfo[id];
+    if (!info || !("completedAt" in info)) continue;
+    if (info.error)
+      return info.error.name === "MessageAbortedError" ? "cancelled" : "failed";
+    if (info.completedAt !== null && info.finish !== "tool-calls")
+      return "completed";
+    return undefined;
+  }
+  return undefined;
+}
+
 /**
  * Derives active Run progress from a Session snapshot without mutating it.
- * Unobserved state and terminal Runs return undefined. Consumers own
- * subscriptions, line limits and display clocks.
+ * Unobserved state and terminal Runs return undefined. A workflow child owns
+ * no Run; its caller passes the parent's active Run while the child's span runs.
+ * Consumers own subscriptions, line limits and display clocks.
  * @example const progress = selectSessionProgress(snapshot);
  */
 export function selectSessionProgress(
   snapshot: SessionSnapshot,
+  run = activeRun(snapshot.state),
 ): SessionProgress | undefined {
-  const run =
-    snapshot.state?.runs.find((run) => run.status === "running") ??
-    snapshot.state?.runs.find((run) => run.status === "queued");
   if (!run) return undefined;
   const latestUser = snapshot.messages
     .map((message) => message.role)

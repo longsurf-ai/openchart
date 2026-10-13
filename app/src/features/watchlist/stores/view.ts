@@ -30,10 +30,13 @@ export function migrateWatchlistSort(
 ) {
   const { legacySort, sort } = view.getState();
   if (legacySort) {
-    const column = watchlist.columns.find(
-      (item) =>
-        item.metric.kind === legacySort.metric && item.visible !== false,
-    );
+    const column =
+      watchlist.columns[
+        watchlist.columns.findIndex(
+          (item) =>
+            item.metric.kind === legacySort.metric && item.visible !== false,
+        )
+      ];
     view.setState({
       legacySort: undefined,
       sort: column

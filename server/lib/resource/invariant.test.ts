@@ -113,6 +113,15 @@ test("paths validate fields, arrays, tuples, unions, records and branded leaves"
   expectTypeOf<readonly ["pair", 0, "name"]>().not.toExtend<Path<Value>>();
 });
 
+test("paths terminate for recursive JSON arrays embedded in prompts", () => {
+  type Value = { name: string; prompt: { args: Schema.Json } };
+  expectTypeOf<readonly ["name"]>().toExtend<Path<Value>>();
+  expectTypeOf<readonly ["prompt", "args", number, number]>().toExtend<
+    Path<Value>
+  >();
+  expectTypeOf<readonly ["naem"]>().not.toExtend<Path<Value>>();
+});
+
 test("the actual declaration infers paths and hides managed fields", () => {
   withInvariants(fields, (invariant) => [
     invariant(

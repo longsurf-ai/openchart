@@ -9,6 +9,7 @@ import { useRef } from "react";
 import type { GridLayoutProps } from "react-grid-layout";
 
 import { widgetRegistry } from "@openchart/app/app/widgets/widget-registry";
+import { CopilotControlsProvider } from "@openchart/app/app/agent/copilot-controls";
 import { TooltipProvider } from "@openchart/app/components/ui/tooltip";
 import {
   chartDetail,
@@ -179,12 +180,14 @@ function setup(widgets: Dashboard["widgets"]) {
           {/* The same scopes DashboardPage gives its widgets. */}
           <ChartSelectionProvider>
             <WidgetIntentProvider>
-              <DashboardView
-                id={dashboard.id}
-                transport={transport}
-                registry={(kind) => registry[kind]}
-                renderHeader={() => null}
-              />
+              <CopilotControlsProvider value={null}>
+                <DashboardView
+                  id={dashboard.id}
+                  transport={transport}
+                  registry={(kind) => registry[kind]}
+                  renderHeader={() => null}
+                />
+              </CopilotControlsProvider>
             </WidgetIntentProvider>
           </ChartSelectionProvider>
         </TooltipProvider>

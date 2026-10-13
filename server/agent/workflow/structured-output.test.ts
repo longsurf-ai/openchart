@@ -52,6 +52,7 @@ test("infers validated output and keeps text output typed as string", async () =
   await Effect.runPromise(
     run(definition, {}).pipe(
       Effect.provideService(Workflow.Service, {
+        getResource: () => Effect.die("Unexpected Resource read"),
         parentPrompt: prompt,
         settings: { concurrency: 1 },
         agent: call,
@@ -108,6 +109,7 @@ test.each([
         {},
       ).pipe(
         Effect.provideService(Workflow.Service, {
+          getResource: () => Effect.die("Unexpected Resource read"),
           parentPrompt: prompt,
           settings: { concurrency: 1 },
           agent: call,
@@ -161,6 +163,7 @@ test("projects referenced encoded shapes and validates transformed outputs", asy
       {},
     ).pipe(
       Effect.provideService(Workflow.Service, {
+        getResource: () => Effect.die("Unexpected Resource read"),
         parentPrompt: prompt,
         settings: { concurrency: 1 },
         agent: call,
@@ -208,6 +211,7 @@ test("reports projection failures before starting an agent", async () => {
       {},
     ).pipe(
       Effect.provideService(Workflow.Service, {
+        getResource: () => Effect.die("Unexpected Resource read"),
         parentPrompt: prompt,
         settings: { concurrency: 1 },
         agent: call,

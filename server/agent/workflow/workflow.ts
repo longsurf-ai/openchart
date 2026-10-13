@@ -27,6 +27,16 @@ export class Service extends Context.Service<
   Service,
   {
     readonly parentPrompt: AgentPromptInput;
+    /**
+     * Reads current Resource state through the host's database without a separate
+     * permission check. Invalid names/IDs, missing entities, and storage failures
+     * fail the Effect; the read transaction closes before it settles.
+     * @example const row = yield* host.getResource("watchlist", id);
+     */
+    readonly getResource: (
+      name: string,
+      id: string,
+    ) => Effect.Effect<unknown, unknown>;
     readonly settings: Settings;
     /**
      * Creates or continues an owned child Session under the existing root Run.

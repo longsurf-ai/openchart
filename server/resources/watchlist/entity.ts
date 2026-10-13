@@ -193,7 +193,11 @@ export const WatchlistEntity = withInvariants(
       (watchlist, { expect }) => {
         const shown = new Set<string>();
         watchlist.columns.forEach((column, c) => {
-          if (column.metric.kind === "formula") return;
+          if (
+            column.metric.kind === "formula" ||
+            column.metric.kind === "semantic"
+          )
+            return;
           expect(shown.has(column.metric.kind), {
             path: ["columns", c, "metric", "kind"],
           }).toBe(false);

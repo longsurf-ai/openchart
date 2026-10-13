@@ -1,6 +1,6 @@
 # watchlist
 
-Owns Watchlist browsing, sections, quote columns and Formula columns.
+Owns Watchlist browsing, sections, quote, Formula and research columns.
 
 - Card chrome owns drag and close. `header.tsx` owns switching, naming, adding,
   and the flat column menu. `widget.tsx` owns selection, writes and dialogs.
@@ -18,5 +18,7 @@ Owns Watchlist browsing, sections, quote columns and Formula columns.
   shared crosshair. Feed receives only `{provider, listing}`.
   Formula execution includes collapsed/offscreen rows. Results stay outside
   Resources; sorting samples at 250 ms with missing values last.
+- Research cells project their bound Session and workflow span; only mounted
+  cells sort.
 - Selection, collapse and stable-column-ID sorting are placement-local.
   Version 1 metric sorts resolve after the selected list loads.

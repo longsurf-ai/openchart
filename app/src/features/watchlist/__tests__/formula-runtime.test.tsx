@@ -61,6 +61,14 @@ function list(): Watchlist {
       { id: "wcl_plot", visible: true, metric: { ...metric, output: "plot" } },
       { id: "wcl_hidden", visible: false, metric },
       { id: "wcl_price", visible: true, metric: { kind: "price" } },
+      {
+        id: "wcl_research",
+        visible: true,
+        metric: {
+          kind: "semantic",
+          prompt: { parts: [{ type: "text", text: "Describe the business." }] },
+        },
+      },
     ],
     sections: [
       {
@@ -145,8 +153,9 @@ it("binds all nested rows and only visible Formula columns, sharing nodes indepe
     <FormulaRuntime
       watchlist={{
         ...watchlist,
-        columns: watchlist.columns.map((column) =>
-          column.id === "wcl_value" ? { ...column, visible: false } : column,
+        columns: watchlist.columns.map<Watchlist["columns"][number]>(
+          (column) =>
+            column.id === "wcl_value" ? { ...column, visible: false } : column,
         ),
       }}
       values={f.values}
@@ -217,7 +226,7 @@ it("uses the first exact capability match and rejects unsupported explicit setti
   const original = list();
   const watchlist = {
     ...original,
-    columns: original.columns.map((column) =>
+    columns: original.columns.map<Watchlist["columns"][number]>((column) =>
       column.id === "wcl_value" && column.metric.kind === "formula"
         ? {
             ...column,
@@ -283,7 +292,7 @@ it("never uses another output when a saved output is missing", () => {
   const original = list();
   const watchlist = {
     ...original,
-    columns: original.columns.map((column) =>
+    columns: original.columns.map<Watchlist["columns"][number]>((column) =>
       column.id === "wcl_value" && column.metric.kind === "formula"
         ? { ...column, metric: { ...column.metric, output: "removed" } }
         : column,

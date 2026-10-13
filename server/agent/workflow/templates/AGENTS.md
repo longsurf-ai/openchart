@@ -4,7 +4,8 @@ Each file is one trusted, self-contained workflow definition. Import only
 `@openchart/workflow`, backed by the host authoring index;
 Effect, Schema, prompt types, and
 agent execution are available through that API. No backend services, sibling
-modules, dynamic imports, or ambient I/O. Put domain I/O in agents, and explicitly
+modules, dynamic imports, or ambient I/O. Use `resource.get` for host-owned
+execution-time reads; put writes and research in agents, and explicitly
 pass returned answers into subsequent prompts.
 
 Startup copies missing templates to the user's default Workspace under `workflows/`, beside `indicators/`. Existing files stay authoritative and editable. Each `.workflow.ts` default-exports its definition; there is no executable catalog. Definitions own arguments and composition;

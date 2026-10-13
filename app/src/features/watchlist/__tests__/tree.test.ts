@@ -189,7 +189,7 @@ test("column drops resolve ids after earlier reorders and ignore removed targets
   } as unknown as Watchlist;
   const [operation] = moveColumn(columns, "wcl_change", "wcl_volume");
   expect(
-    (apply(columns, operation!) as Watchlist).columns.map(
+    (apply(columns, operation!) as Watchlist).columns.map<string>(
       (column) => column.id,
     ),
   ).toEqual(["wcl_change", "wcl_volume", "wcl_price"]);

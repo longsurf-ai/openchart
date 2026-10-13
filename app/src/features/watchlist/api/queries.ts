@@ -30,7 +30,9 @@ export type WatchlistOperation =
 export type WatchlistSave = UseMutationResult<
   Watchlist,
   Error,
-  (watchlist: Watchlist) => readonly WatchlistOperation[]
+  (
+    watchlist: Watchlist,
+  ) => readonly WatchlistOperation[] | Promise<readonly WatchlistOperation[]>
 >;
 
 /** Read the selected Watchlist; undefined waits for selection, null data means deleted. Query owns cancellation and errors. @example useQuery(watchlistDetail(transport, selectedId)); */
@@ -71,7 +73,10 @@ export function watchlistMutation(
     meta: { errorTitle: "Watchlist changes haven’t been saved" },
     retry: false,
     mutationFn: async (
-      edit: (watchlist: Watchlist) => readonly WatchlistOperation[],
+      edit: (
+        watchlist: Watchlist,
+      ) =>
+        readonly WatchlistOperation[] | Promise<readonly WatchlistOperation[]>,
     ) => {
       if (!id) throw new Error("Choose a watchlist first.");
       // Reuse saved data, but an invalidated cache must finish refreshing.
@@ -80,7 +85,7 @@ export function watchlistMutation(
         staleTime: Infinity,
       });
       if (!watchlist) throw new Error("This watchlist no longer exists.");
-      const [first, ...rest] = edit(watchlist);
+      const [first, ...rest] = await edit(watchlist);
       if (!first) return watchlist;
       return transport.rpc.resources.watchlist.patch.mutate({
         id,
@@ -120,14 +125,20 @@ export function createWatchlist(transport: AppTransport) {
     }: {
       name: string;
       columns?: readonly Omit<Column, "id">[];
-    }) =>
-      transport.rpc.resources.watchlist.create.mutate({
+    }) => {
+      // Restored Resource values are already validated JSON; reuse them as input.
+      const source = columns as unknown as readonly Omit<
+        NonNullable<ResourceInputs["watchlist"]["create"]["columns"]>[number],
+        "id"
+      >[];
+      return transport.rpc.resources.watchlist.create.mutate({
         name,
-        columns: columns.map((column) => ({
+        columns: source.map((column) => ({
           ...column,
           id: watchlistIds.column.create(),
         })),
-      }),
+      });
+    },
   });
 }
 
@@ -143,7 +154,7 @@ export function watchlistList(transport: AppTransport) {
         { signal },
       ),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
-    select: (data) => data.pages.flatMap((page) => page.items),
+    select: (data) => data.pages.flatMap<Watchlist>((page) => page.items),
   });
 }
 
@@ -221,7 +232,11 @@ export function formulaColumnMutation(
         command.expectedColumn !== undefined &&
         replaceEqualDeep(
           command.expectedColumn,
-          current.columns.find((column) => column.id === command.columnId),
+          current.columns[
+            current.columns.findIndex(
+              (column) => column.id === command.columnId,
+            )
+          ],
         ) === command.expectedColumn;
       const expectedRevision =
         command.kind === "add" || unchanged

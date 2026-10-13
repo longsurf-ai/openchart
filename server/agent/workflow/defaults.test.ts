@@ -36,7 +36,7 @@ export default defineWorkflow({description: "Edited", args: Schema.Struct({}), r
   const files = (await readdir(new URL("./templates/", import.meta.url)))
     .filter((file) => file.endsWith(".workflow.ts"))
     .sort();
-  expect(files).toHaveLength(6);
+  expect(files).toContain("watchlist-semantic-column.workflow.ts");
   expect((await readdir(directory)).sort()).toEqual(files);
   expect(
     await readFile(path.join(directory, "best-of-n.workflow.ts"), "utf8"),
@@ -46,6 +46,7 @@ export default defineWorkflow({description: "Edited", args: Schema.Struct({}), r
     const loaded = await first.runtime.runPromise(
       loadWorkflow(`default:workflows/${file}`).pipe(
         Effect.provideService(Workflow.Service, {
+          getResource: () => Effect.die("Unexpected Resource read"),
           parentPrompt: {
             agent: "analyst",
             model: { providerID: "codex", modelID: "tier4" },

@@ -8,6 +8,7 @@ import * as ResourceEvents from "@openchart/server/lib/resource/events";
 import { AgentProfile } from "@openchart/server/agent/profiles/profile";
 import { PluginRegistry } from "@openchart/server/agent/plugin/registry";
 import { Plugin } from "@openchart/server/agent/plugin";
+import { watchlistSemanticPlugin } from "./agent/plugin/plugins/watchlist-semantic";
 import { chartExplainPlugin } from "@openchart/server/agent/plugin/plugins/chart-explain";
 import { Permission } from "@openchart/server/agent/permission";
 import { Question } from "@openchart/server/agent/question";
@@ -142,8 +143,12 @@ function makeAgentLayer(
     Question.layer,
     ToolRegistry.layer,
     Layer.unwrap(
-      Effect.map(Plugin.bind(chartExplainPlugin), (plugin) =>
-        PluginRegistry.layer([plugin]),
+      Effect.map(
+        Effect.all([
+          Plugin.bind(chartExplainPlugin),
+          Plugin.bind(watchlistSemanticPlugin),
+        ]),
+        (plugins) => PluginRegistry.layer(plugins),
       ),
     ),
     LLM.layer.pipe(Layer.provideMerge(models)),

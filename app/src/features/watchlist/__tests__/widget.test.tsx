@@ -220,14 +220,15 @@ function setup(
   const placementId = defineId("wdg", "WidgetPlacement.ID").create();
   const patch = vi.fn().mockResolvedValue({ ...watchlist, revision: 4 });
   const other = { ...watchlist, id: "wtl_other", name: "Crypto" };
-  let items = options.empty ? [] : [watchlist, other];
+  const items = options.empty ? [] : [watchlist, other];
   const created = { ...watchlist, id: "wtl_new", name: "Energy", sections: [] };
   const create = vi.fn().mockImplementation(() => {
     items.push(created);
     return Promise.resolve(created);
   });
   const remove = vi.fn().mockImplementation(({ id }: { id: string }) => {
-    items = items.filter((item) => item.id !== id);
+    const index = items.findIndex((item) => item.id === id);
+    if (index >= 0) items.splice(index, 1);
     return Promise.resolve();
   });
   const list = vi.fn().mockImplementation((input: { cursor?: string }) =>
@@ -243,7 +244,7 @@ function setup(
   const get = vi
     .fn()
     .mockImplementation(({ id }: { id: string }) =>
-      Promise.resolve(items.find((item) => item.id === id) ?? null),
+      Promise.resolve(items[items.findIndex((item) => item.id === id)] ?? null),
     );
   const dashboardGet = vi.fn();
   const dashboardPatch = vi.fn();

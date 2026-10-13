@@ -43,28 +43,28 @@ type Recurs<T, Ancestors> = true extends (
 type Paths<T, Ancestors> = T extends
   string | number | boolean | null | undefined
   ? readonly []
-  : T extends ReadonlyArray<infer Item>
-    ? number extends T["length"]
-      ? readonly [] | readonly [number, ...Paths<Item, Ancestors>]
-      : | readonly []
-        | {
-            [
-              K in Exclude<keyof T, keyof ReadonlyArray<unknown>>
-            ]: K extends `${infer Index extends number}`
-              ? readonly [Index, ...Paths<T[K], Ancestors>]
-              : never;
-          }[Exclude<keyof T, keyof ReadonlyArray<unknown>>]
-    : T extends object
-      ? Recurs<T, Ancestors> extends true
-        ? ReadonlyArray<string | number>
+  : Recurs<T, Ancestors> extends true
+    ? ReadonlyArray<string | number>
+    : T extends ReadonlyArray<infer Item>
+      ? number extends T["length"]
+        ? readonly [] | readonly [number, ...Paths<Item, Ancestors | T>]
         : | readonly []
+          | {
+              [
+                K in Exclude<keyof T, keyof ReadonlyArray<unknown>>
+              ]: K extends `${infer Index extends number}`
+                ? readonly [Index, ...Paths<T[K], Ancestors | T>]
+                : never;
+            }[Exclude<keyof T, keyof ReadonlyArray<unknown>>]
+      : T extends object
+        ? | readonly []
           | {
               [K in keyof T & (string | number)]-?: readonly [
                 K,
                 ...Paths<T[K], Ancestors | T>,
               ];
             }[keyof T & (string | number)]
-      : readonly [];
+        : readonly [];
 
 /** The value a path addresses; a union resolves each member that has the step. */
 export type At<T, P> = P extends readonly [infer Head, ...infer Tail]

@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { useContext, type PropsWithChildren } from "react";
 import { FormulaCodePicker } from "../formula-code-picker";
 import { widgetRegistry } from "../widget-registry";
+import { CopilotControlsProvider } from "@openchart/app/app/agent/copilot-controls";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
 import { WidgetContext } from "@openchart/app/lib/widget/widget";
 import { WatchlistFormulaPicker } from "@openchart/app/features/watchlist/components/context";
@@ -123,9 +124,11 @@ function setup({
         }}
       >
         {probe ? (
-          <Provider>
-            <Probe />
-          </Provider>
+          <CopilotControlsProvider value={null}>
+            <Provider>
+              <Probe />
+            </Provider>
+          </CopilotControlsProvider>
         ) : (
           <FormulaCodePicker onSelect={picked} onClose={close} />
         )}
