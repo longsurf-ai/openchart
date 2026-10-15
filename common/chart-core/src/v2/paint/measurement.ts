@@ -133,16 +133,26 @@ export function paintMeasurement(input: {
         `Vol ${stats.volume === undefined ? "—" : Locale.compact(stats.volume) + (stats.partialVolume ? " (partial)" : "")}`,
       ];
   ctx.font = font;
-  const lineHeight = state.config.chart.layout.fontSize + 6;
-  const height = lines.length * lineHeight + 14;
+  const labelMargin = 4;
+  const labelPaddingY = 7;
+  const fontSize = state.config.chart.layout.fontSize;
+  // Compact row spacing at short plot heights while preserving the configured font.
+  const availableLineHeight = Math.floor(
+    (pane.height - 2 * (labelMargin + labelPaddingY)) / lines.length,
+  );
+  const lineHeight = Math.max(
+    fontSize,
+    Math.min(fontSize + 6, availableLineHeight),
+  );
+  const height = lines.length * lineHeight + 2 * labelPaddingY;
   const width = Math.min(
-    pane.width - 8,
+    pane.width - 2 * labelMargin,
     Math.max(...lines.map((line) => ctx.measureText(line).width)) + 24,
   );
   const labelX = Math.max(
-    pane.x + 4,
+    pane.x + labelMargin,
     Math.min(
-      pane.x + pane.width - width - 4,
+      pane.x + pane.width - width - labelMargin,
       cagr ? right + 10 : (left + right - width) / 2,
     ),
   );
@@ -152,10 +162,10 @@ export function paintMeasurement(input: {
       ? top - height - 10
       : bottom + 10;
   const labelY = Math.max(
-    pane.y + 4,
-    Math.min(pane.y + pane.height - height - 4, preferredY),
+    pane.y + labelMargin,
+    Math.min(pane.y + pane.height - height - labelMargin, preferredY),
   );
-  const hasLabel = width > 0 && pane.height >= height + 8;
+  const hasLabel = width > 0 && pane.height >= height + 2 * labelMargin;
   if (hasLabel) {
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -169,7 +179,7 @@ export function paintMeasurement(input: {
       ctx.fillText(
         line,
         labelX + width / 2,
-        labelY + 7 + lineHeight * (index + 0.5),
+        labelY + labelPaddingY + lineHeight * (index + 0.5),
         width - 12,
       ),
     );
