@@ -65,6 +65,7 @@ import {
   type ChartPreferencesStore,
 } from "@openchart/app/lib/chart/preferences";
 
+import { GoToDateButton } from "./go-to-date";
 import { ResourceNotice } from "./resource-notice";
 import { SymbolPicker } from "./symbol-picker";
 import { IndicatorLibraryNavigation } from "@openchart/app/lib/indicator-library/indicator-library";
@@ -613,6 +614,11 @@ function ChartControls({
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <GoToDateButton
+        localStore={localStore}
+        resolution={cell.resolution}
+        disabled={disabled}
+      />
     </div>
   );
 }

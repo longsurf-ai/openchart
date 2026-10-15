@@ -145,6 +145,36 @@ export function initialBarsRequest(
   };
 }
 
+/**
+ * Whether a bars window already covers a saved viewport, so a jump does not
+ * replace the subscription.
+ * @example windowCoversViewport({ from: 0, to: "now" }, { from: 10, to: 20 });
+ */
+export function windowCoversViewport(
+  window: { readonly from: number; readonly to: number | "now" },
+  viewport: { readonly from: number; readonly to: number },
+): boolean {
+  if (window.from > viewport.from) return false;
+  return window.to === "now" || window.to >= viewport.to;
+}
+
+/**
+ * Whether a saved viewport sits far enough outside the current bars window
+ * to replace the subscription. Nearby pans keep it so history can extend.
+ * @example viewportNeedsReload({ from: 100, to: "now" }, { from: 0, to: 10 });
+ */
+export function viewportNeedsReload(
+  window: { readonly from: number; readonly to: number | "now" },
+  viewport: { readonly from: number; readonly to: number },
+): boolean {
+  if (windowCoversViewport(window, viewport)) return false;
+  const end = window.to === "now" ? Number.POSITIVE_INFINITY : window.to;
+  const span = Math.max(1, viewport.to - viewport.from);
+  if (viewport.to <= window.from) return window.from - viewport.to > span;
+  if (viewport.from >= end) return viewport.from - end > span;
+  return false;
+}
+
 /** Re-anchor only when the target actually changed. @example applyTimeViewport(draft, saved, step); */
 export function applyTimeViewport(
   state: v2.Chart.State,

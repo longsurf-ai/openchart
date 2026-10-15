@@ -15,6 +15,7 @@ import {
   indexToTime,
   initialBarsRequest,
   mainTimeline,
+  viewportNeedsReload,
 } from "@openchart/app/lib/chart/data";
 import {
   type ChartPreferencesStore,
@@ -245,6 +246,25 @@ export function useMarketSeriesSource(
     localStore,
     chart,
     identity,
+  ]);
+
+  useLayoutEffect(() => {
+    const viewport = preferences.viewport;
+    if (!viewport || activeWindow.identity !== identity) return;
+    if (!viewportNeedsReload(activeWindow, viewport)) return;
+    const { from, to, countBack } = initialBarsRequest(
+      input.series,
+      localStore.getState(),
+      chart.store.getState().config.chart.dimensions.width,
+    );
+    setWindow({ identity, from, to, countBack });
+  }, [
+    preferences.viewport,
+    activeWindow,
+    identity,
+    input.series,
+    localStore,
+    chart,
   ]);
 
   useLayoutEffect(() => {
