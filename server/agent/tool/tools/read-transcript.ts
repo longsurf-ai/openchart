@@ -208,7 +208,8 @@ function format(input: {
  * `kind: "session"` ContextPart in the caller's transcript that names this
  * session_id pins an inclusive creation-time bound on every page. Synthetic
  * text is retained; reasoning is pruned through the SDK. Empty projections are
- * `[]`. Projection content is never clipped.
+ * `[]`. Projection content is never clipped; earlier read_transcript results
+ * inside the history appear as pointers to the Session they read.
  *
  * Output is `{type: "text"}`:
  * ```text
@@ -238,7 +239,7 @@ export const ReadTranscriptTool = Tool.define(
   "read_transcript",
   Effect.succeed({
     description:
-      "Read a prior agent session as paginated historical context. Use this whenever the current prompt contains a session reference. On the first call pass session_id and cursor: null. Results are newest-page first, chronological within each page. Long messages continue across pages at whole-Part boundaries; content is never clipped. Keep passing the exact next_cursor until End of transcript. Pass around_message_id with cursor: null to center the first page on a message found by search_transcript. Session references automatically enforce their snapshot boundary.",
+      "Read a prior agent session as paginated historical context. Use this whenever the current prompt contains a session reference. On the first call pass session_id and cursor: null. Results are newest-page first, chronological within each page. Long messages continue across pages at whole-Part boundaries; content is never clipped, but earlier read_transcript results inside the history show only which session they read. Keep passing the exact next_cursor until End of transcript. Pass around_message_id with cursor: null to center the first page on a message found by search_transcript. Session references automatically enforce their snapshot boundary.",
     parameters: Parameters,
     execute: Effect.fn("ReadTranscript.execute")(function* (
       input: typeof Parameters.Type,

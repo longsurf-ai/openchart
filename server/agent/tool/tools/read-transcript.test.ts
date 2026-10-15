@@ -443,6 +443,82 @@ test("returns a single oversized Part intact", async () => {
   expect(textOf(page)).not.toContain("[Content truncated");
 });
 
+test("shows earlier read_transcript results as pointers, so chained reads stay the same size", async () => {
+  // Each day reads the previous day's Session, like a scheduled follower.
+  let previous = "ses_day0";
+  await runtime.runPromise(
+    seed(previous, "Day 0", [
+      [
+        assistant("msg_day0", [text("msg_day0", 'ledger "day 0"')], previous),
+        1000,
+      ],
+    ]),
+  );
+  const sizes: number[] = [];
+  for (const day of [1, 2, 3]) {
+    const page = await read({ session_id: previous, cursor: null });
+    sizes.push(textOf(page).length);
+    const sessionID = `ses_day${day}`;
+    const messageID = `msg_day${day}`;
+    const stored: ToolPart = {
+      id: `prt_${ascending()}`,
+      messageID,
+      type: "tool",
+      childSessionIds: [],
+      tool: "read_transcript",
+      callID: `call_${day}`,
+      state: {
+        status: "completed",
+        input: { session_id: previous, cursor: null },
+        output: page.output,
+        title: page.title,
+        metadata: page.metadata,
+        time: { start: 1, end: 2 },
+      },
+    };
+    await runtime.runPromise(
+      seed(sessionID, `Day ${day}`, [
+        [assistant(messageID, [stored], sessionID), 1000],
+      ]),
+    );
+    previous = sessionID;
+  }
+  const last = await read({ session_id: previous, cursor: null });
+  sizes.push(textOf(last).length);
+
+  expect(modelHistoryOf(last, "assistant", "msg_day3")).toEqual([
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "call_3",
+          toolName: "read_transcript",
+          input: { session_id: "ses_day2", cursor: null },
+        },
+      ],
+    },
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "call_3",
+          toolName: "read_transcript",
+          output: {
+            type: "text",
+            value:
+              "[Copy of session ses_day2 omitted; read that session directly with read_transcript.]",
+          },
+        },
+      ],
+    },
+  ]);
+  expect(textOf(last)).not.toContain("day 0");
+  // Embedded copies were re-escaped on every read and doubled per day.
+  expect(sizes.slice(1)).toEqual([sizes[1], sizes[1], sizes[1]]);
+});
+
 test("resumes whole Parts without skipping or repeating content, then continues older messages", async () => {
   const values = ["first", "tool", "middle", "final"].map(
     (label) => label + ":" + "x".repeat(6000),
