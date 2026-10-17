@@ -111,7 +111,7 @@ function sessionRules(
           )}). Instructions may name them without the "${HOST_TOOL_PREFIX}" prefix.`
       : undefined;
   const history = replayed
-    ? `The first message replays this conversation's earlier turns from OpenChart under "Conversation so far". They happened: their tool calls already ran, and the results shown are what OpenChart kept of them. "[truncated]" marks output OpenChart shortened on purpose; nothing is missing or failed. Answer from these turns; use tools only for what they cannot answer.`
+    ? `The first message replays this conversation's earlier turns from OpenChart under "Conversation so far". They happened: their tool calls already ran. "[truncated]" marks where OpenChart cut a completed call's output short in this replay; the call did not fail, and the rest of its output is not available here. Answer from what is shown when it is enough; use tools only for what it cannot answer.`
     : undefined;
   return [system, tools, history].filter(Boolean).join("\n\n");
 }
@@ -272,13 +272,17 @@ export class GrokLanguageModel implements LanguageModelV4 {
     });
 
     const run = async () => {
-      if (toolNames.length > 0)
-        host = await startHostToolServer(tools, call.abortSignal, {
+      if (toolNames.length > 0) {
+        const started = await startHostToolServer(tools, call.abortSignal, {
           started: (id, name, input) =>
             translator.hostToolStarted(id, name, input),
           finished: (id, name, output, isError) =>
             translator.hostToolFinished(id, name, output, isError),
         });
+        // The turn may have settled while the server started; nothing else would close it.
+        if (settled) return started.close();
+        host = started;
+      }
       const mcpServers = host ? [host.server] : [];
       await acp.request("initialize", {
         protocolVersion: 1,
@@ -358,7 +362,7 @@ export class GrokLanguageModel implements LanguageModelV4 {
     return collectGeneration(await this.doStream(call), this.modelId);
   }
 
-  /** Allows once or rejects once; OpenChart's own MCP tools are pre-approved. */
+  /** Allows once or rejects once; this request's OpenChart tools are pre-approved. */
   private async permission(
     request: PermissionRequest,
     options: GrokProviderOptions,
@@ -369,9 +373,14 @@ export class GrokLanguageModel implements LanguageModelV4 {
       request.toolCall.rawInput !== null
         ? (request.toolCall.rawInput as Record<string, unknown>)
         : {};
+    // Only this request's own tools are pre-approved; they apply their own policy.
     const host =
       typeof input.tool_name === "string" &&
-      input.tool_name.startsWith(HOST_TOOL_PREFIX);
+      input.tool_name.startsWith(HOST_TOOL_PREFIX) &&
+      Object.hasOwn(
+        options.tools ?? {},
+        input.tool_name.slice(HOST_TOOL_PREFIX.length),
+      );
     const allowed =
       host ||
       ((await options

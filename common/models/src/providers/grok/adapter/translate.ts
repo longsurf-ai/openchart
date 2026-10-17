@@ -67,6 +67,19 @@ function usageOf(usage: TurnUsage | undefined): LanguageModelV4Usage {
   };
 }
 
+/** JSON with sorted object keys, so equal arguments compare equal. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, nested: unknown) =>
+    typeof nested === "object" && nested !== null && !Array.isArray(nested)
+      ? Object.fromEntries(
+          Object.entries(nested).sort(([left], [right]) =>
+            left < right ? -1 : left > right ? 1 : 0,
+          ),
+        )
+      : nested,
+  );
+}
+
 function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -125,8 +138,11 @@ export class TurnTranslator {
     string,
     { name: string; scope: Scope }
   >();
-  /** Scopes of hidden OpenChart `use_tool` calls, per tool, awaiting their MCP request. */
-  private readonly hostScopes = new Map<string, Scope[]>();
+  /** Hidden OpenChart `use_tool` calls awaiting their MCP request, by native call ID. */
+  private readonly hostAnnouncements = new Map<
+    string,
+    { name: string; input: string | undefined; scope: Scope }
+  >();
   private interrupted = false;
   private done = false;
 
@@ -249,9 +265,24 @@ export class TurnTranslator {
 
   // OpenChart tools, reported by the host server.
 
+  /**
+   * MCP requests carry no native call ID, so a request claims the oldest
+   * announced `use_tool` call with the same tool and arguments, then the oldest
+   * with the same tool. A call whose delegate has already been sealed belongs
+   * to its nearest open ancestor.
+   */
   hostToolStarted(id: string, name: string, input: unknown): void {
     if (this.done) return;
-    const scope = this.hostScopes.get(name)?.shift() ?? null;
+    const announced = [...this.hostAnnouncements].filter(
+      ([, call]) => call.name === name,
+    );
+    const arguments_ = stableJson(input);
+    const [callId, call] =
+      announced.find(([, candidate]) => candidate.input === arguments_) ??
+      announced[0] ??
+      [];
+    if (callId) this.hostAnnouncements.delete(callId);
+    const scope = this.openScope(call?.scope ?? null);
     this.hostCalls.set(id, { name, scope });
     this.startTool(id, name, input, scope, true);
   }
@@ -337,8 +368,14 @@ export class TurnTranslator {
       typeof input.tool_name === "string" &&
       input.tool_name.startsWith(HOST_TOOL_PREFIX)
     ) {
-      const host = input.tool_name.slice(HOST_TOOL_PREFIX.length);
-      this.hostScopes.set(host, [...(this.hostScopes.get(host) ?? []), scope]);
+      this.hostAnnouncements.set(id, {
+        name: input.tool_name.slice(HOST_TOOL_PREFIX.length),
+        input:
+          input.tool_input === undefined
+            ? undefined
+            : stableJson(input.tool_input),
+        scope,
+      });
       this.tools.set(id, { name, scope, hidden: true });
       return;
     }
@@ -357,6 +394,8 @@ export class TurnTranslator {
     if (!open) return;
     if (update.status !== "completed" && update.status !== "failed") return;
     this.tools.delete(update.toolCallId);
+    // A call that never reached the host server must not claim a later request.
+    this.hostAnnouncements.delete(update.toolCallId);
     if (open.hidden) return;
     const failed = update.status === "failed";
     const delegate = this.delegates.get(update.toolCallId);
@@ -404,6 +443,14 @@ export class TurnTranslator {
       dynamic: true,
       ...owner,
     });
+  }
+
+  /** The scope itself while open; a sealed delegate yields its nearest open ancestor. */
+  private openScope(scope: Scope): Scope {
+    let current = scope;
+    while (current !== null && this.delegates.get(current)?.finished)
+      current = this.delegates.get(current)!.parent;
+    return current;
   }
 
   // Delegates

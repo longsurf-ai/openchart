@@ -570,6 +570,121 @@ describe("Grok adapter", () => {
     });
   });
 
+  it("routes concurrent OpenChart calls to the scope that announced their arguments", async () => {
+    const use = (id: string, hint: string, session?: string) =>
+      toolCall(
+        id,
+        "use_tool",
+        { tool_name: "openchart__get_secret", tool_input: { hint } },
+        session,
+      );
+    await script({
+      steps: [
+        toolCall("spawn-a", "spawn_subagent", {
+          description: "child",
+          prompt: "Ask.",
+        }),
+        {
+          notice: {
+            sessionUpdate: "subagent_spawned",
+            parent_session_id: "session-new",
+            child_session_id: "child-a",
+            description: "child",
+          },
+        },
+        // A child call that fails before reaching the host must not claim the
+        // root's later request with the same arguments.
+        use("use-lost", "root", "child-a"),
+        toolDone(
+          "use-lost",
+          { rawOutput: { error: "denied" } },
+          "child-a",
+          "failed",
+        ),
+        use("use-child", "child", "child-a"),
+        use("use-root", "root"),
+        // The host receives them in the other order.
+        { callTool: { name: "get_secret", arguments: { hint: "root" } } },
+        { callTool: { name: "get_secret", arguments: { hint: "child" } } },
+        toolDone("use-root", {}),
+        toolDone("use-child", {}, "child-a"),
+        {
+          notice: {
+            sessionUpdate: "subagent_finished",
+            child_session_id: "child-a",
+            status: "completed",
+          },
+        },
+        toolDone("spawn-a", {
+          rawOutput: { type: "SubagentCompleted", output: "done" },
+        }),
+      ],
+    });
+    const { model } = setup();
+    const events = await run(model, [{ role: "user", content: "go" }], {
+      options: { tools: secretTool, permissionMode: "always-approve" },
+    });
+    const calls = events.filter(
+      (event) => event.type === "tool-call" && event.toolName === "get_secret",
+    );
+    expect(
+      calls.map((event) => [
+        event.providerMetadata?.openchart?.delegateCallId ?? null,
+        (event as { input: { hint: string } }).input.hint,
+      ]),
+    ).toEqual([
+      [null, "root"],
+      ["spawn-a", "child"],
+    ]);
+  });
+
+  it("reports a successful OpenChart call once even when its model projection fails", async () => {
+    await script({
+      steps: [
+        toolCall("use-1", "use_tool", {
+          tool_name: "openchart__fragile",
+          tool_input: {},
+        }),
+        { callTool: { name: "fragile", arguments: {} } },
+        toolDone("use-1", {}),
+        say("done"),
+      ],
+    });
+    const fragile = {
+      fragile: {
+        description: "Succeeds with an output the model cannot read.",
+        inputSchema: z.object({}),
+        execute: async () => ({ saved: true }),
+        toModelOutput: () => {
+          throw new Error("cannot project");
+        },
+      },
+    };
+    const { model } = setup();
+    const events = await run(model, [{ role: "user", content: "go" }], {
+      options: { tools: fragile, permissionMode: "always-approve" },
+    });
+    const results = events.filter(
+      (event) => event.type === "tool-result" || event.type === "tool-error",
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      type: "tool-result",
+      output: { saved: true },
+    });
+    const [exchange] = await records<{ called: { result: unknown } }>(
+      "mcp.jsonl",
+    );
+    expect(exchange!.called.result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "The tool succeeded, but its result could not be shown: cannot project",
+        },
+      ],
+    });
+  });
+
   it("emits native tools, including X search, as provider-executed calls", async () => {
     await script({
       steps: [
@@ -861,6 +976,17 @@ describe("Grok adapter", () => {
             options,
           },
         },
+        {
+          permission: {
+            toolCall: {
+              toolCallId: "use-2",
+              title: "openchart__unlisted",
+              kind: "other",
+              rawInput: { tool_name: "openchart__unlisted" },
+            },
+            options,
+          },
+        },
         say("ok"),
       ],
     });
@@ -868,6 +994,7 @@ describe("Grok adapter", () => {
     const { model } = setup();
     await run(model, [{ role: "user", content: "go" }], {
       options: {
+        tools: secretTool,
         approve: async (request: { input: { command?: string } }) => {
           asked.push(request);
           return request.input.command === "rm x";
@@ -885,6 +1012,12 @@ describe("Grok adapter", () => {
         title: "Execute `curl`",
         input: { variant: "Bash", command: "curl" },
       },
+      // Only this request's own tools skip approval.
+      {
+        kind: "other",
+        title: "openchart__unlisted",
+        input: { tool_name: "openchart__unlisted" },
+      },
     ]);
     const decisions = (await records<Call>("calls.jsonl"))
       .filter((call) => call.permission)
@@ -893,6 +1026,7 @@ describe("Grok adapter", () => {
       { outcome: { outcome: "selected", optionId: "allow-once" } },
       { outcome: { outcome: "selected", optionId: "reject-once" } },
       { outcome: { outcome: "selected", optionId: "allow-once" } },
+      { outcome: { outcome: "selected", optionId: "reject-once" } },
     ]);
   });
 

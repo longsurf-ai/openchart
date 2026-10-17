@@ -79,7 +79,8 @@ async function readBody(request: IncomingMessage): Promise<string> {
  * the request's random bearer token; other requests get 401. It speaks MCP's
  * streamable HTTP transport with JSON responses only: `initialize`, `ping`,
  * `tools/list` and `tools/call`. Each call runs `execute` in-process; the model
- * reads only `toModelOutput`, and `calls` receives the exact outcome.
+ * reads only `toModelOutput`, and `calls` receives the exact outcome once. A
+ * projection that throws after a successful `execute` still reports success.
  * @example
  * const host = await startHostToolServer(tools, signal, calls);
  * try { await acp.request("session/new", { cwd, mcpServers: [host.server] }); } finally { host.close(); }
@@ -108,17 +109,25 @@ export async function startHostToolServer(
       };
     const id = generateId();
     calls.started(id, name, input);
+    let output: unknown;
     try {
-      const output = await tool.execute(input, { toolCallId: id, abortSignal });
-      calls.finished(id, name, output, false);
-      return {
-        content: [{ type: "text", text: text(tool.toModelOutput(output)) }],
-      };
+      output = await tool.execute(input, { toolCallId: id, abortSignal });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       calls.finished(id, name, message, true);
       return { content: [{ type: "text", text: message }], isError: true };
     }
+    // The action already happened: a projection failure must not read as a
+    // failed call that the model would retry.
+    let projected: string;
+    try {
+      projected = text(tool.toModelOutput(output));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      projected = `The tool succeeded, but its result could not be shown: ${message}`;
+    }
+    calls.finished(id, name, output, false);
+    return { content: [{ type: "text", text: projected }] };
   }
 
   async function reply(method: string, params: unknown): Promise<Reply> {
