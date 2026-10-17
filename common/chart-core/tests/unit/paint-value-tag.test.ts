@@ -1037,6 +1037,30 @@ describe("Extended-session value tags", () => {
     }
   });
 
+  it("counts a closed market down to the next open", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-06T20:32:43Z"));
+    try {
+      const ctx = createMockCtx();
+      const state = createChartState({
+        data: Array.from({ length: 100 }, (_, i) => ({ value: 190 + i * 0.2 })),
+        session: {
+          main: {
+            phase: "closed",
+            nextOpenAt: Date.parse("2026-05-06T20:33:43Z") / 1000,
+          },
+        },
+      });
+      repaint(state, createRuntime(ctx), fullMask());
+      const primaryCall = valueTagSpy.mock.calls.find(
+        (call) => call[2] === "209.80",
+      );
+      expect(primaryCall?.[9]).toBe("Opens 01:00");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows the countdown on the primary tag when no secondary extended-session tag exists", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-06T20:32:43Z"));

@@ -2,7 +2,13 @@
 
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { Listing, ProviderId, TradingDay, providerListingKey } from "./index";
+import {
+  Listing,
+  ProviderId,
+  TradingDay,
+  coveredSessionTypes,
+  providerListingKey,
+} from "./index";
 
 describe("market vocabulary", () => {
   it("uses provider and native listing ID independently of display metadata", () => {
@@ -61,6 +67,17 @@ describe("market vocabulary", () => {
     expect(listing.symbol).toBe("BTCUSDT");
     expect(Schema.decodeUnknownSync(ProviderId)("binance")).toBe("binance");
     expect(Schema.is(ProviderId)("")).toBe(false);
+  });
+
+  it("maps a coverage selector onto one set of atomic sessions", () => {
+    expect(coveredSessionTypes("regular")).toEqual(["regular"]);
+    expect(coveredSessionTypes("extended")).toEqual(["pre", "regular", "post"]);
+    expect(coveredSessionTypes("24h")).toEqual([
+      "pre",
+      "regular",
+      "post",
+      "overnight",
+    ]);
   });
 
   it("accepts only atomic sessions with start before end", () => {

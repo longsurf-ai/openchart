@@ -212,7 +212,13 @@ function setup(initialViewport?: { from: number; to: number }) {
         ),
       getCapabilities: vi.fn(),
     },
-    calendar: { getCalendar: vi.fn() },
+    calendar: {
+      getCalendar: vi.fn().mockResolvedValue({
+        calendar: "test",
+        timezone: "UTC",
+        days: [],
+      }),
+    },
     series: { select: vi.fn() },
     symbology: {
       index: vi.fn(),
