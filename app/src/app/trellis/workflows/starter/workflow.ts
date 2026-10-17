@@ -16,7 +16,7 @@ import starGithubVideo from "./star-github.mp4";
 const dashboard = "/app/dashboards/dsh_88JOx0yX7TH65p";
 
 /**
- * The first-launch workflow: connecting Claude Code or Codex, turning on notifications, the Bitcoin dashboard with its chart controls
+ * The first-launch workflow: connecting Claude Code, Codex, Antigravity or Grok, turning on notifications, the Bitcoin dashboard with its chart controls
  * and an Agent-made indicator, the Agent thread behind it and the alert it set, then, back on the dashboard, an ask to star the repository and join Discord. Its IDs must match
  * `platform/desktop/src/onboarding/content`, which starts it.
  * @example starterWorkflow.steps[2].action;
