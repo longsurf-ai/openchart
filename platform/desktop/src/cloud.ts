@@ -3,11 +3,11 @@
 /** Public endpoints only; credentials remain in Clerk and the backend credential store. */
 export const cloudEndpoints = {
   development: {
-    billingUrl: "https://ysufdj6lyh.execute-api.us-west-2.amazonaws.com",
+    billingUrl: "https://billing.sandbox.longsurf.ai",
     openchartUrl: "https://api.sandbox.longsurf.ai",
   },
   production: {
-    billingUrl: "https://8i7jbmb44d.execute-api.us-west-2.amazonaws.com",
+    billingUrl: "https://billing.longsurf.ai",
     openchartUrl: "https://api.alpha.longsurf.ai",
   },
 } as const;

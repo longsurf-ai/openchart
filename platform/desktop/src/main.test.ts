@@ -588,7 +588,7 @@ test("billing IPC validates the caller and destination, and passes the sandbox e
   expect(runtime.startBackend).toHaveBeenCalledWith(
     expect.objectContaining({
       init: expect.objectContaining({
-        billingUrl: "https://ysufdj6lyh.execute-api.us-west-2.amazonaws.com",
+        billingUrl: "https://billing.sandbox.longsurf.ai",
         openchartUrl: "https://api.sandbox.longsurf.ai",
       }),
     }),
