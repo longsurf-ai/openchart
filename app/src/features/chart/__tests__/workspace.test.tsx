@@ -1198,3 +1198,31 @@ it("keeps market execution and chart updates alive when legend surfaces are remo
   fixture.view.unmount();
   expect(channel.stop).toHaveBeenCalledOnce();
 });
+
+it("replaces a live bars window when a historical viewport is saved outside it", () => {
+  const fixture = setup();
+  const to = Date.now();
+  act(() =>
+    fixture.active("AAPL").sink.next({
+      type: "snapshot",
+      snapshot: {
+        data: minuteHistory(to),
+        range: { from: to - 200 * 60_000, to },
+        hasMoreBefore: true,
+      },
+    }),
+  );
+  const liveFrom = fixture.active("AAPL").request.from;
+  const target = {
+    from: to - 10 * 86_400_000,
+    to: to - 9 * 86_400_000,
+  };
+  expect(liveFrom).toBeGreaterThan(target.to);
+  const before = fixture.calls.length;
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  expect(fixture.calls.length).toBeGreaterThan(before);
+  expect(fixture.active("AAPL").request.from).toBeLessThanOrEqual(target.from);
+  const nextTo = fixture.active("AAPL").request.to;
+  expect(nextTo === "now" || nextTo >= target.to).toBe(true);
+  fixture.view.unmount();
+});
