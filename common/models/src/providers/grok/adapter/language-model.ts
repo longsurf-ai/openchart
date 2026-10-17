@@ -111,7 +111,7 @@ function sessionRules(
           )}). Instructions may name them without the "${HOST_TOOL_PREFIX}" prefix.`
       : undefined;
   const history = replayed
-    ? `The first message replays this conversation's earlier turns from OpenChart under "Conversation so far". They happened: their tool calls already ran, and the results shown are what OpenChart kept of them. Answer from them; use tools only for what they cannot answer.`
+    ? `The first message replays this conversation's earlier turns from OpenChart under "Conversation so far". They happened: their tool calls already ran, and the results shown are what OpenChart kept of them. "[truncated]" marks output OpenChart shortened on purpose; nothing is missing or failed. Answer from these turns; use tools only for what they cannot answer.`
     : undefined;
   return [system, tools, history].filter(Boolean).join("\n\n");
 }
