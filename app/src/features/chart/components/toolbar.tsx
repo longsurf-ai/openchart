@@ -64,6 +64,7 @@ import {
   updateSeriesStyles,
   type ChartPreferencesStore,
 } from "@openchart/app/lib/chart/preferences";
+import type { ChartRuntime } from "@openchart/app/lib/chart/store";
 
 import { GoToDateButton } from "./go-to-date";
 import { ResourceNotice } from "./resource-notice";
@@ -143,7 +144,7 @@ export function ChartToolbar() {
     if (resource.isSuccess && controlId && !active) setControlId(undefined);
     if (resource.isSuccess && picker && !pickerExists) setPicker(undefined);
   }, [controlId, picker, pickerExists, resource.isSuccess, active]);
-  const preferences = active && mounted.get(active.id)?.preferences;
+  const mountedCell = active ? mounted.get(active.id) : undefined;
   return (
     <div
       className="contents"
@@ -154,10 +155,11 @@ export function ChartToolbar() {
         if (active) setFocused(active.id);
       }}
     >
-      {active && preferences ? (
+      {active && mountedCell ? (
         <ChartControls
           cell={active}
-          localStore={preferences}
+          chart={mountedCell.chart}
+          localStore={mountedCell.preferences}
           disabled={disabled}
           onChange={(edit) =>
             save.mutate((resource) => updateCell(resource, active.id, edit))
@@ -250,6 +252,7 @@ function OptionItem({
 
 function ChartControls({
   cell,
+  chart: runtime,
   localStore,
   disabled,
   onChange,
@@ -257,6 +260,7 @@ function ChartControls({
   onMenuChange,
 }: {
   cell: CellDefinition;
+  chart: ChartRuntime;
   localStore: ChartPreferencesStore;
   disabled: boolean;
   onChange: (edit: (cell: CellDefinition) => CellDefinition) => void;
@@ -617,6 +621,7 @@ function ChartControls({
       <GoToDateButton
         localStore={localStore}
         resolution={cell.resolution}
+        chart={runtime}
         disabled={disabled}
       />
     </div>

@@ -30,48 +30,36 @@ import {
 } from "@openchart/app/components/ui/tooltip";
 import {
   defaultGoToInstant,
-  formatClock,
-  instantToZonedParts,
-  parseClock,
   viewportAroundInstant,
   visibleSpanMs,
-  zonedCivilToUtcMs,
-  type ZonedCivilTime,
+  zonedWallFromUtcMs,
+  zonedWallToUtcMs,
 } from "@openchart/app/features/chart/utils/go-to-date";
 import { useWidgetControls } from "@openchart/app/hooks/use-widget";
-import type {
-  ChartPreferences,
-  ChartPreferencesStore,
-} from "@openchart/app/lib/chart/preferences";
+import type { ChartPreferencesStore } from "@openchart/app/lib/chart/preferences";
+import type { ChartRuntime } from "@openchart/app/lib/chart/store";
 import { chartSettings } from "@openchart/app/stores/chart";
 
 const timeInputClassName =
   "appearance-none bg-background [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none";
 
-function civilToDate(civil: Pick<ZonedCivilTime, "year" | "month" | "day">) {
-  return new Date(civil.year, civil.month - 1, civil.day);
-}
-
-function dateToCivil(
-  date: Date,
-): Pick<ZonedCivilTime, "year" | "month" | "day"> {
-  return {
-    year: date.getFullYear(),
-    month: date.getMonth() + 1,
-    day: date.getDate(),
-  };
+function calendarDate(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** Open the Go to date dialog with this cell's saved window as the starting point.
- * @example <GoToDateButton localStore={preferences} resolution={cell.resolution} />
+ * @example <GoToDateButton localStore={preferences} resolution={cell.resolution} chart={chart} />
  */
 export function GoToDateButton({
   localStore,
   resolution,
+  chart,
   disabled = false,
 }: {
   localStore: ChartPreferencesStore;
   resolution: Resolution;
+  chart: ChartRuntime;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -97,6 +85,7 @@ export function GoToDateButton({
         <GoToDateDialog
           localStore={localStore}
           resolution={resolution}
+          chart={chart}
           onClose={() => setOpen(false)}
         />
       ) : null}
@@ -105,30 +94,27 @@ export function GoToDateButton({
 }
 
 /** Choose a display-timezone date and apply it to this chart's saved viewport.
- * @example <GoToDateDialog localStore={preferences} resolution="1d" onClose={close} />
+ * @example <GoToDateDialog localStore={preferences} resolution="1d" chart={chart} onClose={close} />
  */
 export function GoToDateDialog({
   localStore,
   resolution,
+  chart,
   onClose,
 }: {
   localStore: ChartPreferencesStore;
   resolution: Resolution;
+  chart: ChartRuntime;
   onClose: () => void;
 }) {
   const timezone = useStore(chartSettings, (state) => state.timezone);
   const formId = useId();
-  const [civil, setCivil] = useState(() =>
-    instantToZonedParts(defaultGoToInstant(localStore.getState()), timezone),
+  const [when, setWhen] = useState(() =>
+    zonedWallFromUtcMs(defaultGoToInstant(localStore.getState()), timezone),
   );
-  const [time, setTime] = useState(() => formatClock(civil.hour, civil.minute));
   const [error, setError] = useState<string>();
   const zone = Tz.parse(timezone);
-  const selected = civilToDate(civil);
-  const go = (viewport: ChartPreferences["viewport"]) => {
-    localStore.setState({ viewport, rightOffset: 0 });
-    onClose();
-  };
+  const selected = new Date(`${when.date}T00:00`);
   return (
     <Dialog
       open
@@ -150,21 +136,32 @@ export function GoToDateDialog({
           className="grid gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            const clock = parseClock(time);
-            if (!clock) {
+            if (!when.time) {
               setError("Enter a valid time");
               return;
             }
-            const at = zonedCivilToUtcMs({ ...civil, ...clock }, timezone);
+            let at: number;
+            try {
+              at = zonedWallToUtcMs(when.date, when.time, timezone);
+            } catch {
+              setError("Enter a valid date");
+              return;
+            }
             if (!Number.isFinite(at)) {
               setError("Enter a valid date");
               return;
             }
-            go(
-              viewportAroundInstant(at, {
-                spanMs: visibleSpanMs(localStore.getState(), resolution),
+            localStore.setState({
+              viewport: viewportAroundInstant(at, {
+                spanMs: visibleSpanMs(
+                  localStore.getState(),
+                  resolution,
+                  chart.store.getState().config.chart.dimensions.width,
+                ),
               }),
-            );
+              rightOffset: 0,
+            });
+            onClose();
           }}
         >
           <FieldGroup>
@@ -177,9 +174,9 @@ export function GoToDateDialog({
                 onSelect={(date) => {
                   if (!date) return;
                   setError(undefined);
-                  setCivil((previous) => ({
-                    ...previous,
-                    ...dateToCivil(date),
+                  setWhen((current) => ({
+                    ...current,
+                    date: calendarDate(date),
                   }));
                 }}
               />
@@ -191,10 +188,13 @@ export function GoToDateDialog({
                 type="time"
                 step={60}
                 className={timeInputClassName}
-                value={time}
+                value={when.time}
                 onChange={(event) => {
                   setError(undefined);
-                  setTime(event.target.value);
+                  setWhen((current) => ({
+                    ...current,
+                    time: event.target.value,
+                  }));
                 }}
               />
               <FieldDescription>Times use {zone.label}.</FieldDescription>
@@ -202,9 +202,6 @@ export function GoToDateDialog({
             </Field>
           </FieldGroup>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => go(null)}>
-              Go to latest
-            </Button>
             <Button type="submit">Go</Button>
           </DialogFooter>
         </form>

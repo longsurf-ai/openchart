@@ -1,127 +1,45 @@
 // Purpose: Turn a display-timezone civil date into a saved chart time window.
+import { Temporal } from "temporal-polyfill";
 import { resolutionMs, type Resolution } from "@openchart/feed";
 
 import type { ChartPreferences } from "@openchart/app/lib/chart/preferences";
 
-/** Wall-clock fields in a named display zone. Month is 1–12. */
-export type ZonedCivilTime = {
-  readonly year: number;
-  readonly month: number;
-  readonly day: number;
-  readonly hour: number;
-  readonly minute: number;
-  readonly second?: number;
-};
-
-function zoneName(timezone: string): string | undefined {
-  return timezone === "local" ? undefined : timezone;
-}
-
-function part(
-  parts: readonly Intl.DateTimeFormatPart[],
-  type: Intl.DateTimeFormatPartTypes,
-): number {
-  const value = Number(parts.find((entry) => entry.type === type)?.value);
-  return Number.isFinite(value) ? value : NaN;
-}
-
-function wallAsUtcMs(instant: number, timezone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: zoneName(timezone),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(instant));
-  let hour = part(parts, "hour");
-  if (hour === 24) hour = 0;
-  return Date.UTC(
-    part(parts, "year"),
-    part(parts, "month") - 1,
-    part(parts, "day"),
-    hour,
-    part(parts, "minute"),
-    part(parts, "second"),
-  );
+function zoneId(timezone: string): string {
+  return timezone === "local" ? Temporal.Now.timeZoneId() : timezone;
 }
 
 /**
- * Read year/month/day/hour/minute of `instant` in `timezone`.
- * `local` uses the host zone; `UTC` and IANA names match chart display settings.
- * @example instantToZonedParts(Date.UTC(2026, 6, 15, 13, 30), "America/New_York");
+ * UTC milliseconds for a `YYYY-MM-DD` date and `HH:MM` clock in `timezone`.
+ * `local` uses the host zone. Daylight-saving gaps and overlaps follow Temporal.
+ * @example zonedWallToUtcMs("2026-07-15", "09:30", "America/New_York");
  */
-export function instantToZonedParts(
+export function zonedWallToUtcMs(
+  date: string,
+  time: string,
+  timezone: string,
+): number {
+  return Temporal.PlainDateTime.from(`${date}T${time}`).toZonedDateTime(
+    zoneId(timezone),
+  ).epochMilliseconds;
+}
+
+/**
+ * `YYYY-MM-DD` and `HH:MM` of `instant` in `timezone`.
+ * `local` uses the host zone; `UTC` and IANA names match chart display settings.
+ * @example zonedWallFromUtcMs(Date.UTC(2026, 6, 15, 13, 30), "America/New_York");
+ */
+export function zonedWallFromUtcMs(
   instant: number,
   timezone: string,
-): ZonedCivilTime {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: zoneName(timezone),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(instant));
-  let hour = part(parts, "hour");
-  if (hour === 24) hour = 0;
+): { readonly date: string; readonly time: string } {
+  const zoned = Temporal.Instant.fromEpochMilliseconds(
+    instant,
+  ).toZonedDateTimeISO(zoneId(timezone));
+  const pad = (value: number) => String(value).padStart(2, "0");
   return {
-    year: part(parts, "year"),
-    month: part(parts, "month"),
-    day: part(parts, "day"),
-    hour,
-    minute: part(parts, "minute"),
+    date: zoned.toPlainDate().toString(),
+    time: `${pad(zoned.hour)}:${pad(zoned.minute)}`,
   };
-}
-
-/**
- * UTC millisecond instant for a civil date and clock in `timezone`.
- * DST gaps and overlaps resolve to the offset of a same-named UTC guess, then
- * one correction so the wall clock round-trips. Invalid civil fields yield NaN.
- * @example zonedCivilToUtcMs({ year: 2026, month: 7, day: 15, hour: 9, minute: 30 }, "America/New_York");
- */
-export function zonedCivilToUtcMs(
-  civil: ZonedCivilTime,
-  timezone: string,
-): number {
-  const second = civil.second ?? 0;
-  const asUtc = Date.UTC(
-    civil.year,
-    civil.month - 1,
-    civil.day,
-    civil.hour,
-    civil.minute,
-    second,
-  );
-  if (!Number.isFinite(asUtc)) return NaN;
-  if (timezone === "UTC") return asUtc;
-  let utc = asUtc;
-  utc -= wallAsUtcMs(utc, timezone) - asUtc;
-  utc -= wallAsUtcMs(utc, timezone) - asUtc;
-  return utc;
-}
-
-/**
- * `HH:MM` clock text, or undefined when the value is not a 24-hour clock.
- * @example parseClock("09:30");
- */
-export function parseClock(
-  value: string,
-): { hour: number; minute: number } | undefined {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(value.trim());
-  if (!match) return undefined;
-  return { hour: Number(match[1]), minute: Number(match[2]) };
-}
-
-/**
- * Zero-padded 24-hour `HH:MM` for a time input.
- * @example formatClock(9, 30);
- */
-export function formatClock(hour: number, minute: number): string {
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 /**
@@ -138,23 +56,23 @@ export function defaultGoToInstant(
 
 /**
  * Visible window length in milliseconds: the saved viewport, or the bars that
- * fit at the current spacing with a floor of eighty bars.
- * @example visibleSpanMs({ viewport: null, barSpacing: 6 }, "1d");
+ * fit `width` at the current spacing.
+ * @example visibleSpanMs({ viewport: null, barSpacing: 6 }, "1d", 480);
  */
 export function visibleSpanMs(
   prefs: Pick<ChartPreferences, "viewport" | "barSpacing">,
   resolution: Resolution,
-  width = 800,
+  width: number,
 ): number {
   if (prefs.viewport)
     return Math.max(1, prefs.viewport.to - prefs.viewport.from);
   const step = resolutionMs[resolution];
-  return Math.max(step * 80, (width / Math.max(0.5, prefs.barSpacing)) * step);
+  return (width / Math.max(0.5, prefs.barSpacing)) * step;
 }
 
 /**
- * A historical viewport centered on `at`, shifted left when the right edge
- * would pass `now` so follow-latest stays a separate action.
+ * A historical viewport centered on `at`. The window shifts left when its
+ * right edge would pass `now`.
  * @example viewportAroundInstant(Date.UTC(2024, 0, 2), { spanMs: 86_400_000, now: Date.UTC(2026, 0, 1) });
  */
 export function viewportAroundInstant(
@@ -166,10 +84,6 @@ export function viewportAroundInstant(
   let to = at + span / 2;
   let from = to - span;
   if (to > now) {
-    to = now;
-    from = to - span;
-  }
-  if (!(from < to)) {
     to = now;
     from = to - span;
   }

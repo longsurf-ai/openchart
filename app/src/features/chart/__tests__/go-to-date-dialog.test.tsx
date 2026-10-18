@@ -1,4 +1,4 @@
-// Purpose: The Go to date dialog writes a historical viewport or returns to latest.
+// Purpose: The Go to date dialog writes a historical viewport at the chart width.
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -11,7 +11,14 @@ import {
   GoToDateDialog,
 } from "@openchart/app/features/chart/components/go-to-date";
 import { createChartPreferences } from "@openchart/app/lib/chart/preferences";
+import type { ChartRuntime } from "@openchart/app/lib/chart/store";
 import { chartSettings } from "@openchart/app/stores/chart";
+
+const chart = {
+  store: {
+    getState: () => ({ config: { chart: { dimensions: { width: 240 } } } }),
+  },
+} as ChartRuntime;
 
 beforeEach(() => {
   localStorage.clear();
@@ -31,16 +38,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("saves a window around the chosen UTC date and can return to latest", async () => {
+it("saves a window around the chosen UTC date at the chart width", async () => {
   const user = userEvent.setup();
   const localStore = createChartPreferences("go-to-date");
   const close = vi.fn();
-  const view = render(
+  render(
     <TooltipProvider>
-      <GoToDateDialog localStore={localStore} resolution="1d" onClose={close} />
+      <GoToDateDialog
+        localStore={localStore}
+        resolution="1d"
+        chart={chart}
+        onClose={close}
+      />
     </TooltipProvider>,
   );
   expect(screen.getByRole("dialog", { name: "Go to date" })).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Go to latest" }),
+  ).not.toBeInTheDocument();
   const time = screen.getByLabelText("Time");
   await user.clear(time);
   await user.type(time, "12:00");
@@ -50,21 +65,8 @@ it("saves a window around the chosen UTC date and can return to latest", async (
   const at = Date.UTC(2026, 9, 15, 12, 0, 0);
   expect(viewport!.from).toBeLessThan(at);
   expect(viewport!.to).toBeGreaterThan(at);
+  expect(viewport!.to - viewport!.from).toBe(40 * 86_400_000);
   expect(close).toHaveBeenCalledOnce();
-  view.unmount();
-  const latest = vi.fn();
-  render(
-    <TooltipProvider>
-      <GoToDateDialog
-        localStore={localStore}
-        resolution="1d"
-        onClose={latest}
-      />
-    </TooltipProvider>,
-  );
-  await user.click(screen.getByRole("button", { name: "Go to latest" }));
-  expect(localStore.getState().viewport).toBeNull();
-  expect(latest).toHaveBeenCalledOnce();
 });
 
 it("keeps the dialog open when the clock is invalid", async () => {
@@ -73,7 +75,12 @@ it("keeps the dialog open when the clock is invalid", async () => {
   const close = vi.fn();
   render(
     <TooltipProvider>
-      <GoToDateDialog localStore={localStore} resolution="1h" onClose={close} />
+      <GoToDateDialog
+        localStore={localStore}
+        resolution="1h"
+        chart={chart}
+        onClose={close}
+      />
     </TooltipProvider>,
   );
   const time = screen.getByLabelText("Time");
@@ -89,7 +96,7 @@ it("opens the dialog from the chart toolbar control", async () => {
   const localStore = createChartPreferences("go-to-date-button");
   render(
     <TooltipProvider>
-      <GoToDateButton localStore={localStore} resolution="1d" />
+      <GoToDateButton localStore={localStore} resolution="1d" chart={chart} />
     </TooltipProvider>,
   );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
