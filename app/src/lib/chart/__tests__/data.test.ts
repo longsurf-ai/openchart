@@ -6,6 +6,7 @@ import {
   initialBarsRequest,
   sessionDaysWindow,
   tagSessions,
+  viewportNeedsReload,
 } from "@openchart/app/lib/chart/data";
 
 const series = Schema.decodeUnknownSync(BarsSeries)({
@@ -126,4 +127,19 @@ it("asks for calendar days only under intraday Extended/24h bars", () => {
       undefined,
     ),
   ).toBeUndefined();
+});
+
+it("reloads only when a jump sits more than one screen outside the current bars window", () => {
+  expect(
+    viewportNeedsReload({ from: 100, to: "now" }, { from: 0, to: 10 }),
+  ).toBe(true);
+  expect(
+    viewportNeedsReload({ from: 100, to: 200 }, { from: 90, to: 150 }),
+  ).toBe(false);
+  expect(
+    viewportNeedsReload({ from: 128, to: "now" }, { from: 0, to: 100 }),
+  ).toBe(false);
+  expect(
+    viewportNeedsReload({ from: 0, to: "now" }, { from: 10, to: 20 }),
+  ).toBe(false);
 });
