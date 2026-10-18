@@ -92,9 +92,13 @@ it.each([false, true])(
   },
 );
 
-it.each([false, true])(
-  "paints CAGR across every pane with a right-side card, time handles and no price-axis ruler (custom formatters: %s)",
-  (customFormatters) => {
+it.each([
+  { customFormatters: false, chartHeight: 600 },
+  { customFormatters: true, chartHeight: 600 },
+  { customFormatters: false, chartHeight: 124 },
+])(
+  "paints CAGR across every pane with a right-side card, time handles and no price-axis ruler ($chartHeight px tall, custom formatters: $customFormatters)",
+  ({ customFormatters, chartHeight }) => {
     const previousLocale = Locale.get();
     if (customFormatters)
       Locale.set({
@@ -114,6 +118,7 @@ it.each([false, true])(
       const state = createState({
         series: { price: { type: "Candlestick", data: rows } },
       });
+      state.config.chart.dimensions.height = chartHeight;
       ChartStateModel.getSeriesObject(state, "price")!.role = "main";
       ChartStateUtils.addSeries(state, {
         id: "indicator",
@@ -156,12 +161,14 @@ it.each([false, true])(
                 "Volatility percent(30.0)",
                 "Return percent(8.0)",
                 "Sharpe (rf 0%) 0,33",
+                "2 bars, 365d 6h",
               ]
             : [
                 "CAGR +8.00%",
                 "Volatility 30.00%",
                 "Return +8.00%",
                 "Sharpe (rf 0%) 0.33",
+                "2 bars, 365d 6h",
               ],
         ),
       );
@@ -195,6 +202,8 @@ it.each([false, true])(
       expect(card.x + card.width).toBeLessThanOrEqual(
         layout.areaX + layout.areaWidth,
       );
+      expect(card.y).toBeGreaterThanOrEqual(0);
+      expect(card.y + card.height).toBeLessThanOrEqual(layout.areaHeight);
     } finally {
       Locale.set({
         ...previousLocale,

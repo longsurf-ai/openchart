@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.20",
+    "date": "2026-10-17",
+    "items": [
+      "Grok is now available as a model provider, alongside Codex, Claude Code and Antigravity.",
+      "CAGR measurements also show the number of bars and the elapsed time of the selected range.",
+      "Fixed scheduled sessions that read earlier transcripts growing until the backend ran out of memory."
+    ]
+  },
+  {
     "version": "0.1.19",
     "date": "2026-10-13",
     "items": [
