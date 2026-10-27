@@ -25,8 +25,11 @@ export function shareBarsViews(
 ): (request: BarsRequest) => Observable<BarsView> {
   const newest = MutableHashMap.empty<string, SharedView>();
   return (request) => {
-    const { from, countBack, ...seriesAndEnd } = request;
-    const key = JSON.stringify(seriesAndEnd);
+    const key = JSON.stringify({
+      ...request,
+      from: undefined,
+      countBack: undefined,
+    });
     const found = MutableHashMap.get(newest, key);
     if (Option.isSome(found) && barsRequestCovers(found.value.request, request))
       return found.value.view$;
