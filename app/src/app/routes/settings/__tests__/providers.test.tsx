@@ -41,10 +41,13 @@ const rpc = vi.hoisted(() => ({
   resources: { symbology: { counts: { query: vi.fn() } } },
 }));
 const updateConfig = vi.hoisted(() => vi.fn());
+const refreshConfig = vi.hoisted(() => vi.fn());
 const preference = vi.hoisted(() => ({
   openchart: true,
   tradingview: true,
   isSaving: false,
+  configAvailable: true,
+  readError: null as Error | null,
 }));
 const navigate = vi.hoisted(() => vi.fn());
 const clerk = vi.hoisted(() => ({ openSignIn: vi.fn() }));
@@ -65,20 +68,24 @@ vi.mock("react-router", () => ({
 }));
 vi.mock("@openchart/app/hooks/use-config", () => ({
   useConfig: () => ({
-    config: {
-      providers: {
-        binance: { enabled: true },
-        yfinance: { enabled: true },
-        openchart: { enabled: preference.openchart },
-        tradingview: { enabled: preference.tradingview },
-      },
-    },
+    config: preference.configAvailable
+      ? {
+          providers: {
+            binance: { enabled: true },
+            yfinance: { enabled: true },
+            openchart: { enabled: preference.openchart },
+            tradingview: { enabled: preference.tradingview },
+          },
+        }
+      : undefined,
     update: updateConfig,
+    refresh: refreshConfig,
+    readError: preference.readError,
     isSaving: preference.isSaving,
   }),
 }));
-vi.mock("@openchart/app/app/routes/settings/settings-page", () => ({
-  SettingsPage: ({ children }: { children: ReactNode }) => (
+vi.mock("@openchart/app/app/section-page", () => ({
+  SectionPage: ({ children }: { children: ReactNode }) => (
     <main>{children}</main>
   ),
 }));
@@ -88,6 +95,8 @@ beforeEach(() => {
   preference.openchart = true;
   preference.tradingview = true;
   preference.isSaving = false;
+  preference.configAvailable = true;
+  preference.readError = null;
   updateConfig.mockImplementation((_patch, options) => options?.onSuccess());
   rpc.access.tradingview.start.mutate.mockResolvedValue({
     attemptID: "attempt-1",
@@ -605,4 +614,72 @@ test("failed or cancelled sign-in never enables the pending provider", async () 
   expect(
     rpc.access.integration.connection.disconnect.mutate,
   ).not.toHaveBeenCalled();
+});
+
+test.each(["pending", "failed"] as const)(
+  "TradingView can be enabled while account metadata is %s without assuming it is disconnected",
+  async (state) => {
+    preference.tradingview = false;
+    if (state === "failed") {
+      rpc.access.integration.listIntegrations.query.mockRejectedValue(
+        new Error("Account metadata unavailable"),
+      );
+    } else {
+      rpc.access.integration.listIntegrations.query.mockReturnValue(
+        new Promise(() => {}),
+      );
+    }
+    show();
+    if (state === "failed") {
+      expect(
+        await screen.findByRole("button", {
+          name: "Retry TradingView connection",
+        }),
+      ).toBeVisible();
+    } else {
+      expect(screen.getByText("Checking connection…")).toBeVisible();
+    }
+    const toggle = await screen.findByRole("switch", {
+      name: "Enable TradingView",
+    });
+    expect(toggle).toBeEnabled();
+    fireEvent.click(toggle);
+    expect(updateConfig).toHaveBeenCalledWith({
+      providers: { tradingview: { enabled: true } },
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(rpc.access.tradingview.start.mutate).not.toHaveBeenCalled();
+    expect(
+      rpc.access.integration.connection.disconnect.mutate,
+    ).not.toHaveBeenCalled();
+    if (state === "failed") {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Retry TradingView connection" }),
+      );
+      await waitFor(() =>
+        expect(
+          rpc.access.integration.listIntegrations.query,
+        ).toHaveBeenCalledTimes(2),
+      );
+    }
+  },
+);
+
+test("failed Config reads retain the logo credit and settings retry", async () => {
+  preference.configAvailable = false;
+  preference.readError = new Error("Settings unavailable");
+  show();
+  expect(screen.getByRole("link", { name: "Elbstream" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Elbstream" })).toHaveAttribute(
+    "href",
+    "https://elbstream.com",
+  );
+  expect(
+    screen.queryByRole("switch", { name: "Enable TradingView" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(
+    within(screen.getByRole("alert")).getByRole("button", { name: "Retry" }),
+  );
+  expect(refreshConfig).toHaveBeenCalledOnce();
+  expect(updateConfig).not.toHaveBeenCalled();
 });

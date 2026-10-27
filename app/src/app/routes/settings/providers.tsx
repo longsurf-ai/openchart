@@ -63,211 +63,217 @@ export default function ProviderSettings() {
   });
   return (
     <SettingsPage title="Data Providers" settings={settings}>
-      {settings.config ? (
-        <Card title="Data Providers">
-          {counts.error ? (
-            <div className="mb-3">
-              <Button variant="link" onClick={() => void counts.refetch()}>
-                Retry indexed counts
-              </Button>
-            </div>
-          ) : null}
-          {status.error ? (
-            <div className="mb-3">
-              <Button variant="link" onClick={() => void status.refetch()}>
-                Retry index status
-              </Button>
-            </div>
-          ) : null}
-          {providerSettingsIds.map((id) => {
-            const name = providerName(ProviderId.make(id));
-            const provider = status.data?.find((row) => row.providerId === id);
-            const job = provider?.job;
-            const running = job?.state === "running";
-            const count =
-              counts.data?.find((row) => row.provider === id)?.count ?? 0;
-            const showIndex = provider?.indexable !== false;
-            const expandable =
-              showIndex || running || job?.state === "succeeded";
-            const Header = expandable ? CollapsibleTrigger : "div";
-            const reason = !provider
-              ? "Waiting for provider status."
-              : !provider.available
-                ? "Enable this provider and wait for it to become available."
-                : undefined;
-            return (
-              <Collapsible
-                key={id}
-                className="border-b border-border/40 py-3 first:pt-0"
-              >
-                <div className="flex items-center gap-4">
-                  <Header className="group flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    {expandable ? (
-                      <ChevronRight
-                        aria-hidden="true"
-                        className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-90 motion-reduce:transition-none"
-                      />
-                    ) : (
-                      <span aria-hidden="true" className="size-4 shrink-0" />
-                    )}
-                    <span className="min-w-0 flex-1 font-medium text-foreground">
-                      {name}
-                    </span>
-                    <span className="text-right text-xs tabular-nums">
-                      {counts.isError
-                        ? "Count unavailable"
-                        : counts.data
-                          ? `${count.toLocaleString()} listings indexed`
-                          : "Loading count…"}
-                      {running
-                        ? " · Indexing…"
-                        : job?.state === "failed"
-                          ? " · Index failed"
-                          : ""}
-                    </span>
-                  </Header>
-                  <ProviderAccessControl
-                    transport={transport}
-                    id={id}
-                    name={name}
-                    enabled={settings.config!.providers[id].enabled}
-                    disabled={
-                      settings.isSaving ||
-                      !!settings.readError ||
-                      (id === "tradingview" &&
-                        (enableTradingView ||
-                          (!settings.config!.providers[id].enabled &&
-                            !tradingViewConnection.isSuccess)))
-                    }
-                    onChange={(enabled) => {
-                      if (
-                        id === "tradingview" &&
-                        enabled &&
-                        !tradingViewConnection.data
-                      ) {
-                        setEnableTradingView(true);
-                      } else {
-                        settings.update({ providers: { [id]: { enabled } } });
-                      }
-                    }}
-                  />
-                </div>
-                {id === "tradingview" ? (
-                  <div className="pb-1 pl-7 pt-4 text-sm">
-                    <TradingViewAccount
+      <Card title="Data Providers">
+        {settings.config ? (
+          <>
+            {counts.error ? (
+              <div className="mb-3">
+                <Button variant="link" onClick={() => void counts.refetch()}>
+                  Retry indexed counts
+                </Button>
+              </div>
+            ) : null}
+            {status.error ? (
+              <div className="mb-3">
+                <Button variant="link" onClick={() => void status.refetch()}>
+                  Retry index status
+                </Button>
+              </div>
+            ) : null}
+            {providerSettingsIds.map((id) => {
+              const name = providerName(ProviderId.make(id));
+              const provider = status.data?.find(
+                (row) => row.providerId === id,
+              );
+              const job = provider?.job;
+              const running = job?.state === "running";
+              const count =
+                counts.data?.find((row) => row.provider === id)?.count ?? 0;
+              const showIndex = provider?.indexable !== false;
+              const expandable =
+                showIndex || running || job?.state === "succeeded";
+              const Header = expandable ? CollapsibleTrigger : "div";
+              const reason = !provider
+                ? "Waiting for provider status."
+                : !provider.available
+                  ? "Enable this provider and wait for it to become available."
+                  : undefined;
+              return (
+                <Collapsible
+                  key={id}
+                  className="border-b border-border/40 py-3 first:pt-0"
+                >
+                  <div className="flex items-center gap-4">
+                    <Header className="group flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      {expandable ? (
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-90 motion-reduce:transition-none"
+                        />
+                      ) : (
+                        <span aria-hidden="true" className="size-4 shrink-0" />
+                      )}
+                      <span className="min-w-0 flex-1 font-medium text-foreground">
+                        {name}
+                      </span>
+                      <span className="text-right text-xs tabular-nums">
+                        {counts.isError
+                          ? "Count unavailable"
+                          : counts.data
+                            ? `${count.toLocaleString()} listings indexed`
+                            : "Loading count…"}
+                        {running
+                          ? " · Indexing…"
+                          : job?.state === "failed"
+                            ? " · Index failed"
+                            : ""}
+                      </span>
+                    </Header>
+                    <ProviderAccessControl
                       transport={transport}
-                      enableRequest={
-                        enableTradingView
-                          ? {
-                              onConnected: () => {
-                                setEnableTradingView(false);
-                                settings.update({
-                                  providers: { tradingview: { enabled: true } },
-                                });
-                              },
-                              onContinueWithoutSignIn: () =>
-                                settings.update(
-                                  {
+                      id={id}
+                      name={name}
+                      enabled={settings.config!.providers[id].enabled}
+                      disabled={
+                        settings.isSaving ||
+                        !!settings.readError ||
+                        (id === "tradingview" && enableTradingView)
+                      }
+                      onChange={(enabled) => {
+                        if (
+                          id === "tradingview" &&
+                          enabled &&
+                          tradingViewConnection.isSuccess &&
+                          !tradingViewConnection.data
+                        ) {
+                          setEnableTradingView(true);
+                        } else {
+                          settings.update({ providers: { [id]: { enabled } } });
+                        }
+                      }}
+                    />
+                  </div>
+                  {id === "tradingview" ? (
+                    <div className="pb-1 pl-7 pt-4 text-sm">
+                      <TradingViewAccount
+                        transport={transport}
+                        enableRequest={
+                          enableTradingView
+                            ? {
+                                onConnected: () => {
+                                  setEnableTradingView(false);
+                                  settings.update({
                                     providers: {
                                       tradingview: { enabled: true },
                                     },
-                                  },
-                                  {
-                                    onSuccess: () =>
-                                      setEnableTradingView(false),
-                                  },
-                                ),
-                              onCancel: () => setEnableTradingView(false),
-                              isSaving: settings.isSaving,
-                            }
-                          : undefined
-                      }
-                    />
-                  </div>
-                ) : null}
-                {expandable ? (
-                  <CollapsibleContent>
-                    <div className="space-y-3 pb-1 pl-7 pt-4 text-sm">
-                      {showIndex ? (
-                        <>
-                          <div className="flex items-center justify-between gap-4">
-                            <p className="text-sm text-muted-foreground">
-                              Index listings for faster symbol search.
-                            </p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0"
-                              disabled={!!reason || running || index.isPending}
-                              onClick={() => {
-                                if (id === "binance")
-                                  index.mutate({
-                                    providerId: id,
-                                    filter: {},
                                   });
-                              }}
-                            >
-                              {running ? "Indexing…" : "Index"}
-                            </Button>
-                          </div>
-                          {reason ? (
-                            <p className="text-xs text-muted-foreground">
-                              {reason}
-                            </p>
-                          ) : null}
-                        </>
-                      ) : null}
-                      {running ? (
-                        <div role="status" className="space-y-2">
-                          <progress
-                            aria-label={`Indexing ${name} listings`}
-                            className="h-1.5 w-full accent-primary"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {job.phase === "fetching"
-                              ? `Fetching ${job.filter.quoteAsset ? `${job.filter.quoteAsset} listings` : "the complete catalog"}…`
-                              : "Saving listings…"}{" "}
-                            You can leave this page.
-                          </p>
-                        </div>
-                      ) : null}
-                      {job?.state === "succeeded" ? (
-                        <p
-                          role="status"
-                          className="text-xs text-muted-foreground"
-                        >
-                          Indexed {job.listingCount.toLocaleString()}{" "}
-                          {job.filter.quoteAsset ?? "active Spot"} listings.
-                        </p>
-                      ) : null}
+                                },
+                                onContinueWithoutSignIn: () =>
+                                  settings.update(
+                                    {
+                                      providers: {
+                                        tradingview: { enabled: true },
+                                      },
+                                    },
+                                    {
+                                      onSuccess: () =>
+                                        setEnableTradingView(false),
+                                    },
+                                  ),
+                                onCancel: () => setEnableTradingView(false),
+                                isSaving: settings.isSaving,
+                              }
+                            : undefined
+                        }
+                      />
                     </div>
-                  </CollapsibleContent>
-                ) : null}
-                <IndexFailure
-                  provider={name}
-                  job={job}
-                  retry={() => {
-                    if (id === "binance")
-                      index.mutate({ providerId: id, filter: {} });
-                  }}
-                />
-              </Collapsible>
-            );
-          })}
-          {/* Elbstream's free logo terms require a visible link of at least 12pt (16px). */}
-          <p className="pt-4 text-right text-base text-muted-foreground">
-            Logos:{" "}
-            <a
-              href="https://elbstream.com"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              Elbstream
-            </a>
-          </p>
-        </Card>
-      ) : null}
+                  ) : null}
+                  {expandable ? (
+                    <CollapsibleContent>
+                      <div className="space-y-3 pb-1 pl-7 pt-4 text-sm">
+                        {showIndex ? (
+                          <>
+                            <div className="flex items-center justify-between gap-4">
+                              <p className="text-sm text-muted-foreground">
+                                Index listings for faster symbol search.
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                                disabled={
+                                  !!reason || running || index.isPending
+                                }
+                                onClick={() => {
+                                  if (id === "binance")
+                                    index.mutate({
+                                      providerId: id,
+                                      filter: {},
+                                    });
+                                }}
+                              >
+                                {running ? "Indexing…" : "Index"}
+                              </Button>
+                            </div>
+                            {reason ? (
+                              <p className="text-xs text-muted-foreground">
+                                {reason}
+                              </p>
+                            ) : null}
+                          </>
+                        ) : null}
+                        {running ? (
+                          <div role="status" className="space-y-2">
+                            <progress
+                              aria-label={`Indexing ${name} listings`}
+                              className="h-1.5 w-full accent-primary"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              {job.phase === "fetching"
+                                ? `Fetching ${job.filter.quoteAsset ? `${job.filter.quoteAsset} listings` : "the complete catalog"}…`
+                                : "Saving listings…"}{" "}
+                              You can leave this page.
+                            </p>
+                          </div>
+                        ) : null}
+                        {job?.state === "succeeded" ? (
+                          <p
+                            role="status"
+                            className="text-xs text-muted-foreground"
+                          >
+                            Indexed {job.listingCount.toLocaleString()}{" "}
+                            {job.filter.quoteAsset ?? "active Spot"} listings.
+                          </p>
+                        ) : null}
+                      </div>
+                    </CollapsibleContent>
+                  ) : null}
+                  <IndexFailure
+                    provider={name}
+                    job={job}
+                    retry={() => {
+                      if (id === "binance")
+                        index.mutate({ providerId: id, filter: {} });
+                    }}
+                  />
+                </Collapsible>
+              );
+            })}
+          </>
+        ) : null}
+        {/* Elbstream's free logo terms require a visible link of at least 12pt (16px). */}
+        <p className="pt-4 text-right text-base text-muted-foreground">
+          Logos:{" "}
+          <a
+            href="https://elbstream.com"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            Elbstream
+          </a>
+        </p>
+      </Card>
     </SettingsPage>
   );
 }
