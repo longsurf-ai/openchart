@@ -52,7 +52,12 @@ const business = {
 };
 const prices = (symbol: string, before = 100, latest = 101) => ({
   provider: "fixture",
-  listing: { symbol, currency: "USD", mic: "XNAS" },
+  listing: {
+    symbol,
+    venue: null as string | null,
+    currency: "USD",
+    mic: "XNAS" as string | null,
+  },
   resolution: "1d",
   session: "regular",
   adjustment: "split",
@@ -357,6 +362,67 @@ test.each(["stale", "misaligned", "before-event", "future", "reversed"])(
     });
   },
 );
+
+test("keeps a currency-less TradingView index benchmark and each listing's venue in price attribution", async () => {
+  const tradingview = (
+    listing: { symbol: string; venue: string; currency: string },
+    before: number,
+    latest: number,
+  ) => ({
+    ...prices(listing.symbol, before, latest),
+    provider: "tradingview",
+    listing: { ...listing, mic: null },
+  });
+  const { result, prompts } = await execute({
+    market: (symbol) => ({
+      ...market(symbol),
+      prices: tradingview(
+        { symbol, venue: "NASDAQ", currency: "USD" },
+        100,
+        101,
+      ),
+      // TradingView reports no quote currency for indices such as SP:SPX.
+      marketBenchmark: tradingview(
+        { symbol: "SPX", venue: "SP", currency: "" },
+        200,
+        204,
+      ),
+    }),
+  });
+  expect(prompts.find((text) => text.startsWith("Collect price"))).toContain(
+    "symbol, venue, currency and mic",
+  );
+  const attributed = (symbol: string, venue: string, currency: string) => ({
+    provider: "tradingview",
+    listing: { symbol, venue, currency, mic: null },
+  });
+  expect(result).toMatchObject({
+    _tag: "Success",
+    success: {
+      findings: [
+        {
+          decision: "retain",
+          returns: { marketExcessPct: expect.closeTo(-1) },
+        },
+        { decision: "retain" },
+      ],
+      research: [
+        {
+          market: {
+            status: "success",
+            value: {
+              output: {
+                prices: attributed("AAA", "NASDAQ", "USD"),
+                marketBenchmark: attributed("SPX", "SP", ""),
+              },
+            },
+          },
+        },
+        expect.anything(),
+      ],
+    },
+  });
+});
 
 test("rejects sourced immaterial business exposure despite a positive reviewer", async () => {
   const { result } = await execute({

@@ -127,7 +127,11 @@ test("Provider-owned settings disable and restore datasets without rebuilding th
   const settings = (enabled: unknown) =>
     JSON.stringify({
       probe: "same runtime",
-      providers: { binance: { enabled }, yfinance: { enabled: false } },
+      providers: {
+        binance: { enabled },
+        yfinance: { enabled: false },
+        tradingview: { enabled: false },
+      },
     });
   await writeFile(filename, settings(false));
   const runtime = makeRuntime({

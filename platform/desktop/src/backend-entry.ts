@@ -6,6 +6,7 @@ import { Agent, setGlobalDispatcher } from "undici";
 import { createServer } from "@openchart/server";
 import { jweEncryption } from "@openchart/server/access/credential/encryption";
 import { OPENCHART_CLOUD } from "@openchart/server/access/integration/openchart-cloud";
+import { TRADINGVIEW } from "@openchart/server/access/integration/tradingview";
 import {
   HostMessage,
   type Init,
@@ -39,8 +40,9 @@ async function start(init: Init): Promise<Server> {
       integrations: {
         integrations: [
           { id: OPENCHART_CLOUD.integrationID, name: "OpenChart" },
+          { id: TRADINGVIEW.integrationID, name: "TradingView" },
         ],
-        methods: [OPENCHART_CLOUD],
+        methods: [OPENCHART_CLOUD, TRADINGVIEW],
       },
       credentialEncryption: jweEncryption(
         Buffer.from(init.credentialKey, "base64"),

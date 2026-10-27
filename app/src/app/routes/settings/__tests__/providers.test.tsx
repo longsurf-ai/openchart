@@ -21,7 +21,15 @@ import type { AppTransport } from "@openchart/app/lib/transport/transport";
 
 const rpc = vi.hoisted(() => ({
   providers: { checkAccess: { query: vi.fn() }, refresh: { mutate: vi.fn() } },
-  access: { auth: { getState: { query: vi.fn() } } },
+  access: {
+    auth: { getState: { query: vi.fn() } },
+    integration: {
+      listIntegrations: { query: vi.fn() },
+      connection: {
+        disconnect: { mutate: vi.fn() },
+      },
+    },
+  },
   feed: {
     symbology: { indexStatus: { query: vi.fn() }, index: { mutate: vi.fn() } },
   },
@@ -53,6 +61,7 @@ vi.mock("@openchart/app/hooks/use-config", () => ({
         binance: { enabled: true },
         yfinance: { enabled: true },
         openchart: { enabled: preference.openchart },
+        tradingview: { enabled: true },
       },
     },
     update: updateConfig,
@@ -69,6 +78,10 @@ beforeEach(() => {
   rpc.access.auth.getState.query.mockResolvedValue({ status: "signed-out" });
   rpc.providers.checkAccess.query.mockResolvedValue({ status: "granted" });
   rpc.providers.refresh.mutate.mockResolvedValue(undefined);
+  rpc.access.integration.listIntegrations.query.mockResolvedValue([]);
+  rpc.access.integration.connection.disconnect.mutate.mockResolvedValue(
+    undefined,
+  );
   client = createQueryClient({ defaultOptions: { queries: { retry: false } } });
   rpc.feed.symbology.indexStatus.query.mockResolvedValue([
     {
@@ -79,6 +92,12 @@ beforeEach(() => {
     },
     {
       providerId: "yfinance",
+      indexable: false,
+      available: true,
+      job: { state: "idle" },
+    },
+    {
+      providerId: "tradingview",
       indexable: false,
       available: true,
       job: { state: "idle" },
@@ -131,7 +150,7 @@ test("a completed run still describes its actual scope without exposing scope co
 test("header switches work without expanding rows; Index always requests the complete catalog", async () => {
   show();
   expect(await screen.findByText("1,250 listings indexed")).toBeInTheDocument();
-  expect(screen.getAllByText("0 listings indexed")).toHaveLength(2);
+  expect(screen.getAllByText("0 listings indexed")).toHaveLength(3);
   const disclosure = screen.getByRole("button", {
     name: /Binance.*listings indexed/,
   });
@@ -156,9 +175,14 @@ test("header switches work without expanding rows; Index always requests the com
       expect.anything(),
     ),
   );
-  fireEvent.click(screen.getByText("Yahoo Finance"));
-  expect(screen.getByText(/Full indexing is unavailable/)).toBeInTheDocument();
-  expect(screen.getAllByRole("button", { name: "Index" })[1]).toBeDisabled();
+  expect(screen.getByText("Yahoo Finance")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: /Yahoo Finance.*listings indexed/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Full indexing is unavailable/),
+  ).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Index" })).toHaveLength(1);
 });
 
 test("failed counts never become zero; running jobs show indeterminate progress and cannot restart", async () => {
@@ -347,4 +371,42 @@ test("a failed index offers Retry only when it can succeed", async () => {
   expect(
     within(internal).getByRole("button", { name: "Retry" }),
   ).toBeInTheDocument();
+});
+
+test("TradingView account actions stay visible under the provider header without expanding", async () => {
+  rpc.access.integration.listIntegrations.query.mockResolvedValue([
+    {
+      id: "tradingview",
+      name: "TradingView",
+      methods: [
+        { id: "browser", type: "oauth", label: "Sign in with your browser" },
+      ],
+      credentialSources: [
+        {
+          type: "credential",
+          id: "cred_1",
+          label: "OpenChartHQ",
+          active: true,
+        },
+      ],
+    },
+  ]);
+  show();
+  expect(
+    await screen.findByRole("button", { name: "Disconnect" }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: /TradingView.*listings indexed/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Reconnect" })).toBeVisible();
+  expect(screen.getByText("Connected as OpenChartHQ")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Index" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Index listings for faster/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Full indexing is unavailable/),
+  ).not.toBeInTheDocument();
 });

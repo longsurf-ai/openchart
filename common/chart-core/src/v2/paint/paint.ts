@@ -4088,10 +4088,16 @@ export function repaint(
       s.type === "Histogram"
         ? Locale.compact(value)
         : formatAxisValue(seriesAxis, value);
-    const countdown =
-      session && typeof session.nextCloseAt === "number"
-        ? formatCountdown(session.nextCloseAt)
+    const countdownAt =
+      session?.phase === "closed" ? session.nextOpenAt : session?.nextCloseAt;
+    const remaining =
+      typeof countdownAt === "number"
+        ? formatCountdown(countdownAt)
         : undefined;
+    const countdown =
+      remaining && session?.phase === "closed"
+        ? `Opens ${remaining}`
+        : remaining;
     ctx.save();
     ctx.font = tagFont;
     let extendedTag:

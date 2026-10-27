@@ -18,6 +18,26 @@ belongs to another user. Account
 operations call [Access](access.md) directly over tRPC; Electron supplies Clerk's
 native bridge.
 
+### TradingView sign-in
+
+Settings → Data Providers offers an optional TradingView account. Sign-in opens
+the system browser through the app's existing external-link handling, preserving
+the person's browser cookies, password manager and passkeys. Integration owns a
+short-lived private verifier; the browser URL contains only its SHA-256 challenge.
+TradingView's desktop connect endpoint accepts its own callback scheme, so the
+person uses “copy the secret key” in the browser page footer to copy the login
+link back into OpenChart. The dialog shows these instructions once. OpenChart does not
+register or take over the `tradingview://` protocol.
+
+`access.tradingview` exposes only start, complete and cancel. Completion exchanges
+the bound one-time token in the backend, validates the returned cookie session,
+and lets Integration encrypt it before reporting success. Cookies and the private
+verifier never enter renderer query data or IPC. Closing the dialog cancels the
+attempt; Integration owns expiry, cancellation and late-result arbitration.
+Failed exchanges offer a fresh attempt instead of reusing a consumed link.
+Disconnect deletes OpenChart's stored connection without signing the person out
+of their ordinary browser.
+
 ## Layout
 
 `src/` holds the three process entries and their unit tests: `main.ts` (host),

@@ -270,7 +270,8 @@ the normal failure event, and clients bootstrap from the repaired database.
 applies to each query. The tool checks `symbology_search` permission for all query
 texts at once; Analyst allows it by default, and configuration can override that. It
 then queries the currently available sources one by one through
-`Feed.get().symbology.search()` at call time, with `indexed: true` fixed. It returns
+`Feed.get().symbology.search()` at call time, with `indexed: false` fixed, so every
+available source is searched even when another source's listings are saved. It returns
 `{query, listings}[]` JSON in input order; each entry's `listings` keeps Feed's
 `ProviderListing[]` and the source identity defined by `common/market`. Feed owns
 sorting, filtering, limit, and source errors. A query with no matches returns an empty

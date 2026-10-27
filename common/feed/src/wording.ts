@@ -7,6 +7,7 @@ const providerNames: Readonly<Record<string, string>> = {
   openchart: "OpenChart Cloud",
   yfinance: "Yahoo Finance",
   binance: "Binance",
+  tradingview: "TradingView",
 };
 
 /**

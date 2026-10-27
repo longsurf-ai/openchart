@@ -55,6 +55,7 @@
     "./access/integration/router": "./access/integration/router.ts",
     "./access/integration/errors": "./access/integration/errors.ts",
     "./access/integration/layer": "./access/integration/layer.ts",
+    "./access/integration/tradingview": "./access/integration/tradingview.ts",
     "./access/integration/events": "./access/integration/events.ts",
     "./resources/catalog": "./resources/catalog.ts",
     "./resources/agent-schedule/*": "./resources/agent-schedule/*.ts",
@@ -100,7 +101,8 @@
     "./data/providers/local/market": "./data/providers/local/market/index.ts",
     "./data/providers/binance/datasets/definitions": "./data/providers/binance/datasets/definitions/index.ts",
     "./data/providers/yfinance/datasets/definitions": "./data/providers/yfinance/datasets/definitions/index.ts",
-    "./data/providers/openchart/datasets/definitions": "./data/providers/openchart/datasets/definitions/index.ts"
+    "./data/providers/openchart/datasets/definitions": "./data/providers/openchart/datasets/definitions/index.ts",
+    "./data/providers/tradingview/datasets/definitions": "./data/providers/tradingview/datasets/definitions/index.ts"
   },
   "scripts": {
     "check": "npm run db:check && tsc -p tsconfig.json && vitest run",

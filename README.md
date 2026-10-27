@@ -175,6 +175,4 @@ in public issues, pull requests, or community channels.
 
 ## License
 
-OpenChart uses the [OpenChart License](LICENSE), based on Apache 2.0 with additional
-conditions. See the license for usage and commercial terms. For commercial
-licensing, contact [legal@longsurf.ai](mailto:legal@longsurf.ai).
+OpenChart is open source under the [MIT License](LICENSE).

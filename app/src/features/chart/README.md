@@ -47,7 +47,8 @@ partial; projected empty margins are not market data.
 
 CAGR uses the same click-move-click or drag-release gesture to select main-price
 bar times, regardless of pointer height or which pane is clicked. A translucent
-time band covers the entire plot, with a four-line readout to its right. Drag
+time band covers the entire plot, with a five-line readout to its right showing
+performance, bar intervals at the current resolution and elapsed calendar time. Drag
 either boundary to adjust a completed range. Endpoints snap to loaded bars;
 reverse selection measures the same chronological interval. The range remains
 chart-local and shares Measure's cancellation, clearing and lifecycle.
@@ -86,7 +87,9 @@ that pane; hiding every curve also removes those decorations even if their own
 outputs remain enabled.
 Placement moves the whole indicator to a pane or shared axis. Reload and removal
 stay grouped. Market price tags reuse the core ticker badge with the displayed
-listing symbol; volume tags stay numeric.
+listing symbol; volume tags stay numeric. The calendar fills that badge with a
+countdown to the covered session's close, or to the next open while the market
+is closed, and shades the active pre/post block. A missing calendar omits both.
 The output list shows color markers; Appearance reads effective renderer values.
 Only explicit edits are persisted; reset removes the override. Tea visual colors
 take precedence over V1's theme-owned indicator palette, which supplies omitted
@@ -157,8 +160,8 @@ cells and all their children.
 
 ## Availability limits
 
-- Calendar Feed is unavailable: no exchange schedule, market-status, session
-  shading, or countdown is fabricated. Display timezone remains selectable.
+- Calendar failures omit session shading and the price-tag countdown. Nothing
+  is fabricated in their place. Display timezone remains selectable.
 - Indicators use Tea directly. Formula opens the study library: typing filters
   authored content and Workspace files; Enter/Send creates an ordinary Agent
   Session and navigates to its full-page chat. App composition captures the chart

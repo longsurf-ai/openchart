@@ -18,3 +18,18 @@ export const AtomicSessionType = Schema.Literals([
   "overnight",
 ]);
 export type AtomicSessionType = typeof AtomicSessionType.Type;
+
+const coveredByCoverage: Record<SessionType, readonly AtomicSessionType[]> = {
+  regular: ["regular"],
+  extended: ["pre", "regular", "post"],
+  "24h": ["pre", "regular", "post", "overnight"],
+};
+
+/** Atomic kinds a coverage selector includes. Extended omits overnight.
+ * @example coveredSessionTypes("extended");
+ */
+export function coveredSessionTypes(
+  coverage: SessionType,
+): readonly AtomicSessionType[] {
+  return coveredByCoverage[coverage];
+}

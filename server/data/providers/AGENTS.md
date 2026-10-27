@@ -21,6 +21,7 @@ owns routing, search policy, and history-window/countBack composition.
 
 <!-- HUMAN-ANNOTATION:END -->
 
+- `tradingview/` follows the same layout.
 - `configured.ts` owns activation: retire admission before replacement, drain
   accepted work, cancel stale acquisition, retry failures (never defects).
   Watchers stay active; retirement never reaches Catalog/Feed.

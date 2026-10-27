@@ -143,7 +143,8 @@ change the series fields:
 - `requests` may hold a complete config per `request.security(...)` line,
   keyed by its variable name. Usually leave it `{}`: a child left out reads
   Bars of the listing its line names. Write that symbol as a ticker id,
-  `provider:symbol`, such as `request.security("binance:ETHUSDT", "D", close)`;
+  `provider:symbol`, such as `request.security("binance:ETHUSDT", "D", close)`.
+  TradingView symbols keep their venue, `tradingview:BITSTAMP:BTCUSD`;
   `syminfo.tickerid` is the script's own listing, and timeframe `""` keeps the
   script's timeframe. The provider must have that listing and serve the
   chart's session and adjustment, so a Binance chart cannot read Yahoo stocks

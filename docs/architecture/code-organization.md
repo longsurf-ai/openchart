@@ -210,7 +210,8 @@ supplies the Clerk provider; sign-in uses Clerk's modal.
 `resources`, `feed`, `access`, `events`, `agent`, `config`, `models`, and `workspace`.
 `models.list` exposes model choices; `agent` consumes the model service for execution.
 `access/router.ts` aggregates
-child routers, currently exposing `access.integration`. Resource routes derive
+child routers: `access.integration`, the TradingView-only `access.tradingview`,
+`access.auth` and `access.billing`. Resource routes derive
 from the shared `resources/catalog.ts`; macros compose Resource transitions.
 `resources/macro-router.ts` exposes `resources.macro.createDashboardWithChart`, which
 creates a Dashboard with its initial Binance BTCUSDT Chart and placement, and

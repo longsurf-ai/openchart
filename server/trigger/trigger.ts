@@ -125,6 +125,20 @@ const execute = Effect.fn("Trigger.execute")(function* (
                   },
                 ]
               : []),
+            // The recorded event is authoritative; a symbol alone can name several venues.
+            {
+              type: "context",
+              context: {
+                kind: "resource",
+                resource: "alert_event",
+                id: eventId,
+                scope: "attached",
+              },
+            },
+            {
+              type: "text",
+              text: "Read the attached alert_event with resource_read before using market data. Use detail.data and the rule to identify the event subject and preserve its provider and full listing, including venue. For multi-symbol events, do not assume the root inputs identify the triggering subject. Never substitute another venue for the same symbol.",
+            },
             {
               type: "text",
               text: "After investigating this Alert, publish your final analysis with publish_post. Include the conclusion, supporting evidence, and uncertainty. The tool records your author and execution source and quotes the original Rule Post automatically. Do not claim publication succeeded unless the tool returns success.",

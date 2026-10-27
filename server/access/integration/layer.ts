@@ -10,6 +10,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Option,
   Schedule,
   Scope,
   SynchronizedRef,
@@ -52,6 +53,25 @@ type TerminalAttempt = Integration.OAuthAttemptStatus & {
   removeAt: number;
 };
 type AttemptEntry = PendingAttempt | TerminalAttempt;
+type Settlement =
+  | { readonly kind: "expired"; readonly attempt: PendingAttempt }
+  | {
+      readonly kind: "settled";
+      readonly attempt: PendingAttempt;
+      readonly persisted: Exit.Exit<void, Credential.StorageFailed>;
+      readonly settled: Exit.Exit<unknown, unknown>;
+    };
+type Completion =
+  | { readonly kind: "expired"; readonly scope: Scope.Closeable }
+  | {
+      readonly kind: "callback";
+      readonly fiber: Fiber.Fiber<
+        Exit.Exit<
+          Credential.OAuth,
+          AuthorizationError | Credential.StorageFailed
+        >
+      >;
+    };
 
 /**
  * Builds the registry once and owns OAuth attempts until the application scope closes.
@@ -135,20 +155,45 @@ export function layer(configuration: Configuration = {}) {
         return error instanceof Error ? error.message : String(error);
       };
 
+      const expire = (
+        attempt: PendingAttempt,
+        now: number,
+      ): TerminalAttempt => ({
+        status: "expired",
+        time: attempt.time,
+        removeAt: now + terminalRetention,
+      });
+
+      // Every outcome other than a stored or already-stored credential fails completion.
+      const notPending = (attemptID: OAuthAttemptID) =>
+        new AuthorizationError({
+          cause: new Error(`OAuth attempt is no longer pending: ${attemptID}`),
+        });
+
       const settle = Effect.fnUntraced(function* (
         attemptID: OAuthAttemptID,
         exit: Exit.Exit<Credential.OAuth, unknown>,
       ) {
-        const now = yield* Clock.currentTimeMillis;
         // Completion becomes visible only after persistence. The same lock chooses
         // whether settlement or cancellation/expiry wins; a losing callback cannot save.
         const result = yield* SynchronizedRef.modifyEffect(
           attempts,
           (current) =>
-            Effect.gen(function* () {
+            Effect.gen(function* (): Effect.fn.Return<
+              readonly [
+                Settlement | undefined,
+                Map<OAuthAttemptID, AttemptEntry>,
+              ]
+            > {
               const attempt = current.get(attemptID);
               if (!attempt || attempt.status !== "pending")
                 return [undefined, current] as const;
+              const now = yield* Clock.currentTimeMillis;
+              if (attempt.time.expires <= now)
+                return [
+                  { kind: "expired" as const, attempt },
+                  new Map(current).set(attemptID, expire(attempt, now)),
+                ] as const;
               const persisted = yield* Effect.gen(function* () {
                 if (Exit.isFailure(exit)) return;
                 const implementation = integrations
@@ -173,13 +218,15 @@ export function layer(configuration: Configuration = {}) {
                   : { status: "failed", message: message(settled.cause) }),
               };
               return [
-                { attempt, persisted, settled },
+                { kind: "settled" as const, attempt, persisted, settled },
                 new Map(current).set(attemptID, terminal),
               ] as const;
             }),
         );
-        if (!result) return;
+        // A losing callback fails, so completion never reports an unsaved credential.
+        if (!result) return yield* notPending(attemptID);
         yield* Effect.gen(function* () {
+          if (result.kind === "expired") return yield* notPending(attemptID);
           if (Exit.isSuccess(result.settled)) {
             yield* events.publish(Event.Updated, {});
           }
@@ -208,11 +255,7 @@ export function layer(configuration: Configuration = {}) {
           for (const [id, attempt] of current) {
             if (attempt.status === "pending" && attempt.time.expires <= now) {
               scopes.push(attempt.scope);
-              next.set(id, {
-                status: "expired",
-                time: attempt.time,
-                removeAt: now + terminalRetention,
-              });
+              next.set(id, expire(attempt, now));
               continue;
             }
             if (attempt.status !== "pending" && attempt.removeAt <= now)
@@ -387,14 +430,27 @@ export function layer(configuration: Configuration = {}) {
               const completion = yield* SynchronizedRef.modifyEffect(
                 attempts,
                 (current) =>
-                  Effect.gen(function* () {
+                  Effect.gen(function* (): Effect.fn.Return<
+                    readonly [
+                      Completion | undefined,
+                      Map<OAuthAttemptID, AttemptEntry>,
+                    ],
+                    CodeRequiredError | AuthorizationError
+                  > {
                     const attempt = current.get(input.attemptID);
-                    if (!attempt)
-                      return yield* Effect.die(
-                        `OAuth attempt not found: ${input.attemptID}`,
-                      );
-                    if (attempt.status !== "pending")
+                    if (attempt?.status === "complete")
                       return [undefined, current] as const;
+                    if (attempt?.status !== "pending")
+                      return yield* notPending(input.attemptID);
+                    const now = yield* Clock.currentTimeMillis;
+                    if (attempt.time.expires <= now)
+                      return [
+                        { kind: "expired" as const, scope: attempt.scope },
+                        new Map(current).set(
+                          input.attemptID,
+                          expire(attempt, now),
+                        ),
+                      ] as const;
                     if (
                       attempt.authorization.mode === "code" &&
                       input.code === undefined
@@ -403,10 +459,13 @@ export function layer(configuration: Configuration = {}) {
                         attemptID: input.attemptID,
                       });
                     }
+                    // A duplicate claim fails without waiting for or replaying the first exchange.
                     if (attempt.completing)
-                      return yield* Effect.die(
-                        `OAuth attempt already completing: ${input.attemptID}`,
-                      );
+                      return yield* new AuthorizationError({
+                        cause: new Error(
+                          `OAuth attempt already completing: ${input.attemptID}`,
+                        ),
+                      });
                     const authorization = attempt.authorization;
                     const callback =
                       authorization.mode === "auto"
@@ -420,19 +479,39 @@ export function layer(configuration: Configuration = {}) {
                       authorize(callback),
                     );
                     return [
-                      completion,
+                      { kind: "callback" as const, fiber: completion },
                       new Map(current).set(input.attemptID, {
                         ...attempt,
                         completing: true,
                       }),
                     ] as const;
                   }),
-              ).pipe(Effect.uninterruptible);
-              if (completion)
-                yield* Fiber.join(completion).pipe(
-                  Effect.flatten,
-                  Effect.asVoid,
-                );
+              ).pipe(
+                Effect.flatMap((completion) =>
+                  completion?.kind === "expired"
+                    ? close(completion.scope).pipe(
+                        Effect.andThen(
+                          Effect.fail(notPending(input.attemptID)),
+                        ),
+                      )
+                    : Effect.succeed(completion),
+                ),
+                Effect.uninterruptible,
+              );
+              if (!completion) return;
+              const outcome = yield* Fiber.await(completion.fiber);
+              const exit: Exit.Exit<
+                unknown,
+                AuthorizationError | Credential.StorageFailed
+              > = Exit.isSuccess(outcome) ? outcome.value : outcome;
+              if (Exit.isSuccess(exit)) return;
+              // Settlement fails a callback that lost to cancellation or expiry;
+              // a cause holding only the interruption gets the same failure.
+              const error = Cause.findErrorOption(exit.cause);
+              if (Option.isSome(error)) return yield* Effect.fail(error.value);
+              if (Cause.hasDies(exit.cause))
+                return yield* Effect.failCause(exit.cause);
+              return yield* notPending(input.attemptID);
             },
           ),
           cancel: Effect.fn("Integration.oauthAttempt.cancel")(

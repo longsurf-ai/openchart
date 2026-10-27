@@ -16,9 +16,11 @@ export const Parameters = Schema.Struct({
 }).annotate({ parseOptions: { onExcessProperty: "error" } });
 
 /**
- * Searches each query against the current Feed after one permission check. Results
- * retain input order and provider identity; each query has its own limit. Feed
- * failures and cancellation propagate unchanged. Initialization captures no Feed.
+ * Searches each query live against every source the current Feed has after one
+ * permission check, so a source that became available after other sources'
+ * listings were saved is still searched. Results retain input order and provider
+ * identity; each query has its own limit. Feed failures and cancellation
+ * propagate unchanged. Initialization captures no Feed.
  * @example
  * const tool = yield* Tool.init(yield* SymbologySearchTool);
  * yield* tool.execute({queries: ['AAPL', 'MSFT'], limit: 5}, context);
@@ -43,7 +45,7 @@ export const SymbologySearchTool = Tool.define(
       const services = yield* (yield* Feed).get();
       const results = yield* Effect.forEach(queries, (query) =>
         services.symbology
-          .search({ ...searchOptions, query, indexed: true })
+          .search({ ...searchOptions, query, indexed: false })
           .pipe(Effect.map((listings) => ({ query, listings }))),
       );
       return {

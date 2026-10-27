@@ -8,6 +8,23 @@ const bySymbol = {
     listing.symbol.toUpperCase() === symbol.toUpperCase(),
 };
 
+// TradingView lists one symbol on many venues (BITSTAMP:BTCUSD and
+// COINBASE:BTCUSD), so it writes `VENUE:SYMBOL`, the symbol its bars read: an
+// already qualified symbol as it is, otherwise the listing's venue before it.
+// A listing with neither has no ticker id, and a symbol without a venue names
+// no listing, so no venue is ever substituted.
+const venueSymbol = (listing: Listing) =>
+  listing.symbol.includes(":")
+    ? listing.symbol
+    : listing.venue
+      ? `${listing.venue}:${listing.symbol}`
+      : undefined;
+const byVenueSymbol = {
+  symbol: venueSymbol,
+  names: (symbol: string, listing: Listing) =>
+    venueSymbol(listing)?.toUpperCase() === symbol.toUpperCase(),
+};
+
 // How each provider writes a listing's symbol in a ticker id, and which
 // listing a symbol names. Every provider's rule lives here and nowhere else;
 // a provider whose listings also carry numeric ids can still be named by
@@ -16,7 +33,7 @@ const providers: Readonly<
   Record<
     string,
     {
-      readonly symbol: (listing: Listing) => string;
+      readonly symbol: (listing: Listing) => string | undefined;
       readonly names: (symbol: string, listing: Listing) => boolean;
     }
   >
@@ -24,6 +41,7 @@ const providers: Readonly<
   binance: bySymbol,
   // OpenChart listings also carry numeric ids; scripts still name them by symbol.
   openchart: bySymbol,
+  tradingview: byVenueSymbol,
   yfinance: bySymbol,
 };
 
@@ -32,24 +50,28 @@ const rulesOf = (provider: string) =>
 
 /**
  * A listing's ticker id, `<provider>:<symbol>`, the way a script names it in
- * `request.security` and reads it as `syminfo.tickerid`. Undefined for a
- * provider without ticker ids.
+ * `request.security` and reads it as `syminfo.tickerid`. TradingView's symbol
+ * keeps the venue, `tradingview:<VENUE>:<SYMBOL>`. Undefined for a provider
+ * without ticker ids, or a TradingView listing without a venue.
  *
  * @example tickerId({ provider: "binance", listing }); // "binance:BTCUSDT"
+ * @example tickerId({ provider: "tradingview", listing }); // "tradingview:BITSTAMP:BTCUSD"
  */
 export function tickerId({
   provider,
   listing,
 }: ProviderListing): string | undefined {
-  const rules = rulesOf(provider);
-  return rules && `${provider}:${rules.symbol(listing)}`;
+  const symbol = rulesOf(provider)?.symbol(listing);
+  return symbol === undefined ? undefined : `${provider}:${symbol}`;
 }
 
 /**
  * Read a ticker id written as `<provider>:<symbol>`: the provider (matched
  * ignoring case, so `BINANCE:BTCUSDT` works too), the symbol to search for,
- * and whether a search hit is the listing it names. Undefined when the text
- * has no provider or symbol, or the provider has no ticker ids.
+ * and whether a search hit is the listing it names, ignoring case. A
+ * TradingView symbol names only the listing at its venue
+ * (`tradingview:BITSTAMP:BTCUSD`); without one it names none. Undefined when
+ * the text has no provider or symbol, or the provider has no ticker ids.
  *
  * @example
  * const ticker = parseTickerId("binance:ETHUSDT");

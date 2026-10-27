@@ -47,7 +47,9 @@ const Prices = Schema.Struct({
   provider: Text,
   listing: Schema.Struct({
     symbol: Text,
-    currency: Text,
+    venue: Schema.NullOr(Text),
+    // Empty when the source reports no quote currency, such as an index or yield.
+    currency: Schema.String,
     mic: Schema.NullOr(Text),
   }),
   resolution: Text,
@@ -249,7 +251,7 @@ export default defineWorkflow({
                 agent(
                   prompt(
                     [
-                      "Collect price evidence independently of the beneficiary thesis. Resolve this exact company/exchange with symbology_search, preserve the full provider and listing unchanged in tool calls, discover capabilities and fetch market_data. For report attribution, copy provider plus the listing's symbol, currency and mic (null if absent). Never silently substitute another listing. Return null for unavailable series.",
+                      "Collect price evidence independently of the beneficiary thesis. Resolve this exact company/exchange with symbology_search, preserve the full provider and listing unchanged in tool calls, discover capabilities and fetch market_data. For report attribution, copy provider plus the listing's symbol, venue, currency and mic exactly as returned: venue and mic are null if absent, and currency stays an empty string when the listing has none. Never fill in a currency or exchange, and never silently substitute another listing. Return null for unavailable series.",
                       "Use a consistent resolution, trading session and adjustment for the candidate, broad-market benchmark and an appropriate sector benchmark. Supply three comparable completed price observations: lookback about 20 trading sessions before the event, beforeEvent immediately before the first public catalyst, and latest after the event and no later than the fixed cutoff. time is when that closing observation was available, not the opening timestamp of an unfinished candle. Explain exact windows and any gaps; never infer a close timestamp you cannot establish.",
                       "Benchmark observations must use the same timestamps as the candidate. Set status unavailable if the candidate or market benchmark is missing, stale, still forming, not yet trading after the event, or incomparable. A cutoff is not a freshness guarantee. Describe sourced volatility context or explicitly say unknown; do not invent normal volatility, returns or thresholds. The workflow computes returns from the observations.",
                       eventContext,

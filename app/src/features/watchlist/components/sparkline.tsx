@@ -1,10 +1,11 @@
 // Purpose: Draw a listing's latest session day against its previous close, as V1's Price History column did.
 import { barsSeries, resolutionMs, type BarsRequest } from "@openchart/feed";
-import type {
-  ProviderListing,
-  SessionType,
-  TradingDay,
-  TradingSession,
+import {
+  coveredSessionTypes,
+  type ProviderListing,
+  type SessionType,
+  type TradingDay,
+  type TradingSession,
 } from "@openchart/market";
 import { mergeByTime } from "@openchart/timeseries";
 import { useObservable, useObservableState } from "observable-hooks";
@@ -67,15 +68,11 @@ export function sparklineShape(
 ): SparklineShape | null {
   const last = times.at(-1);
   if (last === undefined) return null;
+  const allowed = coveredSessionTypes(session);
   // Days ascend, so the last match is the latest day that has begun.
   let day: TradingSession[] | undefined;
   for (const { sessions } of days) {
-    const covered = sessions.filter(
-      ({ type }) =>
-        session === "24h" ||
-        type === "regular" ||
-        (session === "extended" && type !== "overnight"),
-    );
+    const covered = sessions.filter(({ type }) => allowed.includes(type));
     if (covered[0] && covered[0].start <= last) day = covered;
   }
   let first = times.length - 1;

@@ -133,7 +133,9 @@ export function SymbolSearch({
               {hit.listing.name}
             </span>
             <span className="text-xs text-muted-foreground">
-              {hit.provider} · {hit.listing.currency}
+              {[hit.provider, hit.listing.venue, hit.listing.currency]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           </button>
         ))}

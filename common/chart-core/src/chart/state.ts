@@ -131,9 +131,15 @@ export namespace Chart {
     /**
      * Unix seconds of the next countdown boundary. For equity this is the
      * venue's next regular-session close; for crypto it is the next UTC
-     * midnight (daily bar close). Undefined means "no countdown".
+     * midnight (daily bar close). Undefined means "no close countdown".
+     * A closed market counts down to `nextOpenAt` instead.
      */
     nextCloseAt?: number;
+    /**
+     * Unix seconds when the next covered session opens. The badge counts down
+     * to it while `phase` is `"closed"`.
+     */
+    nextOpenAt?: number;
     /**
      * Unix seconds of the current countdown/session window start. Used by the
      * renderer to shade the whole active pre/post block even before future

@@ -40,4 +40,5 @@ See [README.md](README.md) and [architecture](../../../../docs/architecture/char
   decides once `useTeaDefinition` settles on the post-save read.
 - menus.tsx/chart-explain-drawings.tsx may use Effect Schema for Drawing input.
 - MarketVisuals tags intraday Extended/24h bars with calendar sessions;
-  failures only omit shading.
+  failures only omit shading. MarketSource fills the core price-tag countdown
+  from that calendar, including time until the next open; failures omit it.
