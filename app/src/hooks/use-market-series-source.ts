@@ -6,7 +6,7 @@ import {
   type Resolution,
 } from "@openchart/feed";
 import { mergeByTime, type DataFrame } from "@openchart/timeseries";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { debounceTime, filter, map } from "rxjs";
 import { useStore } from "zustand";
 
@@ -93,8 +93,27 @@ export function useMarketSeriesSource(
   const pendingGesture = useRef<{
     view: NonNullable<typeof current>;
     baseViewport: ChartPreferences["viewport"];
-    viewport: ChartPreferences["viewport"];
+    intent: Pick<ChartPreferences, "viewport" | "barSpacing" | "rightOffset">;
   }>();
+  const saveGesture = useCallback(
+    (gesture: NonNullable<typeof pendingGesture.current>) => {
+      if (
+        gesture.view !== current ||
+        gesture.baseViewport !== localStore.getState().viewport
+      )
+        return;
+      const { intent } = gesture;
+      localStore.setState((previous) =>
+        previous.barSpacing === intent.barSpacing &&
+        previous.rightOffset === intent.rightOffset &&
+        previous.viewport?.from === intent.viewport?.from &&
+        previous.viewport?.to === intent.viewport?.to
+          ? previous
+          : intent,
+      );
+    },
+    [current, localStore],
+  );
   const [projectionError, setProjectionError] = useState<string>();
   const [materialized, setMaterialized] = useState<{
     view: typeof current;
@@ -190,7 +209,7 @@ export function useMarketSeriesSource(
           const historical =
             main &&
             (gesture?.view === current && gesture.baseViewport === saved
-              ? gesture.viewport !== null
+              ? gesture.intent.viewport !== null
               : saved !== null ||
                 v2.XScale.getAxis(state.config.xAxis).spacing.rightOffset < 0);
           // Preserve continuous coordinates through data changes, including a
@@ -239,28 +258,28 @@ export function useMarketSeriesSource(
           pendingGesture.current = {
             view: current,
             baseViewport: localStore.getState().viewport,
-            viewport: intent.viewport,
+            intent,
           };
-          return intent;
+          return pendingGesture.current;
         }),
         filter((intent) => intent !== undefined),
         debounceTime(300),
       )
-      .subscribe((intent) => {
-        localStore.setState((previous) =>
-          previous.barSpacing === intent.barSpacing &&
-          previous.rightOffset === intent.rightOffset &&
-          previous.viewport?.from === intent.viewport?.from &&
-          previous.viewport?.to === intent.viewport?.to
-            ? previous
-            : intent,
-        );
-      });
+      .subscribe(saveGesture);
     return () => {
       subscription.unsubscribe();
       pendingGesture.current = undefined;
     };
-  }, [chart, current, request, preferences.viewport, localStore, main, step]);
+  }, [
+    chart,
+    current,
+    request,
+    preferences.viewport,
+    localStore,
+    main,
+    step,
+    saveGesture,
+  ]);
 
   useLayoutEffect(() => {
     const subscription = chart.output$
@@ -288,26 +307,32 @@ export function useMarketSeriesSource(
           return;
         const visible = Math.max(1, range.to - range.from),
           pad = Math.max(2, Math.floor(visible * 0.1));
+        const before =
+          current.hasMoreBefore &&
+          from < current.data.get(0)!.time + pad * step;
+        const after = request.to !== "now" && to >= request.to;
+        if (!before && !after) return;
+        // Both debounces have observed every interaction. If paging runs first,
+        // commit its captured intent before changing request and cancelling the
+        // other timer. A later explicit viewport invalidates the scoped record.
+        if (pendingGesture.current) saveGesture(pendingGesture.current);
         // History starts at the snapshot's first bar. Depending on the live frame
         // would cancel pending pans on every tick.
-        if (
-          current.hasMoreBefore &&
-          from < current.data.get(0)!.time + pad * step
-        )
+        if (before)
           setWindow((previous) => ({
             ...previous,
             from: Math.min(previous.from, Math.floor(from - visible * step)),
             countBack:
               previous.countBack + Math.max(120, Math.ceil(visible * 1.25)),
           }));
-        else if (request.to !== "now" && to >= request.to)
+        else
           setWindow((previous) => ({
             ...previous,
             to: to >= Date.now() - step ? "now" : Math.ceil(to + step),
           }));
       });
     return () => subscription.unsubscribe();
-  }, [chart, current, status, request, step]);
+  }, [chart, current, status, request, step, saveGesture]);
 
   useLayoutEffect(() => {
     const viewport = preferences.viewport;

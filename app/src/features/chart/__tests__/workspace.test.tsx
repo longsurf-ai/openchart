@@ -1642,3 +1642,70 @@ it("records fractional renderer movement even when the integer visible range is 
   expect(fixture.local.getState().rightOffset).toBe(0.25);
   fixture.view.unmount();
 });
+
+it.each([false, true])(
+  "saves a gesture before paging can cancel its timer (prior viewport change: %s)",
+  (priorViewportChange) => {
+    vi.useFakeTimers();
+    const fixture = loadedMarket(Math.floor(Date.now() / 60_000) * 60_000);
+    if (priorViewportChange)
+      act(() =>
+        fixture.local.setState({
+          viewport: {
+            from: fixture.to - 140 * 60_000,
+            to: fixture.to - 60 * 60_000,
+          },
+          rightOffset: 0,
+        }),
+      );
+    const timers: Array<{
+      id: ReturnType<typeof setInterval>;
+      run: () => void;
+      cancelled: boolean;
+    }> = [];
+    const originalSet = globalThis.setInterval;
+    const originalClear = globalThis.clearInterval;
+    const schedule = vi
+      .spyOn(globalThis, "setInterval")
+      .mockImplementation((handler, delay, ...args) => {
+        const id = originalSet(handler, delay, ...args);
+        if (delay === 300 && typeof handler === "function") {
+          expect(args).toHaveLength(0);
+          timers.push({ id, run: handler as () => void, cancelled: false });
+        }
+        return id;
+      });
+    const clear = vi
+      .spyOn(globalThis, "clearInterval")
+      .mockImplementation((id) => {
+        const timer = timers.find((timer) => timer.id === id);
+        if (timer) timer.cancelled = true;
+        originalClear(id);
+      });
+    try {
+      act(() =>
+        mocks.renderers
+          .at(-1)!
+          .config.setState((state) =>
+            v2.ChartStateUtils.setVisibleRange(state, -30, 70),
+          ),
+      );
+      const intended = fixture.exactVisible();
+      const calls = fixture.calls.length;
+      expect(timers).toHaveLength(2);
+      vi.setSystemTime(Date.now() + 300);
+      // Each browser timer is a separate task. Flush its React commit before the
+      // next callback; batching both callbacks in one act hides cancellation.
+      act(() => timers[0]!.run());
+      expect(fixture.calls).toHaveLength(calls + Number(priorViewportChange));
+      for (const timer of timers.slice(1))
+        if (!timer.cancelled) act(() => timer.run());
+      expect(fixture.calls).toHaveLength(calls + 1);
+      expect(fixture.local.getState().viewport).toEqual(intended);
+    } finally {
+      fixture.view.unmount();
+      schedule.mockRestore();
+      clear.mockRestore();
+    }
+  },
+);
