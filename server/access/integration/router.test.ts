@@ -14,6 +14,7 @@ import { Context, Effect, Layer, ManagedRuntime } from "effect";
 import { expect, expectTypeOf, test, vi } from "vitest";
 
 import { Integration } from "./integration";
+import { TRADINGVIEW, tradingViewBrowserMethod } from "./tradingview";
 
 const integrationID = Integration.IntegrationID.make("example-provider");
 const credentialID = Credential.ID.make("cred_example");
@@ -42,10 +43,12 @@ function implementation() {
       disconnect: vi.fn(() => Effect.void),
     },
     oauthAttempt: {
-      start: vi.fn(internal),
-      getStatus: vi.fn(internal),
-      complete: vi.fn(internal),
-      cancel: vi.fn(internal),
+      start: vi.fn<Integration.Interface["oauthAttempt"]["start"]>(internal),
+      getStatus:
+        vi.fn<Integration.Interface["oauthAttempt"]["getStatus"]>(internal),
+      complete:
+        vi.fn<Integration.Interface["oauthAttempt"]["complete"]>(internal),
+      cancel: vi.fn<Integration.Interface["oauthAttempt"]["cancel"]>(internal),
     },
   } satisfies Integration.Interface;
 }
@@ -124,6 +127,101 @@ test("mounts only provider listing and API-key management under access.integrati
       "setApiKey" | "disconnect"
     >();
   } finally {
+    await server.close();
+  }
+});
+
+const loginLink = "tradingview://browser-auth/?token=private-one-time-token";
+
+test("TradingView routes exchange one copied link through real Integration without exposing secrets", async () => {
+  const requests: string[] = [];
+  const fetcher: typeof fetch = async (input) => {
+    requests.push(String(input));
+    if (!String(input).includes("/accounts/tvd/complete/"))
+      return new Response(
+        '<script>var user = {"username":"alice","auth_token":"private-chart-token"};</script>',
+      );
+    const headers = new Headers();
+    headers.append("set-cookie", "sessionid=private-session; Path=/; Secure");
+    return new Response("{}", { headers });
+  };
+  const server = await serve(undefined, {
+    methods: [tradingViewBrowserMethod(fetcher)],
+  });
+  const client = server.client.access.tradingview;
+  try {
+    const attempt = await client.start.mutate();
+    expect(new URL(attempt.url).origin).toBe("https://auth.tradingview.com");
+    await expect(
+      client.complete.mutate({
+        attemptID: attempt.attemptID,
+        link: "https://example.com/?token=private-token",
+      }),
+    ).rejects.toThrow("Authorization failed");
+    expect(requests).toEqual([]);
+    expect(
+      await client.complete.mutate({
+        attemptID: attempt.attemptID,
+        link: loginLink,
+      }),
+    ).toEqual({ status: "complete" });
+    expect(requests).toHaveLength(2);
+    const connected = (
+      await server.client.access.integration.listIntegrations.query()
+    ).find((item) => item.id === TRADINGVIEW.integrationID);
+    expect(connected?.credentialSources).toMatchObject([
+      { label: "alice", active: true },
+    ]);
+    await client.cancel.mutate({ attemptID: attempt.attemptID });
+    await client.cancel.mutate({ attemptID: attempt.attemptID });
+    expect(JSON.stringify({ attempt, connected })).not.toContain("private-");
+  } finally {
+    await server.close();
+  }
+});
+
+test("TradingView completion failures stay generic and never report an unsaved connection", async () => {
+  const server = await serve(undefined, {
+    methods: [
+      tradingViewBrowserMethod(async (input) => {
+        throw new Error(`Network failure for ${String(input)}`);
+      }),
+    ],
+  });
+  const logged = [
+    vi.spyOn(console, "error").mockImplementation(() => {}),
+    vi.spyOn(console, "warn").mockImplementation(() => {}),
+  ];
+  const complete = (attemptID: string) =>
+    fetch(`${server.url}/access.tradingview.complete`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ attemptID, link: loginLink }),
+    });
+  try {
+    const { attemptID } = await server.client.access.tradingview.start.mutate();
+    // Missing, freshly failed and already failed attempts all fail authorization.
+    for (const id of [
+      Integration.OAuthAttemptID.create(),
+      attemptID,
+      attemptID,
+    ]) {
+      const response = await complete(id);
+      expect(response.status).toBe(400);
+      const body = await response.text();
+      expect(body).toContain("Authorization failed");
+      expect(body).not.toContain("private-one-time-token");
+    }
+    expect(
+      (await server.client.access.integration.listIntegrations.query()).find(
+        (item) => item.id === TRADINGVIEW.integrationID,
+      )?.credentialSources,
+    ).toEqual([]);
+    const output = JSON.stringify(logged.map((spy) => spy.mock.calls));
+    expect(output).not.toContain("private-one-time-token");
+    expect(output).not.toContain("key_source");
+  } finally {
+    for (const spy of logged) spy.mockRestore();
     await server.close();
   }
 });

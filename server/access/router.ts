@@ -3,6 +3,7 @@
 import { billingRouter } from "@openchart/server/access/billing/router";
 import { authRouter } from "@openchart/server/access/auth/router";
 import { integrationRouter } from "@openchart/server/access/integration/router";
+import { tradingviewRouter } from "./integration/tradingview-router";
 import { trpc } from "@openchart/server/lib/trpc";
 
 /**
@@ -14,6 +15,7 @@ import { trpc } from "@openchart/server/lib/trpc";
  */
 export const accessRouter = trpc.router({
   integration: integrationRouter,
+  tradingview: tradingviewRouter,
   auth: authRouter,
   billing: billingRouter,
 });

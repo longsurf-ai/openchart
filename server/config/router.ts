@@ -17,6 +17,7 @@ export const Settings = Schema.Struct({
   ),
   providers: Schema.Struct({
     openchart: ProviderSettings,
+    tradingview: ProviderSettings,
     binance: ProviderSettings,
     yfinance: ProviderSettings,
   }).pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),

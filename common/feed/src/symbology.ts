@@ -17,22 +17,61 @@ export const SymbolSearchResult = Schema.Array(ProviderListing);
 export type SymbolSearchResult = typeof SymbolSearchResult.Type;
 
 /**
+ * Reads a query's search conveniences without rewriting any listing identity.
+ * `VENUE:SYMBOL` names an uppercase venue, ignoring spaces around the colon. An
+ * unnumbered continuous future such as `NQ!` also names `NQ1!`; numbered
+ * contracts, repeated `!` and other text stay literal. Sources and ranking
+ * share this one grammar.
+ * @example parseSymbolQuery("cme_mini : nq!"); // {venue: "CME_MINI", symbol: "nq!", continuous: "nq1!"}
+ */
+export function parseSymbolQuery(query: string): {
+  readonly venue?: string;
+  readonly symbol: string;
+  readonly continuous?: string;
+} {
+  const text = query.trim();
+  const qualified = /^([^:\s]+)\s*:\s*([^:\s]+)$/.exec(text);
+  const symbol = qualified?.[2] ?? text;
+  const root = /^([^\s:!]*[^\d\s:!])!$/.exec(symbol)?.[1];
+  return {
+    ...(qualified ? { venue: qualified[1]!.toUpperCase() } : {}),
+    symbol,
+    ...(root === undefined ? {} : { continuous: `${root}1!` }),
+  };
+}
+
+/**
  * Stable search order shared by saved and live results: the exact symbol, then
- * symbols and then names starting with the query, then other matches; ties sort
- * by symbol. Ranks come from the query alone; source scores are never compared.
+ * symbols and then names starting with the query, then other matches. Within a
+ * rank, a source's primary listing comes first, then symbols sort by symbol,
+ * provider, venue and name. Ranks come from the query alone; source scores are
+ * never compared. A {@link parseSymbolQuery} venue also ranks the symbol at
+ * that venue, and a continuous alias also matches its first contract. Literal
+ * matches remain eligible and listing identities are never rewritten.
  * @example hits.sort(compareSymbolListings(request.query));
  */
 export function compareSymbolListings(query: string) {
   const text = query.trim().toUpperCase();
+  const { venue, symbol: symbolText, continuous } = parseSymbolQuery(text);
   const rank = ({ listing }: ProviderListing) => {
     const symbol = listing.symbol.toUpperCase();
-    if (symbol === text) return 0;
-    if (symbol.startsWith(text)) return 1;
-    if (listing.name?.toUpperCase().startsWith(text)) return 2;
-    return 3;
+    const name = listing.name?.toUpperCase();
+    const match = (value: string) => {
+      if (symbol === value) return 0;
+      if (symbol.startsWith(value)) return 1;
+      if (name?.startsWith(value)) return 2;
+      return 3;
+    };
+    const literal = match(text);
+    if (venue && listing.venue?.toUpperCase() !== venue) return literal;
+    return Math.min(
+      literal,
+      match(symbolText),
+      continuous ? match(continuous) : 3,
+    );
   };
   const key = ({ provider, listing }: ProviderListing) =>
-    `${listing.symbol.toUpperCase()}\0${provider}\0${listing.venue}\0${listing.name}`;
+    `${listing.symbol.toUpperCase()}\0${provider}\0${listing.primary === true ? "0" : "1"}\0${listing.venue}\0${listing.name}`;
   return (a: ProviderListing, b: ProviderListing): number => {
     const left = key(a);
     const right = key(b);

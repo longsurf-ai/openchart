@@ -4,9 +4,21 @@ import { FeedError, FeedReasons, SymbolSearchResult } from "@openchart/feed";
 import { ProviderId } from "@openchart/market";
 import { InvalidArgumentsError } from "@openchart/server/agent/tool/errors";
 import * as Tool from "@openchart/server/agent/tool/tool";
+import { Database } from "@openchart/server/db";
 import { Feed } from "@openchart/server/feed/service";
 import type { ISymbologyFeedService } from "@openchart/server/feed/symbology/service";
-import { Cause, Deferred, Effect, Exit, Fiber, Result, Schema } from "effect";
+import { SymbologyIndex } from "@openchart/server/feed/symbology/symbology";
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  ManagedRuntime,
+  Result,
+  Schema,
+} from "effect";
 import { expect, test, vi } from "vitest";
 import { Parameters, SymbologySearchTool } from "./symbology-search";
 
@@ -89,8 +101,8 @@ test("groups live results by query in input order and preserves provider identit
         ],
       });
       expect(search.mock.calls).toEqual([
-        [{ query: "ABC", limit: 10, assetClass: "stock", indexed: true }],
-        [{ query: "MSFT", limit: 10, assetClass: "stock", indexed: true }],
+        [{ query: "ABC", limit: 10, assetClass: "stock", indexed: false }],
+        [{ query: "MSFT", limit: 10, assetClass: "stock", indexed: false }],
       ]);
       expect(feed.get).toHaveBeenCalledOnce();
       expect(ask).toHaveBeenCalledExactlyOnceWith({
@@ -119,6 +131,58 @@ test("groups live results by query in input order and preserves provider identit
       expect(search).toHaveBeenCalledTimes(2);
     }).pipe(Effect.provideService(Feed, feed)),
   );
+});
+
+test("searches a source that became available after another source's listings were saved", async () => {
+  const runtime = ManagedRuntime.make(
+    SymbologyIndex.layer.pipe(
+      Layer.provideMerge(Database.layer(":memory:", () => Effect.void)),
+    ),
+  );
+  try {
+    const [binance, tradingview] = Schema.decodeUnknownSync(SymbolSearchResult)(
+      [
+        {
+          provider: "binance",
+          listing: { symbol: "BTCUSDT", currency: "USDT" },
+        },
+        {
+          provider: "tradingview",
+          listing: { symbol: "BTCUSD", venue: "BITSTAMP", currency: "USD" },
+        },
+      ],
+    );
+    const request = { query: "BTC", limit: 10, indexed: true };
+    const owner = await runtime.runPromise(SymbologyIndex);
+    const binanceSource = {
+      providerId: binance!.provider,
+      search: () => Effect.succeed([binance!]),
+    };
+    // Binance's hit is saved before TradingView is available.
+    await runtime.runPromise(owner.provision([binanceSource]).search(request));
+    const tradingviewSearch = vi.fn(() => Effect.succeed([tradingview!]));
+    const symbology = owner.provision([
+      binanceSource,
+      { providerId: tradingview!.provider, search: tradingviewSearch },
+    ]);
+    // Indexed search still answers from the saved hit alone.
+    expect(await runtime.runPromise(symbology.search(request))).toEqual([
+      binance,
+    ]);
+    expect(tradingviewSearch).not.toHaveBeenCalled();
+    const result = await runtime.runPromise(
+      Effect.gen(function* () {
+        const tool = yield* Tool.init(yield* SymbologySearchTool);
+        return yield* tool.execute({ queries: ["BTC"], limit: 10 }, context);
+      }).pipe(Effect.provideService(Feed, fixture(symbology.search))),
+    );
+    expect(result.output).toEqual({
+      type: "json",
+      value: [{ query: "BTC", listings: [tradingview, binance] }],
+    });
+  } finally {
+    await runtime.dispose();
+  }
 });
 
 test("waits for permission before reading Feed and preserves rejection", async () => {

@@ -218,11 +218,12 @@ test.each(["auto", "code"] as const)(
         expect(
           yield* service.oauthAttempt.getStatus(attempt.attemptID),
         ).toMatchObject({ status: "failed", message: expect.any(String) });
+        expect(
+          yield* service.oauthAttempt
+            .complete({ attemptID: attempt.attemptID, code: "retry" })
+            .pipe(Effect.flip),
+        ).toBeInstanceOf(Integration.AuthorizationError);
         expect(yield* credentials.list(integrationID)).toEqual([saved]);
-        yield* service.oauthAttempt.complete({
-          attemptID: attempt.attemptID,
-          code: "retry",
-        });
       }),
       {
         methods: [
@@ -264,19 +265,24 @@ test("failed authorize closes its scope and preserves the original typed cause",
   );
 });
 
-test("unknown OAuth methods and attempts preserve upstream defects and missing cancel is a no-op", () =>
+test("unknown OAuth methods and status reads are defects; missing attempts fail completion and cancel is a no-op", () =>
   run(
     Effect.gen(function* () {
       const service = yield* Integration.Service;
       const missing = Integration.OAuthAttemptID.create();
-      for (const operation of [
+      const operations: Effect.Effect<unknown, unknown>[] = [
         service.oauthAttempt.start({ integrationID, methodID, inputs: {} }),
         service.oauthAttempt.getStatus(missing),
-        service.oauthAttempt.complete({ attemptID: missing, code: "123" }),
-      ]) {
+      ];
+      for (const operation of operations) {
         const exit = yield* operation.pipe(Effect.exit);
         expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true);
       }
+      expect(
+        yield* service.oauthAttempt
+          .complete({ attemptID: missing, code: "123" })
+          .pipe(Effect.flip),
+      ).toBeInstanceOf(Integration.AuthorizationError);
       yield* service.oauthAttempt.cancel(missing);
     }),
   ));

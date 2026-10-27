@@ -1873,6 +1873,100 @@ it("searches the providers when the saved index lacks the listing", async () => 
   ]);
 });
 
+// TradingView lists one symbol on many venues; its listings keep the venue.
+const tradingview = (venue?: string) =>
+  Schema.decodeUnknownSync(ProviderListing)({
+    provider: "tradingview",
+    listing: {
+      symbol: "BTCUSD",
+      currency: "USD",
+      class: "crypto",
+      ...(venue && { venue }),
+    },
+  });
+const bitstamp = tradingview("BITSTAMP");
+const coinbase = tradingview("COINBASE");
+const onBitstamp = barsSeries(bitstamp, series);
+
+it("a TradingView script's syminfo.tickerid keeps its venue and reads that listing, not the same symbol elsewhere", async () => {
+  const f = await fixture(
+    'daily = request.security(syminfo.tickerid, "D", close)\nemit "id" syminfo.tickerid\nemit "daily" daily',
+  );
+  f.search.mockReturnValue(Effect.succeed([coinbase, bitstamp]));
+  const result = await f.finite(f.request(f.node, Tea.barsInputs(onBitstamp)));
+  expect(f.search).toHaveBeenLastCalledWith({
+    query: "BITSTAMP:BTCUSD",
+    indexed: true,
+    limit: 100,
+  });
+  expect(result.config.requests.daily).toEqual({
+    ...Tea.barsInputs(
+      barsSeries(bitstamp, { ...onBitstamp, resolution: "1d" }),
+    ),
+    parameters: {},
+    requests: {},
+  });
+  expect([...result.snapshot.data].map(({ id, daily }) => [id, daily])).toEqual(
+    Array(10).fill(["tradingview:BITSTAMP:BTCUSD", 1]),
+  );
+});
+
+it("request.security names a TradingView listing by venue and symbol, ignoring case", async () => {
+  const f = await fixture(
+    'btc = request.security("tradingview:coinbase:btcusd", "", close)\nemit "btc" btc',
+  );
+  f.search.mockReturnValue(Effect.succeed([bitstamp, coinbase]));
+  const result = await f.finite(f.request(f.node, Tea.barsInputs(onBitstamp)));
+  expect(f.search).toHaveBeenLastCalledWith({
+    query: "coinbase:btcusd",
+    indexed: true,
+    limit: 100,
+  });
+  expect(result.config.requests.btc).toEqual({
+    ...Tea.barsInputs(barsSeries(coinbase, onBitstamp)),
+    parameters: {},
+    requests: {},
+  });
+});
+
+it.each([
+  // Without a venue, or at a venue that lacks it, a symbol listed elsewhere
+  // is never substituted.
+  [
+    '"tradingview:BTCUSD"',
+    bitstamp,
+    "child: tradingview:BTCUSD names no listing",
+  ],
+  [
+    '"tradingview:KRAKEN:BTCUSD"',
+    bitstamp,
+    "child: tradingview:KRAKEN:BTCUSD names no listing",
+  ],
+  // A TradingView listing without a venue has no ticker id.
+  [
+    "syminfo.tickerid",
+    tradingview(),
+    "child: its symbol or timeframe is unknown",
+  ],
+])(
+  "request.security(%s) on TradingView is rejected",
+  async (symbol, parent, message) => {
+    const f = await fixture(
+      `child = request.security(${symbol}, "", close)\nemit "child" child`,
+    );
+    f.search.mockReturnValue(Effect.succeed([bitstamp, coinbase]));
+    expect(
+      await f.invalid(
+        f.request(f.node, Tea.barsInputs(barsSeries(parent, series))),
+      ),
+    ).toMatchObject({
+      code: "invalid_request",
+      message: expect.stringContaining(message),
+    });
+    expect(f.calls).toEqual([]);
+  },
+);
+
 it.each([
   ['"ETHUSDT", ""', "child: 'ETHUSDT' is not a ticker id"],
   ['"nowhere:ETHUSDT", ""', "is not a ticker id"],

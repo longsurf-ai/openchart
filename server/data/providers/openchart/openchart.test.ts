@@ -139,7 +139,11 @@ async function fixture(rows: readonly Bar[], initial?: Bar, resolution = "1m") {
     integrations: { methods: [OPENCHART_CLOUD] },
     config: ConfigProvider.fromUnknown({
       openchart: { baseUrl: `http://127.0.0.1:${address.port}` },
-      providers: { binance: { enabled: false }, yfinance: { enabled: false } },
+      providers: {
+        binance: { enabled: false },
+        yfinance: { enabled: false },
+        tradingview: { enabled: false },
+      },
     }),
     models: { fetchEnabled: false, userAgent: "test" },
   });
@@ -367,6 +371,7 @@ test("Feed keeps OpenChart search identity, filters classes and exposes unified 
     expect(status.map((s) => s.providerId).sort()).toEqual([
       "binance",
       "openchart",
+      "tradingview",
       "yfinance",
     ]);
     const caps = await f.runtime.runPromise(

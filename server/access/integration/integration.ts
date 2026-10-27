@@ -298,7 +298,11 @@ export interface Interface {
       attemptID: OAuthAttemptID,
     ) => Effect.Effect<OAuthAttemptStatus>;
     /**
-     * Completes authorization and stores its credential.
+     * Completes authorization and stores its credential. Success means this
+     * attempt's credential was saved, or the attempt had already completed.
+     * Missing, cancelled, failed and expired attempts fail with
+     * AuthorizationError, including expiry while the callback runs; storage
+     * failures keep the previous credential and fail with StorageFailed.
      * @example
      * yield* integrations.oauthAttempt.complete({attemptID, code: suppliedCode});
      */

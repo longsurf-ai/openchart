@@ -15,6 +15,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
@@ -39,11 +40,21 @@ vi.mock("@openchart/app/hooks/use-datafeed", () => ({
 
 it("keeps same-symbol listings separate through reordered results and selection", async () => {
   const listings = [
-    { id: 10244, name: "The SPAC and New Issue ETF" },
-    { id: 55090, name: "Space Exploration Technologies Corp." },
+    {
+      id: 10244,
+      name: "The SPAC and New Issue ETF",
+      venue: "NASDAQ",
+      currency: "USD",
+    },
+    {
+      id: 55090,
+      name: "Space Exploration Technologies Corp.",
+      venue: "NYSE",
+      currency: "",
+    },
   ].map((entry) => ({
     provider: ProviderId.make("openchart"),
-    listing: { ...entry, symbol: "SPCX", venue: "NASDAQ", currency: "USD" },
+    listing: { ...entry, symbol: "SPCX" },
   }));
   search.mockReset();
   search.mockResolvedValue(listings);
@@ -59,9 +70,9 @@ it("keeps same-symbol listings separate through reordered results and selection"
     </QueryClientProvider>,
   );
   try {
-    fireEvent.click(
-      await screen.findByRole("button", { name: /SPCX The SPAC/ }),
-    );
+    const first = await screen.findByRole("button", { name: /SPCX The SPAC/ });
+    expect(within(first).getByText("openchart · NASDAQ · USD")).toBeVisible();
+    fireEvent.click(first);
     await waitFor(() =>
       expect(onSelect).toHaveBeenCalledWith(listings[0], expect.any(Array)),
     );
@@ -72,6 +83,7 @@ it("keeps same-symbol listings separate through reordered results and selection"
     const second = await screen.findByRole("button", {
       name: /SPCX Space Exploration/,
     });
+    expect(within(second).getByText("openchart · NYSE")).toBeVisible();
     await waitFor(() => expect(second).toBeEnabled());
     fireEvent.click(second);
     await waitFor(() =>
@@ -157,7 +169,7 @@ it.each(["matches", "empty", "failure", "denied"])(
         ).toBeVisible();
       else {
         // Access stays denied however often the search repeats.
-        await vi.waitFor(() =>
+        await waitFor(() =>
           expect(screen.queryByText("Searching…")).not.toBeInTheDocument(),
         );
         expect(

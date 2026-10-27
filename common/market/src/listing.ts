@@ -59,6 +59,8 @@ export const Listing = Schema.Struct({
   venue: Schema.optionalKey(Schema.String), // venue name within the provider
   currency: Schema.String, // currency of the listing, required
   mic: Schema.optionalKey(Schema.String), // ISO 10383 venue id
+  /** Source-native primary listing for this instrument; searches prefer it. */
+  primary: Schema.optionalKey(Schema.Boolean),
   instrument: Schema.optionalKey(Instrument),
 });
 export type Listing = typeof Listing.Type;

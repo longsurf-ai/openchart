@@ -137,7 +137,8 @@ explicit `restUrl` or `websocketUrl` skips the race.
 Access-checked Providers expose `checkAccess` and `refresh` independently of ready
 Datasets. Access is either granted or requires subscribing or managing an
 existing subscription; failed checks remain errors. Binance and Yahoo always grant
-access without network I/O. Settings renders the same contract for every Provider,
+access without network I/O; TradingView grants anonymous access, and a stored
+session must also validate. Settings renders the same contract for every Provider,
 without rewriting the enabled preference. Its retry and confirmed subscription
 status changes refresh activation; account writes also invalidate OpenChart work.
 
@@ -153,7 +154,27 @@ credentials and immutable data remain usable; shared closable clients must be
 borrowed for the complete operation if a future Provider introduces them. OAuth sources can implement the same
 watch contract while owning their credential refresh independently.
 
-OpenChart is the third Provider (`openchart`). Its `client.ts` owns one
+TradingView (`tradingview`) needs no key for anonymous chart data. Its
+`protocol.ts` owns socket.io framing, and `client.ts` owns symbol search,
+WebSocket history paging and one live series per socket; identities stay in
+TradingView's `EXCHANGE:SYMBOL` vocabulary. Browser sign-in stores its cookie
+session as an encrypted Integration OAuth credential; other credential shapes
+deny access. The signed-in homepage validates the session before opening a
+socket, and an invalid stored session fails access rather than silently reading
+as anonymous. Equal sessions share one validated profile for five minutes;
+failures are never cached. Search and profile reads share the parent HTTP
+helper's 429 cooldown. History uses `create_series` plus `modify_series` ranges
+and `request_more_data`; an estimated window never counts as caller coverage.
+Search is not indexable, and TradingView's primary listing flag orders
+duplicate symbols. Search expands futures families into their actual contracts
+and shares Feed's query grammar for exchange-qualified and continuous-futures
+queries. Missing currency metadata stays empty rather than removing an index or
+yield series. Complete OHLC stays available when the source has no volume.
+Heartbeats keep quiet established streams alive but never extend a pending
+response; Monitoring retains source-reported delay instead of inferring
+freshness from a candle timestamp.
+
+OpenChart is the account-scoped Provider (`openchart`). Its `client.ts` owns one
 account-scoped OpenChart API client; runtime injects its reset callback into Auth.
 `contract.ts` owns typed requests/results. Client exposes capabilities, listing search,
 single bar pages and acquired live activity; it owns endpoint paths, serialization,

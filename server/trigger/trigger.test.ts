@@ -11,7 +11,10 @@ import { Database } from "@openchart/server/db";
 import { Events, SubscriberOverflowError } from "@openchart/server/events";
 import { Transactor } from "@openchart/server/lib/resource";
 import { Notification } from "@openchart/server/notification";
-import { AlertEventId } from "@openchart/server/resources/alert-event";
+import {
+  AlertEventId,
+  alertEventResource,
+} from "@openchart/server/resources/alert-event";
 import { BarsSeries } from "@openchart/feed";
 import {
   AlertRuleId,
@@ -88,7 +91,7 @@ function run<A, E>(program: Effect.Effect<A, E, Services>) {
   return Effect.runPromise(program.pipe(Effect.scoped, Effect.provide(layer)));
 }
 
-const createRule = () =>
+const createRule = (series = inputs) =>
   Transactor.run(
     alertRuleResource.transitions.create({
       name: "AAPL above 200",
@@ -97,7 +100,7 @@ const createRule = () =>
       alertable: {
         kind: "tea",
         source: 'alertcondition(close > 200, "Above", "AAPL crossed 200")',
-        config: barsRuleConfig(inputs, { threshold: 200 }),
+        config: barsRuleConfig(series, { threshold: 200 }),
       },
     }),
   );
@@ -121,6 +124,7 @@ const triggerIds = Transactor.run(triggerResource.transitions.listAll()).pipe(
 /** Records one fire the way the Alert service does and returns its Bus message. */
 const recordFire = Effect.fn("test.recordFire")(function* (
   rule: typeof alertRuleResource.entity.Type,
+  series = inputs,
 ) {
   const event = yield* Transactor.run(
     recordAlertFire({
@@ -132,8 +136,8 @@ const recordFire = Effect.fn("test.recordFire")(function* (
         title: "Above",
         message: "AAPL crossed 200",
         data: {
-          symbol: "AAPL",
-          inputs,
+          symbol: series.listing.symbol,
+          inputs: series,
           parameters: { threshold: 200 },
           values: { close: 201.5 },
         },
@@ -245,7 +249,7 @@ test("an agent_prompt trigger admits one Run per event into a chat Session; a re
           ]),
         },
       });
-      expect(accepted!.input.parts).toHaveLength(3);
+      expect(accepted!.input.parts).toHaveLength(5);
       expect(accepted!.input.parts.at(-1)).toMatchObject({
         type: "text",
         text: expect.stringContaining("publish_post"),
@@ -273,6 +277,69 @@ test("an agent_prompt trigger admits one Run per event into a chat Session; a re
       // Another event of the same rule is another Run.
       yield* fire(yield* recordFire(rule));
       expect(yield* db.select().from(agentRun)).toHaveLength(2);
+    }),
+  ));
+
+test("an agent_prompt admission attaches the fired alert_event, whose inputs keep the TradingView venue", () =>
+  run(
+    Effect.gen(function* () {
+      const series = Schema.decodeUnknownSync(BarsSeries)({
+        provider: "tradingview",
+        listing: {
+          symbol: "BTCUSD",
+          venue: "BITSTAMP",
+          currency: "USD",
+          class: "crypto",
+        },
+        resolution: "1m",
+        session: "24h",
+        adjustment: "raw",
+      });
+      const rule = yield* createRule(series);
+      const trigger = yield* createTrigger(rule.id, {
+        target: { kind: "agent_prompt", prompt },
+      });
+      const store = yield* AgentRunStore.Service;
+      const fire = yield* start();
+      const message = yield* recordFire(rule, series);
+      yield* fire(message);
+      const accepted = yield* store.getByIntent(
+        `trigger:${trigger.id}:${message.eventId}`,
+      );
+      const attached = (resource: string) =>
+        accepted!.input.parts.flatMap((part) =>
+          part.type === "context" &&
+          part.context.kind === "resource" &&
+          part.context.resource === resource
+            ? [part.context]
+            : [],
+        );
+      // User-authored text renders as before; the Post stays attributed.
+      expect(accepted!.input.parts[0]).toEqual({
+        type: "text",
+        text: "Review BTCUSD.",
+      });
+      expect(attached("post")).toHaveLength(1);
+      expect(attached("alert_event")).toEqual([
+        {
+          kind: "resource",
+          resource: "alert_event",
+          id: message.eventId,
+          scope: "attached",
+        },
+      ]);
+      expect(accepted!.input.parts).toContainEqual({
+        type: "text",
+        text: expect.stringContaining("including venue"),
+      });
+      // The attached id resolves to the authoritative recorded listing.
+      const event = yield* Transactor.run(
+        alertEventResource.transitions.get(AlertEventId.make(message.eventId)),
+      );
+      expect(event.detail.data.inputs).toMatchObject({
+        provider: "tradingview",
+        listing: { symbol: "BTCUSD", venue: "BITSTAMP" },
+      });
     }),
   ));
 

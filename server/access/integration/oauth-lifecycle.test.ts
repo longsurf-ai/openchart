@@ -1,7 +1,7 @@
-// Purpose: Locks OAuth concurrency, attempt ownership, expiry, and runtime cleanup.
+// Purpose: Locks OAuth concurrency, attempt ownership, completion outcomes, expiry, and runtime cleanup.
 
 import { Credential } from "@openchart/server/access/credential";
-import { Cause, Deferred, Effect, Exit, Fiber } from "effect";
+import { Cause, Deferred, Effect, Exit, Fiber, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, test, vi } from "vitest";
 import { Integration } from "./integration";
@@ -13,6 +13,12 @@ import {
   run,
   value,
 } from "./test-fixture";
+
+// Cancelled, expired and failed attempts surface as authorization failures, not interruptions.
+const failedAuthorization = (exit: Exit.Exit<unknown, unknown>) =>
+  Exit.isFailure(exit) &&
+  Option.getOrUndefined(Cause.findErrorOption(exit.cause)) instanceof
+    Integration.AuthorizationError;
 
 test("concurrent completion exchanges a code only once", () => {
   const entered = Deferred.makeUnsafe<void>();
@@ -37,12 +43,17 @@ test("concurrent completion exchanges a code only once", () => {
       yield* Deferred.await(entered);
       const second = yield* service.oauthAttempt
         .complete({ attemptID: attempt.attemptID, code: "456" })
-        .pipe(Effect.exit);
-      expect(Exit.isFailure(second) && Cause.hasDies(second.cause)).toBe(true);
+        .pipe(Effect.flip);
+      expect(second).toBeInstanceOf(Integration.AuthorizationError);
       yield* Deferred.succeed(gate, value);
       yield* Fiber.join(first);
-      expect(callback).toHaveBeenCalledTimes(1);
-      expect(yield* credentials.all()).toHaveLength(1);
+      expect(callback).toHaveBeenCalledOnce();
+      expect(
+        (yield* credentials.all()).map((credential) => credential.value),
+      ).toEqual([value]);
+      expect(
+        yield* service.oauthAttempt.getStatus(attempt.attemptID),
+      ).toMatchObject({ status: "complete" });
     }),
     {
       methods: [
@@ -92,7 +103,7 @@ test.each(["auto", "code"] as const)(
         expect(closed).toBe(true);
         yield* Deferred.succeed(gate, value);
         if (completion)
-          expect(Exit.isFailure(yield* Fiber.join(completion))).toBe(true);
+          expect(failedAuthorization(yield* Fiber.join(completion))).toBe(true);
         expect(yield* credentials.all()).toEqual([]);
         expect(
           Exit.isFailure(
@@ -159,7 +170,7 @@ test.each(["auto", "code"] as const)(
           yield* service.oauthAttempt.getStatus(attempt.attemptID),
         ).toEqual({ status: "expired", time: attempt.time });
         if (completion)
-          expect(Exit.isFailure(yield* Fiber.join(completion))).toBe(true);
+          expect(failedAuthorization(yield* Fiber.join(completion))).toBe(true);
         expect(yield* credentials.all()).toEqual([]);
         yield* TestClock.adjust("1 minute");
         expect(
@@ -223,6 +234,99 @@ test("completed attempts retain terminal status for one minute", () => {
   );
 });
 
+test("an attempt expires at its advertised deadline even between scrub ticks", () => {
+  const callback = vi.fn(() => Effect.succeed(value));
+  return run(
+    Effect.gen(function* () {
+      const service = yield* Integration.Service;
+      const credentials = yield* Credential.Service;
+      const previous = { ...value, access: "previous-access-token" };
+      yield* credentials.create({ integrationID, value: previous });
+      yield* TestClock.adjust("1 second");
+      const attempt = yield* service.oauthAttempt.start({
+        integrationID,
+        methodID,
+        inputs: {},
+      });
+      yield* TestClock.adjust("10 minutes");
+      const exit = yield* service.oauthAttempt
+        .complete({ attemptID: attempt.attemptID, code: "123" })
+        .pipe(Effect.exit);
+      expect(failedAuthorization(exit)).toBe(true);
+      expect(callback).not.toHaveBeenCalled();
+      expect(yield* service.oauthAttempt.getStatus(attempt.attemptID)).toEqual({
+        status: "expired",
+        time: attempt.time,
+      });
+      expect(
+        (yield* credentials.all()).map((credential) => credential.value),
+      ).toEqual([previous]);
+    }),
+    {
+      methods: [
+        oauth(Effect.succeed({ ...instructions, mode: "code", callback })),
+      ],
+    },
+  );
+});
+
+test.each(["auto", "code"] as const)(
+  "a %s callback that finishes at expiry cannot replace saved credentials before the next scrub",
+  (mode) => {
+    const entered = Deferred.makeUnsafe<void>();
+    const gate = Deferred.makeUnsafe<Credential.OAuth>();
+    const closed = Deferred.makeUnsafe<void>();
+    const callback = Deferred.succeed(entered, undefined).pipe(
+      Effect.andThen(Deferred.await(gate)),
+    );
+    const authorization: Integration.OAuthAuthorization =
+      mode === "auto"
+        ? { ...instructions, mode, callback }
+        : { ...instructions, mode, callback: () => callback };
+    return run(
+      Effect.gen(function* () {
+        const service = yield* Integration.Service;
+        const credentials = yield* Credential.Service;
+        const previous = { ...value, access: "previous-access-token" };
+        yield* credentials.create({ integrationID, value: previous });
+        yield* TestClock.adjust("1 second");
+        const attempt = yield* service.oauthAttempt.start({
+          integrationID,
+          methodID,
+          inputs: {},
+        });
+        const completion =
+          mode === "code"
+            ? yield* service.oauthAttempt
+                .complete({ attemptID: attempt.attemptID, code: "123" })
+                .pipe(Effect.exit, Effect.forkScoped)
+            : undefined;
+        yield* Deferred.await(entered);
+        yield* TestClock.adjust("10 minutes");
+        yield* Deferred.succeed(gate, value);
+        yield* Deferred.await(closed);
+        if (completion)
+          expect(failedAuthorization(yield* Fiber.join(completion))).toBe(true);
+        expect(
+          yield* service.oauthAttempt.getStatus(attempt.attemptID),
+        ).toEqual({ status: "expired", time: attempt.time });
+        expect(
+          (yield* credentials.all()).map((credential) => credential.value),
+        ).toEqual([previous]);
+      }),
+      {
+        methods: [
+          oauth(
+            Effect.addFinalizer(() => Deferred.succeed(closed, undefined)).pipe(
+              Effect.as(authorization),
+            ),
+          ),
+        ],
+      },
+    );
+  },
+);
+
 test("request interruption leaves code completion owned by the service", () => {
   const entered = Deferred.makeUnsafe<void>();
   const gate = Deferred.makeUnsafe<Credential.OAuth>();
@@ -262,6 +366,53 @@ test("request interruption leaves code completion owned by the service", () => {
             }),
           ),
         ),
+      ],
+    },
+  );
+});
+
+test("completion succeeds only for a stored credential and repeats only after success", () => {
+  const callback = vi.fn((code: string) =>
+    code === "good"
+      ? Effect.succeed(value)
+      : Effect.fail(new Error("Rejected code")),
+  );
+  return run(
+    Effect.gen(function* () {
+      const service = yield* Integration.Service;
+      const credentials = yield* Credential.Service;
+      const start = service.oauthAttempt.start({
+        integrationID,
+        methodID,
+        inputs: {},
+      });
+      const complete = (attemptID: Integration.OAuthAttemptID, code: string) =>
+        service.oauthAttempt.complete({ attemptID, code }).pipe(Effect.exit);
+      const accepted = yield* start;
+      expect(Exit.isSuccess(yield* complete(accepted.attemptID, "good"))).toBe(
+        true,
+      );
+      expect(Exit.isSuccess(yield* complete(accepted.attemptID, "good"))).toBe(
+        true,
+      );
+      const rejected = yield* start;
+      expect(
+        failedAuthorization(yield* complete(rejected.attemptID, "bad")),
+      ).toBe(true);
+      expect(
+        failedAuthorization(yield* complete(rejected.attemptID, "good")),
+      ).toBe(true);
+      const cancelled = yield* start;
+      yield* service.oauthAttempt.cancel(cancelled.attemptID);
+      expect(
+        failedAuthorization(yield* complete(cancelled.attemptID, "good")),
+      ).toBe(true);
+      expect(callback).toHaveBeenCalledTimes(2);
+      expect(yield* credentials.all()).toHaveLength(1);
+    }),
+    {
+      methods: [
+        oauth(Effect.succeed({ ...instructions, mode: "code", callback })),
       ],
     },
   );

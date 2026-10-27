@@ -21,5 +21,6 @@ Owns registration, credential selection, OAuth attempts, and renewal.
 - Expiry/scrubbing are application-scoped. Disposal awaits cleanup before dependencies close.
 - Credential writes publish one `integration.updated` invalidation after storage;
   payloads contain no secrets. Registration publishes nothing.
-- Public writes accept third-party IDs only; Auth owns account writes.
-  OAuth, setActive, and secret reads stay internal; tests use isolated SQLite.
+- Public writes accept third-party IDs only; Auth owns account writes. OAuth
+  (except `tradingview-router.ts`), setActive, secret reads stay internal; tests
+  use isolated SQLite.
