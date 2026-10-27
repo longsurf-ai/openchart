@@ -41,6 +41,7 @@ const attempt = {
     "At the bottom of TradingView’s page, click “copy the secret key” to copy your login link.",
   mode: "code",
   time: { created: 100, expires: 200 },
+  proof: "attempt-proof",
 };
 const loginLink = "tradingview://browser-auth/?token=one-time-secret";
 const connected = [
@@ -123,6 +124,7 @@ test("exchanges the pasted link without passing cookies or caching the secret", 
   await waitFor(() =>
     expect(rpc.access.tradingview.complete.mutate).toHaveBeenCalledWith({
       attemptID: attempt.attemptID,
+      proof: attempt.proof,
       link: loginLink,
     }),
   );
@@ -253,6 +255,7 @@ test("a failed completion keeps the draft and requires a fresh attempt before su
   expect(rpc.access.tradingview.complete.mutate).toHaveBeenCalledTimes(2);
   expect(rpc.access.tradingview.complete.mutate).toHaveBeenLastCalledWith({
     attemptID: "attempt-2",
+    proof: attempt.proof,
     link: freshLink,
   });
 });
@@ -372,6 +375,7 @@ test("a failed replacement start keeps the dialog recoverable", async () => {
   );
   expect(rpc.access.tradingview.complete.mutate).toHaveBeenLastCalledWith({
     attemptID: nextAttempt.attemptID,
+    proof: nextAttempt.proof,
     link: "tradingview://browser-auth/?token=fresh-secret",
   });
 });

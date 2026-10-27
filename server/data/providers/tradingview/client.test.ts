@@ -730,6 +730,36 @@ test("retirement stops the socket while accepted live candles drain", async () =
   );
 });
 
+test("candles sent before the live subscription completes reach the stream in order", async () => {
+  const socket = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series")
+      socket.emitMessage(
+        update(candle(1_700_000_000, 12)),
+        update(candle(1_700_000_001, 13)),
+        completed(),
+      );
+  });
+  const events = await Effect.runPromise(
+    Effect.gen(function* () {
+      const client = yield* makeClient({
+        websocket: () => asWebSocket(socket),
+      });
+      const updates = yield* client.live(
+        liveRequest,
+        yield* Deferred.make<void>(),
+      );
+      socket.emitMessage(update(candle(1_700_000_002, 14)));
+      return yield* updates.pipe(Stream.take(4), Stream.runCollect);
+    }).pipe(Effect.scoped),
+  );
+  expect(events).toMatchObject([
+    { type: "bars", bars: [{ time: 1_700_000_000_000, close: 12 }] },
+    { type: "bars", bars: [{ time: 1_700_000_001_000, close: 13 }] },
+    { type: "status", status: { mode: "live" } },
+    { type: "bars", bars: [{ time: 1_700_000_002_000, close: 14 }] },
+  ]);
+});
+
 test("live activity retains the source-reported delay and heartbeat separately from prices", async () => {
   const socket = new FakeSocket((method, _parameters, socket) => {
     if (method === "create_series")

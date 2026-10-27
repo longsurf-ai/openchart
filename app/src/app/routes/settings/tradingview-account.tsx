@@ -119,6 +119,7 @@ export function TradingViewAccount({ transport }: { transport: AppTransport }) {
       if (!attempt) return;
       await transport.rpc.access.tradingview.complete.mutate({
         attemptID: attempt.attemptID,
+        proof: attempt.proof,
         link: link.trim(),
       });
     },

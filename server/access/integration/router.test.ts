@@ -155,16 +155,29 @@ test("TradingView routes exchange one copied link through real Integration witho
     await expect(
       client.complete.mutate({
         attemptID: attempt.attemptID,
+        proof: attempt.proof,
         link: "https://example.com/?token=private-token",
       }),
     ).rejects.toThrow("Authorization failed");
+    // Another client that learns the attempt ID cannot bind its own login link.
+    const other = await client.start.mutate();
+    for (const proof of ["", other.proof, `${attempt.proof}A`])
+      await expect(
+        client.complete.mutate({
+          attemptID: attempt.attemptID,
+          proof,
+          link: loginLink,
+        }),
+      ).rejects.toThrow("Authorization failed");
     expect(requests).toEqual([]);
     expect(
       await client.complete.mutate({
         attemptID: attempt.attemptID,
+        proof: attempt.proof,
         link: loginLink,
       }),
     ).toEqual({ status: "complete" });
+    await client.cancel.mutate({ attemptID: other.attemptID });
     expect(requests).toHaveLength(2);
     const connected = (
       await server.client.access.integration.listIntegrations.query()
@@ -192,21 +205,22 @@ test("TradingView completion failures stay generic and never report an unsaved c
     vi.spyOn(console, "error").mockImplementation(() => {}),
     vi.spyOn(console, "warn").mockImplementation(() => {}),
   ];
-  const complete = (attemptID: string) =>
+  const complete = (attemptID: string, proof: string) =>
     fetch(`${server.url}/access.tradingview.complete`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ attemptID, link: loginLink }),
+      body: JSON.stringify({ attemptID, proof, link: loginLink }),
     });
   try {
-    const { attemptID } = await server.client.access.tradingview.start.mutate();
+    const { attemptID, proof } =
+      await server.client.access.tradingview.start.mutate();
     // Missing, freshly failed and already failed attempts all fail authorization.
     for (const id of [
       Integration.OAuthAttemptID.create(),
       attemptID,
       attemptID,
     ]) {
-      const response = await complete(id);
+      const response = await complete(id, proof);
       expect(response.status).toBe(400);
       const body = await response.text();
       expect(body).toContain("Authorization failed");

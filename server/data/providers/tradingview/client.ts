@@ -634,7 +634,17 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
       capacity: 256,
     });
     yield* Effect.addFinalizer(() => Queue.shutdown(queue));
+    const offer = (activity: LiveActivity) =>
+      Queue.offerUnsafe(queue, activity)
+        ? Effect.void
+        : Effect.fail(
+            new DatasetFailure(
+              new DatasetReasons.StreamInterrupted({ kind: "overflow" }),
+            ),
+          );
     openSeries(connection, request, 2);
+    // Candles can precede the subscription acknowledgement; keep them in order
+    // because the caller's history snapshot may already have ended.
     for (;;) {
       const frame = yield* nextResponse(
         connection,
@@ -646,9 +656,11 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
       );
       const failure = frameFailure(frame, request.symbol);
       if (failure) return yield* Effect.fail(failure);
+      const candles = frameCandles(frame);
+      if (candles.length > 0) yield* offer({ type: "bars", bars: candles });
       const status = streamStatus(frame);
       if (status !== undefined) {
-        Queue.offerUnsafe(queue, { type: "status", status });
+        yield* offer({ type: "status", status });
         break;
       }
     }
@@ -674,13 +686,7 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
                 : candles.length > 0
                   ? { type: "bars", bars: candles }
                   : undefined;
-          if (activity === undefined) continue;
-          if (!Queue.offerUnsafe(queue, activity))
-            return yield* Effect.fail(
-              new DatasetFailure(
-                new DatasetReasons.StreamInterrupted({ kind: "overflow" }),
-              ),
-            );
+          if (activity !== undefined) yield* offer(activity);
         }
       }).pipe(
         Effect.catch((error) =>
