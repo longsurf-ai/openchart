@@ -74,7 +74,9 @@ function capabilities(request: BarsRequest["listing"]): BarsCapabilities {
  * updates end only when the source retires: once its accepted updates drain
  * they fail with retryable `Feed.Reconfigured`, so consumers reopen on the
  * current source instead of waiting on a closed one. Source failures keep
- * their own reasons, and history reads have no updates.
+ * their own reasons, and history reads have no updates. Receipt order prevents
+ * buffered observations from replacing a later snapshot of the same bar;
+ * TradingView supplies no comparable upstream revision across these sockets.
  * @example const bars = tradingviewBarsFeed(dataset, providerId);
  */
 export function tradingviewBarsFeed(
@@ -122,17 +124,20 @@ export function tradingviewBarsFeed(
           .pipe(Effect.mapError(datasetFailure(providerId))),
       );
       if (!updates) return { snapshot };
-      const values = (
+      const version = (
         frame: SelectResult<typeof tradingviewBars>,
         index: number,
       ) => {
         const row = frame.get(index)!;
-        return [row.open, row.high, row.low, row.close, row.volume];
+        return {
+          receivedSequence: row.receivedSequence!,
+          values: [row.open, row.high, row.low, row.close, row.volume],
+        };
       };
       const versions = new Map(
         [...snapshot.data].map(({ time }, index) => [
           time,
-          values(snapshot.data, index),
+          version(snapshot.data, index),
         ]),
       );
       return {
@@ -144,16 +149,22 @@ export function tradingviewBarsFeed(
               frame,
               [...frame].flatMap(({ time }, index) => {
                 if (time < snapshot.range.from) return [];
-                const next = values(frame, index);
+                const next = version(frame, index);
                 const previous = versions.get(time);
-                // A repeated snapshot is unchanged; the newest value wins otherwise.
+                // The stamp is assigned at socket receipt, before both queues.
+                // Price and volume can fall in a valid later correction.
                 if (
-                  previous?.every((value, column) =>
-                    Object.is(value, next[column]),
-                  )
+                  previous &&
+                  next.receivedSequence <= previous.receivedSequence
                 )
                   return [];
                 versions.set(time, next);
+                if (
+                  previous?.values.every((value, column) =>
+                    Object.is(value, next.values[column]),
+                  )
+                )
+                  return [];
                 return [index];
               }),
             ),

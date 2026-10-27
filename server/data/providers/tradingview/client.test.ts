@@ -787,3 +787,114 @@ test("live activity retains the source-reported delay and heartbeat separately f
     { type: "bars", bars: [{ time: 1_700_000_000_000, close: 12 }] },
   ]);
 });
+
+test("receipt sequences preserve socket order when buffered live bars drain after history", async () => {
+  const time = Date.UTC(2026, 0, 5, 15);
+  const receipts: string[] = [];
+  const liveSocket = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series") {
+      receipts.push("pre-ack live");
+      socket.emitMessage(update(candle(time / 1000, 10)), completed());
+    }
+  });
+  const historySocket = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series") {
+      receipts.push("live before history data");
+      liveSocket.emitMessage(update(candle(time / 1000, 10.25)));
+      receipts.push("history data");
+      socket.emitMessage(update(candle(time / 1000, 10.5)), completed());
+    }
+    if (method === "modify_series") {
+      receipts.push("live after history data");
+      liveSocket.emitMessage(update(candle(time / 1000, 10.75)));
+      receipts.push("history completed");
+      socket.emitMessage(completed());
+    }
+  });
+  let connections = 0;
+  const { history, live } = await Effect.runPromise(
+    Effect.gen(function* () {
+      const client = yield* makeClient({
+        websocket: () =>
+          asWebSocket(connections++ === 0 ? liveSocket : historySocket),
+      });
+      const updates = yield* client.live(
+        liveRequest,
+        yield* Deferred.make<void>(),
+      );
+      const history = yield* client.history({
+        ...liveRequest,
+        to: time + 60_000,
+        count: 1,
+      });
+      receipts.push("history returned before consuming live");
+      const live = yield* updates.pipe(
+        Stream.filter((event) => event.type === "bars"),
+        Stream.map((event) => event.bars[0]!),
+        Stream.take(3),
+        Stream.runCollect,
+      );
+      return { history, live };
+    }).pipe(Effect.scoped),
+  );
+  expect(receipts).toEqual([
+    "pre-ack live",
+    "live before history data",
+    "history data",
+    "live after history data",
+    "history completed",
+    "history returned before consuming live",
+  ]);
+  expect(history.map((bar) => bar.close)).toEqual([10.5]);
+  expect(live.map((bar) => bar.close)).toEqual([10, 10.25, 10.75]);
+  expect(live[0]!.receivedSequence).toBeLessThan(live[1]!.receivedSequence);
+  expect(live[1]!.receivedSequence).toBeLessThan(history[0]!.receivedSequence);
+  expect(live[2]!.receivedSequence).toBeGreaterThan(
+    history[0]!.receivedSequence,
+  );
+  expect(connections).toBe(2);
+  expect(liveSocket.terminated && historySocket.terminated).toBe(true);
+});
+
+test("receipt sequences are shared within a candle frame and increase for the next frame", async () => {
+  const time = Date.UTC(2026, 0, 5, 15);
+  const socket = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series")
+      socket.emitMessage(
+        message("timescale_update", [
+          "cs",
+          {
+            sds_1: {
+              s: [
+                { v: candle(time / 1000, 10) },
+                { v: candle((time + 60_000) / 1000, 10.25) },
+              ],
+            },
+          },
+        ]),
+        completed(),
+      );
+    if (method === "modify_series")
+      socket.emitMessage(
+        update(candle((time + 120_000) / 1000, 10.5)),
+        completed(),
+      );
+  });
+  const bars = await Effect.runPromise(
+    Effect.gen(function* () {
+      const client = yield* makeClient({
+        websocket: () => asWebSocket(socket),
+      });
+      return yield* client.history({
+        ...liveRequest,
+        to: time + 180_000,
+        count: 3,
+      });
+    }).pipe(Effect.scoped),
+  );
+  expect(bars.map((bar) => bar.close)).toEqual([10, 10.25, 10.5]);
+  expect(bars[0]!.receivedSequence).toBeGreaterThan(0);
+  expect(bars[1]!.receivedSequence).toBe(bars[0]!.receivedSequence);
+  expect(bars[2]!.receivedSequence).toBeGreaterThan(bars[1]!.receivedSequence);
+  expect(socket.terminated).toBe(true);
+});

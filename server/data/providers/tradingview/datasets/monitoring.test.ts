@@ -72,6 +72,7 @@ test("source delay stays degraded on heartbeats and only an explicit live status
         low: 0.5,
         close: 1.5,
         volume: null,
+        receivedSequence: 1,
       };
       yield* Queue.offer(activity, { type: "bars", bars: [bar] });
       yield* Effect.yieldNow;

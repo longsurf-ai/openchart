@@ -90,9 +90,15 @@ Provider retirement, at the cost of bounded extra history. Empty/closed periods
 are not automatically history exhaustion. Provider-native count semantics and
 DataFrames remain unchanged. Native correction metadata covers backfilled bars.
 
+TradingView does not cache history because it does not establish
+source finality. Its client stamps socket receipt order before buffering; the
+adapter uses that order when a live bar overlaps the snapshot. This prevents
+local buffering from rolling back a later observation, but does not establish
+upstream revision order across independent sockets.
+
 The local backend shares complete historical spans across price charts and Tea.
-`server/feed/bar/history-cache.ts` owns range/count reuse; each Provider creates
-one cache per ready Bars Dataset and installs its select behind Dataset admission.
+`server/feed/bar/history-cache.ts` owns range/count reuse; Providers with proven
+finality create one cache per ready Bars Dataset behind Dataset admission.
 All native series keys participate in identity. Separate windows stay separate;
 overlapping or touching coverage merges, including successfully inspected empty
 intervals. Only missing intervals are fetched. Backward limits count actual rows

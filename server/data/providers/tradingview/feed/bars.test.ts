@@ -40,6 +40,7 @@ test("index OHLC with no volume reaches a Feed snapshot and survives its wire co
                 low: 9,
                 close: 11,
                 volume: null,
+                receivedSequence: 1,
               },
             ],
       ),
@@ -72,18 +73,32 @@ test("index OHLC with no volume reaches a Feed snapshot and survives its wire co
   const encoded = Schema.encodeSync(BarsSnapshot)(snapshot);
   const decoded = Schema.decodeUnknownSync(BarsSnapshot)(encoded);
   expect([...decoded.data]).toEqual([
-    { time, open: 10, high: 12, low: 9, close: 11, volume: null },
+    {
+      time,
+      open: 10,
+      high: 12,
+      low: 9,
+      close: 11,
+      volume: null,
+      receivedSequence: 1,
+    },
   ]);
 });
 
 const minute = 60_000;
-const bar = (time: number, close: number) => ({
+const bar = (
+  time: number,
+  close: number,
+  receivedSequence = close,
+  volume: number | null = 1,
+) => ({
   time,
   open: close,
   high: close,
   low: close,
   close,
-  volume: 1,
+  volume,
+  receivedSequence,
 });
 const btc = {
   provider: ProviderId.make("tradingview"),
@@ -103,7 +118,10 @@ const btc = {
 // The Feed over a real Dataset and stream adapter. History holds one bar;
 // live activity is what a test offers, and retirement ends it normally once
 // accepted activity drains, as the native client does.
-const liveFeed = Effect.fn(function* () {
+const liveFeed = Effect.fn(function* (
+  snapshot = [bar(0, 1)],
+  buffered: ReturnType<typeof bar>[] = [],
+) {
   const activity = yield* Queue.unbounded<
     LiveActivity,
     DatasetFailure | Cause.Done
@@ -114,7 +132,7 @@ const liveFeed = Effect.fn(function* () {
     access: () => Effect.succeed({ status: "granted" }),
     reset: () => Effect.void,
     history: ({ to }) =>
-      Effect.succeed(to !== undefined && to <= 0 ? [] : [bar(0, 1)]),
+      Effect.succeed(to !== undefined && to <= 0 ? [] : snapshot),
     live: (_, retired) =>
       Deferred.await(retired).pipe(
         Effect.andThen(Queue.end(activity)),
@@ -127,6 +145,8 @@ const liveFeed = Effect.fn(function* () {
     stream: (query) => streamBars(client, query, retired),
   });
   const feed = tradingviewBarsFeed(dataset, btc.provider);
+  for (const row of buffered)
+    yield* Queue.offer(activity, { type: "bars", bars: [row] });
   const live = yield* feed.observe({ ...btc, to: "now" });
   const rows: unknown[] = [];
   return {
@@ -143,6 +163,58 @@ const liveFeed = Effect.fn(function* () {
       Effect.result,
     ),
   };
+});
+
+test("older buffered observations cannot roll back a snapshot; newer corrections and absent bars survive", async () => {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const snapshot = bar(0, 102, 10, 5);
+      const missing = bar(minute, 103, 2);
+      const f = yield* liveFeed([snapshot], [bar(0, 101, 1), missing]);
+      // Later corrections can lower price/volume, return to the snapshot's
+      // price, or remove volume. None of those values establish revision order.
+      const lower = bar(0, 100, 11, 1);
+      const returned = bar(0, 102, 12, 5);
+      const noVolume = bar(0, 102, 13, null);
+      const newBar = bar(minute, 99, 14);
+      for (const row of [lower, returned, noVolume, newBar])
+        yield* f.offer(row);
+      yield* f.offer(bar(0, 102, 15, null));
+      yield* f.offer(bar(minute, 99, 16));
+      yield* Deferred.succeed(f.retired, undefined);
+      yield* f.drain;
+      expect(f.rows).toEqual([missing, lower, returned, noVolume, newBar]);
+    }).pipe(Effect.scoped),
+  );
+});
+
+test("an empty delayed snapshot preserves queued observations", async () => {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const queued = bar(0, 101, 1);
+      const f = yield* liveFeed([], [queued]);
+      expect(f.live.snapshot.data.numRows).toBe(0);
+      yield* Deferred.succeed(f.retired, undefined);
+      yield* f.drain;
+      expect(f.rows).toEqual([queued]);
+    }).pipe(Effect.scoped),
+  );
+});
+
+test("repeated older bars in live batches stay deduplicated for chronological consumers", async () => {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const f = yield* liveFeed();
+      const previous = bar(minute, 100, 2);
+      const current = bar(2 * minute, 101, 2);
+      const revised = bar(2 * minute, 102, 3);
+      yield* f.offer(previous, current);
+      yield* f.offer(bar(minute, 100, 3), revised);
+      yield* Deferred.succeed(f.retired, undefined);
+      yield* f.drain;
+      expect(f.rows).toEqual([previous, current, revised]);
+    }).pipe(Effect.scoped),
+  );
 });
 
 test("after retirement drains accepted updates, live updates fail as retryable Feed.Reconfigured", async () => {

@@ -65,8 +65,12 @@ export interface SearchRow {
   readonly typespecs?: readonly string[];
 }
 
-/** One native bar with a millisecond open time. */
-export type Bar = Candle;
+/** One native bar with a millisecond open time and client-local receipt order.
+ * The sequence spans this client's sockets, before buffering. It orders local
+ * observations, not upstream revisions, exchange timestamps or finality.
+ * @example if (next.receivedSequence > previous.receivedSequence) consume(next);
+ */
+export type Bar = Candle & { readonly receivedSequence: number };
 
 /**
  * Validated activity for one live series. Heartbeats renew liveness without
@@ -220,8 +224,13 @@ const sessionID = (prefix: string) =>
     ),
   ).join("")}`;
 
+interface ReceivedFrame {
+  readonly frame: ServerFrame;
+  readonly receivedSequence: number;
+}
+
 interface Connection {
-  readonly queue: Queue.Queue<ServerFrame, DatasetFailure | Cause.Done>;
+  readonly queue: Queue.Queue<ReceivedFrame, DatasetFailure | Cause.Done>;
   send(method: string, parameters: readonly unknown[]): void;
   close(): void;
 }
@@ -247,6 +256,9 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
           "User-Agent": userAgent,
         },
       }));
+  // Shared by history and live sockets; stamp before either queue can delay
+  // consumption. A dequeue counter would make an old buffered frame look new.
+  let receivedSequence = 0;
   // Sessions compare structurally, so separately decoded copies share a
   // lookup; failures are never cached.
   const profiles = yield* Cache.makeWith(
@@ -273,9 +285,11 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
     closeFailure: () => DatasetFailure,
   ) {
     const url = profile?.isPro === true ? proUrl : dataUrl;
-    const queue = yield* Queue.make<ServerFrame, DatasetFailure | Cause.Done>({
-      capacity: 512,
-    });
+    const queue = yield* Queue.make<ReceivedFrame, DatasetFailure | Cause.Done>(
+      {
+        capacity: 512,
+      },
+    );
     let closing = false;
     let failure: DatasetFailure | undefined;
     const socket = yield* Effect.acquireRelease(
@@ -307,7 +321,12 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
           if (frame.kind === "heartbeat") {
             socket.send(heartbeatFrame(frame.payload));
           }
-          if (!Queue.offerUnsafe(queue, frame))
+          if (
+            !Queue.offerUnsafe(queue, {
+              frame,
+              receivedSequence: ++receivedSequence,
+            })
+          )
             fail(
               new DatasetFailure(
                 new DatasetReasons.StreamInterrupted({ kind: "overflow" }),
@@ -367,7 +386,7 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
    * answer a pending request, so they cannot extend its timeout. */
   const nextResponse = (connection: Connection, onDone: () => DatasetFailure) =>
     Queue.take(connection.queue).pipe(
-      Effect.repeat({ until: (frame) => frame.kind !== "heartbeat" }),
+      Effect.repeat({ until: ({ frame }) => frame.kind !== "heartbeat" }),
       Effect.timeoutOrElse({ duration: responseTimeout, orElse: stopped }),
       Effect.catchIf(Cause.isDone, () => Effect.fail(onDone())),
     );
@@ -556,11 +575,14 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
         )
         .sort((left, right) => left.time - right.time);
     for (;;) {
-      const frame = yield* nextResponse(connection, historyClosed);
+      const { frame, receivedSequence } = yield* nextResponse(
+        connection,
+        historyClosed,
+      );
       const failure = frameFailure(frame, request.symbol);
       if (failure) return yield* Effect.fail(failure);
       for (const bar of frameCandles(frame)) {
-        bars.set(bar.time, bar);
+        bars.set(bar.time, { ...bar, receivedSequence });
         earliest = Math.min(earliest, bar.time);
       }
       if (frame.kind === "message" && frame.method === "series_completed") {
@@ -646,7 +668,7 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
     // Candles can precede the subscription acknowledgement; keep them in order
     // because the caller's history snapshot may already have ended.
     for (;;) {
-      const frame = yield* nextResponse(
+      const { frame, receivedSequence } = yield* nextResponse(
         connection,
         () =>
           new DatasetFailure(
@@ -656,7 +678,10 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
       );
       const failure = frameFailure(frame, request.symbol);
       if (failure) return yield* Effect.fail(failure);
-      const candles = frameCandles(frame);
+      const candles = frameCandles(frame).map((bar) => ({
+        ...bar,
+        receivedSequence,
+      }));
       if (candles.length > 0) yield* offer({ type: "bars", bars: candles });
       const status = streamStatus(frame);
       if (status !== undefined) {
@@ -667,16 +692,20 @@ export const makeClient = Effect.fn("TradingView.makeClient")(function* (
     yield* Effect.forkScoped(
       Effect.gen(function* () {
         for (;;) {
-          const frame = yield* nextFrame(connection).pipe(
+          const received = yield* nextFrame(connection).pipe(
             Effect.catchIf(Cause.isDone, () => Effect.succeed(undefined)),
           );
-          if (frame === undefined) {
+          if (received === undefined) {
             Queue.endUnsafe(queue);
             return;
           }
+          const { frame, receivedSequence } = received;
           const failure = frameFailure(frame, request.symbol);
           if (failure) return yield* Effect.fail(failure);
-          const candles = frameCandles(frame);
+          const candles = frameCandles(frame).map((bar) => ({
+            ...bar,
+            receivedSequence,
+          }));
           const status = streamStatus(frame);
           const activity: LiveActivity | undefined =
             frame.kind === "heartbeat"

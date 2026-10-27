@@ -13,9 +13,9 @@ extend anonymous access.
   instruments. `feed/` owns capabilities: crypto uses `24h`, others
   `regular`; no `1s` without entitlement. Listings need a venue or
   `EXCHANGE:SYMBOL`.
-- History pages from `create_series`/`modify_series` and `request_more_data`,
-  and shares proven spans per activation. Never treat an estimated lower bound
-  as caller coverage. Empty ranges are empty data, not failures.
+- History pages from `create_series`/`modify_series` and `request_more_data`.
+  Reads remain uncached without proven source finality. Never treat estimated
+  bounds as caller coverage. Empty ranges are empty data, not failures.
 - Anonymous/free sessions use `data`; paid plans use `prodata`. Stored
   sessions are validated before sockets open.
 - Search expands native futures contracts, preserves exchange prefixes and

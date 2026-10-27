@@ -13,6 +13,11 @@ export const tradingviewBarsRow = Schema.Struct({
   low: Schema.Finite,
   close: Schema.Finite,
   volume: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
+  /** Client-local socket receipt order; not an upstream revision or finality. */
+  receivedSequence: Schema.Finite.check(
+    Schema.isInt(),
+    Schema.isGreaterThan(0),
+  ),
 });
 
 /**

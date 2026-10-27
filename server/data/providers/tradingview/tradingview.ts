@@ -16,7 +16,7 @@ import { makeDataset } from "@openchart/server/data/dataset/dataset";
 import { configuredDatasets } from "@openchart/server/data/providers/configured";
 import type { AccessCheckedDatasetProvider } from "@openchart/server/data/provider";
 import { feeds } from "@openchart/server/data/providers/tradingview/feed/feed";
-import { cachedSelectBars, streamBars } from "./datasets/bars";
+import { selectBars, streamBars } from "./datasets/bars";
 import { searchSymbols } from "./datasets/symbology";
 import { makeCredential } from "./access";
 import { makeClient, type ClientOptions } from "./client";
@@ -52,9 +52,8 @@ export class TradingViewProvider extends Context.Service<
         const acquire = Effect.fn("TradingViewProvider.acquire")(function* (
           retired: Deferred.Deferred<void>,
         ) {
-          const history = yield* cachedSelectBars(client);
           const bars = yield* makeDataset(tradingviewBars, {
-            select: history.select,
+            select: (query) => selectBars(client, query),
             stream: (query) => streamBars(client, query, retired),
           });
           const symbology = yield* makeDataset(tradingviewSymbology, {

@@ -1,8 +1,6 @@
 // Purpose: Adapt TradingView history and live bars to the Dataset declaration.
 
 import { Effect, Stream, type Deferred, type Scope } from "effect";
-import { resolutionMs } from "@openchart/feed";
-import { cacheHistory } from "@openchart/server/feed/bar/history-cache";
 import { Monitoring } from "@openchart/server/monitoring";
 import type {
   DatasetFailure,
@@ -46,25 +44,6 @@ export const selectBars = Effect.fn("TradingView.selectBars")(function* (
     }),
   );
 });
-
-/** Share proven historical spans within one ready Dataset; recent bars stay fresh.
- * Create inside the Provider activation.
- * @example const { select } = yield* cachedSelectBars(client);
- */
-export const cachedSelectBars = Effect.fn("TradingView.cachedSelectBars")(
-  function* (client: Client) {
-    return yield* cacheHistory(
-      (query: SelectQuery<typeof tradingviewBars>) =>
-        Effect.scoped(selectBars(client, query)),
-      {
-        window: (query, now) => ({
-          from: 0,
-          to: now - 2 * resolutionMs[query.resolution],
-        }),
-      },
-    );
-  },
-);
 
 /** Acquire live candles before returning; the socket buffers until consumption.
  * Retirement ends the subscription normally so accepted updates can drain.
