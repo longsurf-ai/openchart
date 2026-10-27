@@ -17,11 +17,31 @@ import {
 } from "@openchart/app/lib/feed/bars";
 import {
   BarsView,
+  barsRequestCovers,
   UseBarsOptions,
   UseBarsResult,
 } from "@openchart/app/lib/feed/contracts";
 
 import { frame, request, snapshot } from "./bars.test-utils";
+
+it("accepts covering request windows without accepting a different series or end", () => {
+  const available = { ...request, from: -100, countBack: 200 };
+  expect(barsRequestCovers(available, request)).toBe(true);
+  expect(barsRequestCovers(request, available)).toBe(false);
+  expect(barsRequestCovers(available, { ...request, countBack: 201 })).toBe(
+    false,
+  );
+  expect(barsRequestCovers(available, { ...request, to: 10 })).toBe(false);
+  expect(barsRequestCovers(available, { ...request, resolution: "1d" })).toBe(
+    false,
+  );
+  expect(
+    barsRequestCovers(available, {
+      ...request,
+      listing: { ...request.listing, symbol: "ETHUSDT" },
+    }),
+  ).toBe(false);
+});
 
 it("provides completed updates for finite history and freezes its snapshot", () => {
   const complete = vi.fn();

@@ -58,7 +58,11 @@ import {
   type ChartPreferencesStore,
 } from "@openchart/app/lib/chart/preferences";
 import type { ChartRuntime } from "@openchart/app/lib/chart/store";
-import { observeBars } from "@openchart/app/lib/feed/bars";
+import {
+  BARS_KEEP_MS,
+  observeBars,
+  shareBarsViews,
+} from "@openchart/app/lib/feed/bars";
 import type { FeedClient } from "@openchart/app/lib/feed/client";
 import {
   FeedReactContext,
@@ -198,23 +202,27 @@ function MarketScene({
   );
 }
 
-function setup(initialViewport?: { from: number; to: number }) {
+function setup(
+  initialViewport?: { from: number; to: number },
+  keepLive = false,
+) {
   const calls: Array<{
     request: BarsRequest;
     sink: Subscriber<BarsMessage>;
     stop: ReturnType<typeof vi.fn>;
   }> = [];
+  const open = (request: BarsRequest) =>
+    observeBars(
+      new Observable((sink) => {
+        const stop = vi.fn();
+        calls.push({ request, sink, stop });
+        return stop;
+      }),
+      request,
+    );
   const client: FeedClient = {
     bars: {
-      observe: (request) =>
-        observeBars(
-          new Observable((sink) => {
-            const stop = vi.fn();
-            calls.push({ request, sink, stop });
-            return stop;
-          }),
-          request,
-        ),
+      observe: keepLive ? shareBarsViews(open) : open,
       getCapabilities: vi.fn(),
     },
     calendar: {
@@ -1240,8 +1248,8 @@ it("replaces a live bars window when a historical viewport is saved outside it",
   fixture.view.unmount();
 });
 
-function loadedMarket(to = Date.now()) {
-  const fixture = setup();
+function loadedMarket(to = Date.now(), keepLive = false) {
+  const fixture = setup(undefined, keepLive);
   act(() =>
     fixture.active("AAPL").sink.next({
       type: "snapshot",
@@ -1444,6 +1452,69 @@ it("keeps fractional pinned dates exact through repeated ticks and new bars", ()
     expect(fixture.exactVisible()).toEqual(target);
   }
   fixture.view.unmount();
+});
+
+it("projects a returned cached live view before its accumulated updates replay", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket(Math.floor(Date.now() / 60_000) * 60_000, true);
+  const live = fixture.active("AAPL");
+  const historical = {
+    from: fixture.to - 10 * 86_400_000,
+    to: fixture.to - 10 * 86_400_000 + 80 * 60_000,
+  };
+  act(() => fixture.local.setState({ viewport: historical, rightOffset: 0 }));
+  const history = fixture.active("AAPL");
+  act(() => {
+    history.sink.next({
+      type: "snapshot",
+      snapshot: {
+        data: minuteHistory(historical.to + 60_000),
+        range: { from: history.request.from, to: Number(history.request.to) },
+        hasMoreBefore: true,
+      },
+    });
+    history.sink.complete();
+  });
+  expect(fixture.exactVisible()).toEqual(historical);
+  // The shared live observation remains open while history is displayed.
+  act(() => {
+    live.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 3, fixture.to),
+    });
+    live.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 4, fixture.to + 60_000),
+    });
+  });
+  const opened = fixture.calls.length;
+  const target = {
+    from: fixture.to - 80 * 60_000 - 9173,
+    to: fixture.to - 9173,
+  };
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  expect(fixture.calls).toHaveLength(opened);
+  expect(
+    v2.ChartStateModel.mainSeries(fixture.runtime.store.getState())!.data,
+  ).toHaveLength(202);
+  expect(fixture.exactVisible()).toEqual(target);
+  const nearby = {
+    from: target.from - 20 * 60_000,
+    to: target.to - 20 * 60_000,
+  };
+  act(() => fixture.local.setState({ viewport: nearby, rightOffset: 0 }));
+  expect(fixture.exactVisible()).toEqual(nearby);
+  expect(fixture.calls).toHaveLength(opened);
+  act(() =>
+    mocks.renderers
+      .at(-1)!
+      .config.setState((state) => v2.ChartStateUtils.scrollToRealTime(state)),
+  );
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toBeNull();
+  fixture.view.unmount();
+  await act(async () => vi.advanceTimersByTime(BARS_KEEP_MS));
+  expect(live.stop).toHaveBeenCalledOnce();
 });
 
 it("retains a resized pinned window and its spacing through live ticks", () => {

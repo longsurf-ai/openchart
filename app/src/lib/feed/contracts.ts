@@ -18,6 +18,27 @@ const BarsUpdates = Schema.declare<Observable<BarsSnapshot["data"]>>(
 /** Compare request content using the shared schema. @example sameBarsRequest(a, b); */
 export const sameBarsRequest = Schema.toEquivalence(BarsRequest);
 
+/**
+ * Whether an available request covers another request for the same series and
+ * end: it starts no later and includes at least as many preceding bars. Uses
+ * the shared schema's equality for every other field. This pure comparison
+ * owns no resources or channel lifecycle; a closed view is not made reusable.
+ * @example if (barsRequestCovers(current.request, requested)) show(current);
+ */
+export function barsRequestCovers(
+  available: BarsRequest,
+  requested: BarsRequest,
+): boolean {
+  return (
+    available.from <= requested.from &&
+    available.countBack >= requested.countBack &&
+    sameBarsRequest(
+      { ...available, from: requested.from, countBack: requested.countBack },
+      requested,
+    )
+  );
+}
+
 /** Loading keeps the stopped view by default; clear hides it for any series/window. */
 export const UseBarsOptions = Schema.Struct({
   loadingBehavior: Schema.optionalKey(Schema.Literals(["keep", "clear"])),

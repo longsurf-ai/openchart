@@ -23,7 +23,7 @@ import {
   type ChartPreferences,
 } from "@openchart/app/lib/chart/preferences";
 import type { ChartOutput, ChartRuntime } from "@openchart/app/lib/chart/store";
-import { sameBarsRequest } from "@openchart/app/lib/feed/contracts";
+import { barsRequestCovers } from "@openchart/app/lib/feed/contracts";
 
 import { useBars } from "./use-bars";
 
@@ -111,7 +111,7 @@ export function useMarketSeriesSource(
       status === "ready" &&
       current?.data.numRows === 0 &&
       current.request.to !== "now" &&
-      sameBarsRequest(current.request, request) &&
+      barsRequestCovers(current.request, request) &&
       localStore.getState().viewport !== null
     ) {
       // A saved window before available history has no timeline to pan from.
@@ -119,6 +119,59 @@ export function useMarketSeriesSource(
       localStore.setState({ viewport: null, rightOffset: 0 });
     }
   }, [main, status, current, request, localStore]);
+  // Child ChartSeries layout effects install data before this source restores the viewport.
+  useLayoutEffect(() => {
+    if (!main || !frame) return;
+    const viewport =
+      materialized && materialized.view === current
+        ? materialized.viewport
+        : localStore.getState().viewport;
+    if (viewport === undefined) return;
+    chart.mutate((state) => {
+      if (viewport === null) {
+        const saved = localStore.getState();
+        v2.XScale.setAxisSpacing(
+          state.config.xAxis,
+          state.config.xAxis.activeId,
+          {
+            barSpacing: saved.barSpacing,
+            rightOffset: saved.rightOffset,
+          },
+        );
+      } else applyTimeViewport(state, viewport, step);
+    });
+  }, [chart, frame, materialized, current, localStore, main, step]);
+
+  // A control can move within already loaded bars without replacing the frame.
+  // Distant targets wait for their own snapshot instead of projecting onto the
+  // retained frame, whose history constraint belongs to the preceding window.
+  useLayoutEffect(() => {
+    if (
+      !main ||
+      !current ||
+      !barsRequestCovers(current.request, request) ||
+      (preferences.viewport !== null &&
+        viewportNeedsReload(request, preferences.viewport))
+    )
+      return;
+    chart.mutate((state) => {
+      if (preferences.viewport === null) {
+        const saved = localStore.getState();
+        v2.XScale.setAxisSpacing(
+          state.config.xAxis,
+          state.config.xAxis.activeId,
+          {
+            barSpacing: saved.barSpacing,
+            rightOffset: saved.rightOffset,
+          },
+        );
+      } else applyTimeViewport(state, preferences.viewport, step);
+    });
+  }, [chart, current, request, preferences.viewport, localStore, main, step]);
+
+  // Install and project the snapshot above before subscribing. A reused live
+  // view synchronously replays accumulated updates to this late subscriber;
+  // its first update must preserve the newly projected window, not old offsets.
   useLayoutEffect(() => {
     setProjectionError(undefined);
     if (!current) return;
@@ -158,55 +211,6 @@ export function useMarketSeriesSource(
     });
     return () => subscription.unsubscribe();
   }, [current, chart, localStore, main, step]);
-  // Child ChartSeries layout effects install data before this source restores the viewport.
-  useLayoutEffect(() => {
-    if (!main || !frame) return;
-    const viewport =
-      materialized && materialized.view === current
-        ? materialized.viewport
-        : localStore.getState().viewport;
-    if (viewport === undefined) return;
-    chart.mutate((state) => {
-      if (viewport === null) {
-        const saved = localStore.getState();
-        v2.XScale.setAxisSpacing(
-          state.config.xAxis,
-          state.config.xAxis.activeId,
-          {
-            barSpacing: saved.barSpacing,
-            rightOffset: saved.rightOffset,
-          },
-        );
-      } else applyTimeViewport(state, viewport, step);
-    });
-  }, [chart, frame, materialized, current, localStore, main, step]);
-
-  // A control can move within already loaded bars without replacing the frame.
-  // Distant targets wait for their own snapshot instead of projecting onto the
-  // retained frame, whose history constraint belongs to the preceding window.
-  useLayoutEffect(() => {
-    if (
-      !main ||
-      !current ||
-      !sameBarsRequest(current.request, request) ||
-      (preferences.viewport !== null &&
-        viewportNeedsReload(request, preferences.viewport))
-    )
-      return;
-    chart.mutate((state) => {
-      if (preferences.viewport === null) {
-        const saved = localStore.getState();
-        v2.XScale.setAxisSpacing(
-          state.config.xAxis,
-          state.config.xAxis.activeId,
-          {
-            barSpacing: saved.barSpacing,
-            rightOffset: saved.rightOffset,
-          },
-        );
-      } else applyTimeViewport(state, preferences.viewport, step);
-    });
-  }, [chart, current, request, preferences.viewport, localStore, main, step]);
 
   useLayoutEffect(() => {
     if (!main) return;
@@ -219,7 +223,7 @@ export function useMarketSeriesSource(
         // Capture absolute intent before a live prepend can reindex the same
         // view during the gesture debounce.
         map(() => {
-          if (!current || !sameBarsRequest(current.request, request)) return;
+          if (!current || !barsRequestCovers(current.request, request)) return;
           const state = chart.store.getState();
           const viewport = readTimeViewport(state, step);
           if (!viewport) return;
@@ -271,7 +275,7 @@ export function useMarketSeriesSource(
         if (
           status !== "ready" ||
           !current?.data.numRows ||
-          !sameBarsRequest(current.request, request)
+          !barsRequestCovers(current.request, request)
         )
           return;
         const state = chart.store.getState();
