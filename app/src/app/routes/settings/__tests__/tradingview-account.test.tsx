@@ -81,10 +81,19 @@ function show() {
   );
 }
 async function start() {
-  const button = await screen.findByRole("button", { name: "Connect account" });
+  const button = await screen.findByRole("button", {
+    name: "Connect your TradingView account",
+  });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
-  return screen.findByRole("dialog", { name: "Connect TradingView" });
+  const dialog = await screen.findByRole("dialog", {
+    name: "Connect your TradingView account",
+  });
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Connect account" }),
+  );
+  await screen.findByLabelText("Login link");
+  return dialog;
 }
 function paste(value: string = loginLink) {
   fireEvent.change(screen.getByLabelText("Login link"), {
@@ -129,7 +138,7 @@ test("exchanges the pasted link without passing cookies or caching the secret", 
     }),
   );
   expect(
-    await screen.findByRole("button", { name: "Reconnect" }),
+    await screen.findByRole("button", { name: "Switch account" }),
   ).toBeVisible();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(rpc.providers.refresh.mutate).toHaveBeenCalledOnce();
@@ -400,9 +409,12 @@ test("a start that finishes after unmount is cancelled without opening a browser
       }),
   );
   const view = show();
-  const button = await screen.findByRole("button", { name: "Connect account" });
+  const button = await screen.findByRole("button", {
+    name: "Connect your TradingView account",
+  });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
+  fireEvent.click(screen.getByRole("button", { name: "Connect account" }));
   await waitFor(() =>
     expect(rpc.access.tradingview.start.mutate).toHaveBeenCalledOnce(),
   );
@@ -428,12 +440,12 @@ test("a failed account read stays unknown and offers retry", async () => {
   });
   expect(screen.getByText("Connection status is unavailable.")).toBeVisible();
   expect(
-    screen.queryByRole("button", { name: "Connect account" }),
+    screen.queryByRole("button", { name: "Connect your TradingView account" }),
   ).not.toBeInTheDocument();
   rpc.access.integration.listIntegrations.query.mockResolvedValue(connected);
   fireEvent.click(retry);
   expect(
-    await screen.findByRole("button", { name: "Reconnect" }),
+    await screen.findByRole("button", { name: "Switch account" }),
   ).toBeVisible();
   expect(rpc.access.tradingview.start.mutate).not.toHaveBeenCalled();
 });
@@ -450,10 +462,71 @@ test("disconnect clears the server account and refreshes provider access", async
     ).toHaveBeenCalledWith({ integrationID: "tradingview" }),
   );
   expect(
-    await screen.findByRole("button", { name: "Connect account" }),
+    await screen.findByRole("button", {
+      name: "Connect your TradingView account",
+    }),
   ).toBeEnabled();
   expect(rpc.providers.refresh.mutate).toHaveBeenCalledOnce();
   expect(
     rpc.access.integration.connection.setApiKey.mutate,
+  ).not.toHaveBeenCalled();
+});
+
+test("account choice does not open the browser until sign-in is chosen", async () => {
+  show();
+  const button = await screen.findByRole("button", {
+    name: "Connect your TradingView account",
+  });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  expect(rpc.access.tradingview.start.mutate).not.toHaveBeenCalled();
+  expect(window.open).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Continue without signing in" }),
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(rpc.access.tradingview.cancel.mutate).not.toHaveBeenCalled();
+  expect(
+    rpc.access.integration.connection.disconnect.mutate,
+  ).not.toHaveBeenCalled();
+});
+
+test("switching first identifies the current account and preserves it on cancel or failure", async () => {
+  rpc.access.integration.listIntegrations.query.mockResolvedValue(connected);
+  show();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Switch account" }),
+  );
+  const dialog = screen.getByRole("dialog", {
+    name: "Switch TradingView account",
+  });
+  expect(within(dialog).getByText(/Connected as alice/)).toBeVisible();
+  expect(rpc.access.tradingview.start.mutate).not.toHaveBeenCalled();
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Open TradingView" }),
+  );
+  expect(window.open).toHaveBeenCalledWith(
+    "https://www.tradingview.com/",
+    "_blank",
+    "noopener,noreferrer",
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByText("Connected as alice")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Switch account" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  await screen.findByLabelText("Login link");
+  rpc.access.tradingview.complete.mutate.mockRejectedValueOnce(
+    new Error("Switch failed"),
+  );
+  paste();
+  submit();
+  await findErrorToast("Switch failed");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  expect(screen.getByText("Connected as alice")).toBeVisible();
+  expect(
+    rpc.access.integration.connection.disconnect.mutate,
   ).not.toHaveBeenCalled();
 });

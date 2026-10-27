@@ -284,7 +284,8 @@ Capabilities report only the supported resolution/session/adjustment combination
 Logos are not a Feed service. The app's `lib/logo` maps a listing to an
 [Elbstream](https://elbstream.com/logos) URL (crypto base asset, else ISIN or
 native symbol) that the renderer loads directly; unknown logos fall back to
-initials. Settings › Data Providers carries Elbstream's required attribution.
+initials. Settings › Data Providers carries Elbstream's attribution at the bottom
+right inside its card, retaining the free service's minimum 12pt text size.
 
 Calendar requests carry the same `{provider, listing}` pair as Bars and route to
 that provider only; a provider without a calendar is `Feed.SourceUnavailable`.

@@ -47,39 +47,69 @@ function isLoginLink(value: string): boolean {
 }
 
 /**
- * Opens TradingView sign-in in the system browser, preserving its existing
- * account and passkey support. Access exchanges the pasted one-time link and
- * stores credentials server-side; the renderer retains only the unsaved draft.
- * Closing or unmounting cancels the attempt, and successful completion clears
- * the draft. Starting again awaits cancellation of the failed attempt and keeps
- * the dialog until its replacement opens, so an old callback cannot outlive it.
- * Query reports failures while failed writes preserve the dialog.
- * @example <TradingViewAccount transport={transport} />
+ * Reads the active TradingView account from the shared Integration query. Query
+ * owns request cleanup and reports failures; no credentials enter the renderer.
+ * A successful empty result means no account is connected.
+ * @example const connection = useTradingViewConnection(transport);
  */
-export function TradingViewAccount({ transport }: { transport: AppTransport }) {
-  const queries = useQueryClient();
-  const refresh = useRefreshProviderAccess(transport);
-  const inputID = useId();
-  const [attempt, setAttempt] = useState<LoginAttempt | null>(null);
-  const [link, setLink] = useState("");
-  const [invalid, setInvalid] = useState(false);
-  const activeAttempt = useRef<string | null>(null);
-  const mounted = useRef(false);
-  const connection = useQuery({
+export function useTradingViewConnection(transport: AppTransport) {
+  return useQuery({
     queryKey: integrationKey,
     queryFn: ({ signal }) =>
       transport.rpc.access.integration.listIntegrations.query(undefined, {
         signal,
       }),
+    select: (integrations) =>
+      integrations
+        .find((integration) => integration.id === integrationID)
+        ?.credentialSources.find((source) => source.active),
     meta: { errorTitle: "Couldn’t read the TradingView connection" },
   });
-  const activeConnection = connection.data
-    ?.find((integration) => integration.id === integrationID)
-    ?.credentialSources.find((source) => source.active);
+}
+
+/**
+ * Offers account choice before opening browser sign-in. Switching first lets
+ * users select their own account in TradingView; the saved account remains
+ * connected until Access successfully exchanges the one-time login link.
+ * Closing or unmounting cancels the attempt and discards only the unsaved draft.
+ * Failed writes retain the dialog for retry. Provider enablement stays with the
+ * caller: an optional pending enable is confirmed after an anonymous choice or
+ * successful login, and cancelled on close. Ordinary account actions never
+ * change the provider preference.
+ * @example <TradingViewAccount transport={transport} />
+ */
+export function TradingViewAccount({
+  transport,
+  enableRequest,
+}: {
+  transport: AppTransport;
+  enableRequest?: {
+    onConnected: () => void;
+    onContinueWithoutSignIn: () => void;
+    onCancel: () => void;
+    isSaving: boolean;
+  };
+}) {
+  const queries = useQueryClient();
+  const refresh = useRefreshProviderAccess(transport);
+  const inputID = useId();
+  const [preparation, setPreparation] = useState<"connect" | "switch" | null>(
+    null,
+  );
+  const [attempt, setAttempt] = useState<LoginAttempt | null>(null);
+  const [link, setLink] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const activeAttempt = useRef<string | null>(null);
+  const mounted = useRef(false);
+  const connection = useTradingViewConnection(transport);
+  const activeConnection = connection.data;
   const connected = Boolean(activeConnection);
+  const switching = preparation === "switch";
+  const open = Boolean(preparation || enableRequest || attempt);
   const clearAttempt = () => {
     activeAttempt.current = null;
     setAttempt(null);
+    setPreparation(null);
     setLink("");
     setInvalid(false);
   };
@@ -127,6 +157,7 @@ export function TradingViewAccount({ transport }: { transport: AppTransport }) {
     gcTime: 0,
     onSuccess: () => {
       clearAttempt();
+      if (mounted.current) enableRequest?.onConnected();
       refresh.mutate();
       void queries.invalidateQueries({ queryKey: integrationKey });
     },
@@ -144,25 +175,33 @@ export function TradingViewAccount({ transport }: { transport: AppTransport }) {
     },
     meta: { errorTitle: "Couldn’t disconnect TradingView" },
   });
-  const writing = complete.isPending || cancel.isPending;
+  const writing =
+    complete.isPending || cancel.isPending || enableRequest?.isSaving;
   const busy =
-    start.isPending ||
-    Boolean(attempt) ||
-    disconnect.isPending ||
-    refresh.isPending;
+    start.isPending || open || disconnect.isPending || refresh.isPending;
   const close = () => {
-    if (!attempt || writing || start.isPending) return;
+    if (writing || start.isPending) return;
+    if (!attempt) {
+      setPreparation(null);
+      enableRequest?.onCancel();
+      return;
+    }
     const attemptID = attempt.attemptID;
     cancel.mutate(attemptID, {
       onSuccess: () => {
-        if (activeAttempt.current === attemptID) clearAttempt();
+        if (activeAttempt.current === attemptID) {
+          clearAttempt();
+          enableRequest?.onCancel();
+        }
       },
     });
   };
   return (
     <>
       <CardItem
-        title="TradingView account"
+        className="flex-wrap gap-y-3"
+        classNameWrapperAction="max-w-full"
+        title="Your TradingView account"
         description={
           connection.isError
             ? "Connection status is unavailable."
@@ -170,7 +209,7 @@ export function TradingViewAccount({ transport }: { transport: AppTransport }) {
               ? "Checking connection…"
               : connected
                 ? `Connected as ${activeConnection?.label}`
-                : "Optional. Connect to use your account’s history depth and data entitlements; anonymous data works without it."
+                : "Not connected"
         }
         actions={
           connection.isError ? (
@@ -185,19 +224,18 @@ export function TradingViewAccount({ transport }: { transport: AppTransport }) {
               Retry
             </Button>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant={connected ? "outline" : "default"}
                 size="sm"
+                className="h-auto min-h-8 max-w-full whitespace-normal"
                 disabled={busy || connection.isPending}
-                onClick={() => start.mutate()}
+                onClick={() => setPreparation(connected ? "switch" : "connect")}
               >
-                {start.isPending
-                  ? "Opening browser…"
-                  : connected
-                    ? "Reconnect"
-                    : "Connect account"}
+                {connected
+                  ? "Switch account"
+                  : "Connect your TradingView account"}
               </Button>
               {connected ? (
                 <Button
@@ -214,92 +252,150 @@ export function TradingViewAccount({ transport }: { transport: AppTransport }) {
           )
         }
       />
-      <Dialog open={Boolean(attempt)} onOpenChange={(open) => !open && close()}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={open} onOpenChange={(open) => !open && close()}>
+        <DialogContent className="sm:max-w-lg lg:max-w-lg xl:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Connect TradingView</DialogTitle>
-            <DialogDescription>{attempt?.instructions}</DialogDescription>
+            <DialogTitle>
+              {switching
+                ? "Switch TradingView account"
+                : "Connect your TradingView account"}
+            </DialogTitle>
+            <DialogDescription>
+              {attempt
+                ? attempt.instructions
+                : switching
+                  ? `Connected as ${activeConnection?.label}. In your browser, sign in to the TradingView account you want to use, then return here.`
+                  : "Use your own account, or continue with public market data."}
+            </DialogDescription>
           </DialogHeader>
-          <form
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (writing || start.isPending) return;
-              if (complete.isError && attempt) {
-                // The dialog keeps the failed draft until its released attempt is replaced.
-                cancel.mutate(attempt.attemptID, {
-                  onSuccess: () => start.mutate(),
-                });
-                return;
-              }
-              if (!isLoginLink(link)) {
-                setInvalid(true);
-                return;
-              }
-              complete.mutate();
-            }}
-          >
-            {!complete.isError ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="justify-self-start"
-                disabled={writing}
-                onClick={() => {
-                  if (attempt)
-                    window.open(attempt.url, "_blank", "noopener,noreferrer");
-                }}
-              >
-                Return to browser
-              </Button>
-            ) : null}
-            <div className="grid gap-2">
-              <Label htmlFor={inputID}>Login link</Label>
-              <SecretInput
-                id={inputID}
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={8192}
-                value={link}
-                disabled={writing || complete.isError}
-                placeholder="Paste the copied link"
-                aria-invalid={invalid}
-                aria-describedby={invalid ? `${inputID}-error` : undefined}
-                onChange={(event) => {
-                  setLink(event.target.value);
-                  setInvalid(false);
-                }}
-              />
-              {invalid ? (
-                <p
-                  id={`${inputID}-error`}
-                  role="alert"
-                  className="text-sm text-destructive"
+          {!attempt ? (
+            <>
+              {switching ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="justify-self-start"
+                  onClick={() =>
+                    window.open(
+                      "https://www.tradingview.com/",
+                      "_blank",
+                      "noopener,noreferrer",
+                    )
+                  }
                 >
-                  Paste the login link copied from TradingView.
-                </p>
+                  Open TradingView
+                </Button>
               ) : null}
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={writing || start.isPending}
-                onClick={close}
-              >
-                {cancel.isPending ? "Cancelling…" : "Cancel"}
-              </Button>
-              <Button type="submit" disabled={writing || start.isPending}>
-                {start.isPending
-                  ? "Opening browser…"
-                  : complete.isError
-                    ? "Start again"
-                    : complete.isPending
-                      ? "Connecting…"
-                      : "Connect"}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={start.isPending || writing}
+                  onClick={() => {
+                    if (switching) close();
+                    else {
+                      setPreparation(null);
+                      enableRequest?.onContinueWithoutSignIn();
+                    }
+                  }}
+                >
+                  {switching ? "Cancel" : "Continue without signing in"}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={start.isPending || writing}
+                  onClick={() => start.mutate()}
+                >
+                  {start.isPending
+                    ? "Opening browser…"
+                    : switching
+                      ? "Continue"
+                      : "Connect account"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <form
+              className="grid gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (writing || start.isPending) return;
+                if (complete.isError && attempt) {
+                  // The dialog keeps the failed draft until its released attempt is replaced.
+                  cancel.mutate(attempt.attemptID, {
+                    onSuccess: () => start.mutate(),
+                  });
+                  return;
+                }
+                if (!isLoginLink(link)) {
+                  setInvalid(true);
+                  return;
+                }
+                complete.mutate();
+              }}
+            >
+              {!complete.isError ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="justify-self-start"
+                  disabled={writing}
+                  onClick={() => {
+                    if (attempt)
+                      window.open(attempt.url, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  Return to browser
+                </Button>
+              ) : null}
+              <div className="grid gap-2">
+                <Label htmlFor={inputID}>Login link</Label>
+                <SecretInput
+                  id={inputID}
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={8192}
+                  value={link}
+                  disabled={writing || complete.isError}
+                  placeholder="Paste the copied link"
+                  aria-invalid={invalid}
+                  aria-describedby={invalid ? `${inputID}-error` : undefined}
+                  onChange={(event) => {
+                    setLink(event.target.value);
+                    setInvalid(false);
+                  }}
+                />
+                {invalid ? (
+                  <p
+                    id={`${inputID}-error`}
+                    role="alert"
+                    className="text-sm text-destructive"
+                  >
+                    Paste the login link copied from TradingView.
+                  </p>
+                ) : null}
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={writing || start.isPending}
+                  onClick={close}
+                >
+                  {cancel.isPending ? "Cancelling…" : "Cancel"}
+                </Button>
+                <Button type="submit" disabled={writing || start.isPending}>
+                  {start.isPending
+                    ? "Opening browser…"
+                    : complete.isError
+                      ? "Start again"
+                      : complete.isPending
+                        ? "Connecting…"
+                        : "Connect"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </>

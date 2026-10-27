@@ -8,6 +8,7 @@ import {
 import { ProviderId } from "@openchart/market";
 import { offersRetry } from "@openchart/app/lib/feed/transport";
 // Purpose: Configure providers and index native listings using the existing settings cards.
+import { useState } from "react";
 import { useOutletContext } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
@@ -25,7 +26,10 @@ import { useSymbologyFeed } from "@openchart/app/hooks/use-datafeed";
 import { resourceQueryKeys } from "@openchart/app/lib/resource/invalidation";
 import { SettingsPage } from "./settings-page";
 import { ProviderAccessControl } from "./provider-access";
-import { TradingViewAccount } from "./tradingview-account";
+import {
+  TradingViewAccount,
+  useTradingViewConnection,
+} from "./tradingview-account";
 
 const providerSettingsIds = [
   "openchart",
@@ -38,6 +42,8 @@ const providerSettingsIds = [
 export default function ProviderSettings() {
   const { transport } = useOutletContext<AppRouteContext>();
   const settings = useConfig(transport);
+  const tradingViewConnection = useTradingViewConnection(transport);
+  const [enableTradingView, setEnableTradingView] = useState(false);
   const symbology = useSymbologyFeed();
   const queryClient = useQueryClient();
   const statusKey = ["symbology", "indexStatus"] as const;
@@ -92,7 +98,7 @@ export default function ProviderSettings() {
             return (
               <Collapsible
                 key={id}
-                className="border-b border-border/40 py-3 first:pt-0 last:border-none last:pb-0"
+                className="border-b border-border/40 py-3 first:pt-0"
               >
                 <div className="flex items-center gap-4">
                   <Header className="group flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -125,15 +131,58 @@ export default function ProviderSettings() {
                     id={id}
                     name={name}
                     enabled={settings.config!.providers[id].enabled}
-                    disabled={settings.isSaving || !!settings.readError}
-                    onChange={(enabled) =>
-                      settings.update({ providers: { [id]: { enabled } } })
+                    disabled={
+                      settings.isSaving ||
+                      !!settings.readError ||
+                      (id === "tradingview" &&
+                        (enableTradingView ||
+                          (!settings.config!.providers[id].enabled &&
+                            !tradingViewConnection.isSuccess)))
                     }
+                    onChange={(enabled) => {
+                      if (
+                        id === "tradingview" &&
+                        enabled &&
+                        !tradingViewConnection.data
+                      ) {
+                        setEnableTradingView(true);
+                      } else {
+                        settings.update({ providers: { [id]: { enabled } } });
+                      }
+                    }}
                   />
                 </div>
                 {id === "tradingview" ? (
                   <div className="pb-1 pl-7 pt-4 text-sm">
-                    <TradingViewAccount transport={transport} />
+                    <TradingViewAccount
+                      transport={transport}
+                      enableRequest={
+                        enableTradingView
+                          ? {
+                              onConnected: () => {
+                                setEnableTradingView(false);
+                                settings.update({
+                                  providers: { tradingview: { enabled: true } },
+                                });
+                              },
+                              onContinueWithoutSignIn: () =>
+                                settings.update(
+                                  {
+                                    providers: {
+                                      tradingview: { enabled: true },
+                                    },
+                                  },
+                                  {
+                                    onSuccess: () =>
+                                      setEnableTradingView(false),
+                                  },
+                                ),
+                              onCancel: () => setEnableTradingView(false),
+                              isSaving: settings.isSaving,
+                            }
+                          : undefined
+                      }
+                    />
                   </div>
                 ) : null}
                 {expandable ? (
@@ -205,20 +254,20 @@ export default function ProviderSettings() {
               </Collapsible>
             );
           })}
+          {/* Elbstream's free logo terms require a visible link of at least 12pt (16px). */}
+          <p className="pt-4 text-right text-base text-muted-foreground">
+            Logos:{" "}
+            <a
+              href="https://elbstream.com"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Elbstream
+            </a>
+          </p>
         </Card>
       ) : null}
-      {/* Elbstream's free logo terms require a visible link of at least 12pt (16px). */}
-      <p className="text-base text-muted-foreground">
-        Logos by{" "}
-        <a
-          href="https://elbstream.com"
-          target="_blank"
-          rel="noreferrer"
-          className="text-foreground underline"
-        >
-          Elbstream
-        </a>
-      </p>
     </SettingsPage>
   );
 }

@@ -20,9 +20,13 @@ native bridge.
 
 ### TradingView sign-in
 
-Settings → Data Providers offers an optional TradingView account. Sign-in opens
-the system browser through the app's existing external-link handling, preserving
-the person's browser cookies, password manager and passkeys. Integration owns a
+Settings → Data Providers offers a choice to connect the person's TradingView
+account or continue with public market data. Enabling a disconnected provider
+opens this choice; connecting an account separately preserves provider enablement.
+Switch account first lets the person open TradingView and select their account
+in the normal browser. The saved connection remains until a replacement succeeds.
+Sign-in opens the system browser through the app's existing external-link handling,
+preserving browser cookies, password manager and passkeys. Integration owns a
 short-lived private verifier; the browser URL contains only its SHA-256 challenge.
 TradingView's desktop connect endpoint accepts its own callback scheme, so the
 person uses “copy the secret key” in the browser page footer to copy the login
