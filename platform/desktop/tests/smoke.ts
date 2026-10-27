@@ -55,11 +55,91 @@ const executable = join(bundle, relative(sourceBundle, sourceExecutable));
 const home = join(profile, "home");
 const userData = join(profile, "browser");
 const errors: string[] = [];
+const calendarResponses: Promise<void>[] = [];
+const calendarConsoleErrors: { url: string; text: string }[] = [];
+const verifiedCalendarResponses = new Map<string, number>();
+const optionalCalendarFailures: {
+  status: number;
+  provider: string;
+  reason: string;
+}[] = [];
 const processErrors: string[] = [];
 let application: ElectronApplication | undefined;
 let passed = false;
 const nativeState = join(profile, "native-state");
 const nativeBin = join(profile, "bin");
+
+/** Keep optional Binance calendar misses distinct from renderer or other HTTP failures. */
+function observeRendererErrors(page: Page) {
+  const calendarURL = (value: string) =>
+    URL.canParse(value) &&
+    new URL(value).hostname === "127.0.0.1" &&
+    new URL(value).pathname === "/trpc/feed.calendar.get";
+  page.on("pageerror", (cause) => errors.push(cause.stack ?? cause.message));
+  page.on("response", (response) => {
+    if (response.status() !== 503 || !calendarURL(response.url())) return;
+    calendarResponses.push(
+      response
+        .json()
+        .then((body: unknown) => {
+          const failure = body as {
+            error?: {
+              data?: {
+                code?: string;
+                error?: {
+                  _tag?: string;
+                  reason?: { _tag?: string; provider?: string };
+                };
+              };
+            };
+          };
+          const data = failure?.error?.data;
+          assert.equal(data?.code, "SERVICE_UNAVAILABLE");
+          assert.equal(data?.error?._tag, "FeedError");
+          assert.deepEqual(data?.error?.reason, {
+            _tag: "Feed.SourceUnavailable",
+            provider: "binance",
+          });
+          verifiedCalendarResponses.set(
+            response.url(),
+            (verifiedCalendarResponses.get(response.url()) ?? 0) + 1,
+          );
+          optionalCalendarFailures.push({
+            status: 503,
+            provider: "binance",
+            reason: "Feed.SourceUnavailable",
+          });
+        })
+        .catch(() => {
+          errors.push("Unexpected or unreadable calendar HTTP 503 response");
+        }),
+    );
+  });
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    const text = message.text().slice(0, 600);
+    const url = message.location().url;
+    if (
+      text ===
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)" &&
+      calendarURL(url)
+    )
+      calendarConsoleErrors.push({ url, text });
+    else errors.push(text);
+  });
+}
+
+/** Await response decoding before allowing one console message per verified optional miss. */
+async function assertRendererErrors() {
+  while (calendarResponses.length)
+    await Promise.all(calendarResponses.splice(0));
+  for (const { url, text } of calendarConsoleErrors.splice(0)) {
+    const count = verifiedCalendarResponses.get(url) ?? 0;
+    if (count > 0) verifiedCalendarResponses.set(url, count - 1);
+    else errors.push(text);
+  }
+  assert.deepEqual(errors, []);
+}
 
 /** Exercises Settings through the renderer, including native CLI setup and model requests. */
 async function verifySettings(page: Page) {
@@ -107,10 +187,7 @@ async function verifySettings(page: Page) {
     join(applicationDirectory, "preload/preload.cjs"),
   );
   const sibling = await siblingReady;
-  sibling.on("pageerror", (cause) => errors.push(cause.message));
-  sibling.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
+  observeRendererErrors(sibling);
   try {
     await sibling.goto("openchart://app/app/settings/providers");
     await expect(
@@ -193,7 +270,7 @@ async function verifySettings(page: Page) {
   await expect
     .poll(
       async () =>
-        JSON.parse(await readFile(filename, "utf8")).models.defaultModel
+        JSON.parse(await readFile(filename, "utf8")).models?.defaultModel
           ?.modelID,
     )
     .toBe("tier1");
@@ -429,10 +506,7 @@ async function launch(): Promise<Page> {
   await assert.rejects(readFile(join(userData, "openchart.sqlite3")), {
     code: "ENOENT",
   });
-  page.on("pageerror", (cause) => errors.push(cause.stack ?? cause.message));
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text().slice(0, 600));
-  });
+  observeRendererErrors(page);
   page.setDefaultTimeout(30_000);
   await expect(page).toHaveURL(/^openchart:\/\/app\//);
   return page;
@@ -726,7 +800,7 @@ try {
     ),
     1,
   );
-  assert.deepEqual(errors, []);
+  await assertRendererErrors();
   const stopped = await quit();
 
   page = await launch();
@@ -749,7 +823,7 @@ try {
       .getByRole("region", { name: "Codex", exact: true })
       .getByText("1 models available", { exact: true }),
   ).toBeVisible();
-  assert.deepEqual(errors, []);
+  await assertRendererErrors();
 
   const result = {
     executable: sourceExecutable,
@@ -762,6 +836,7 @@ try {
     transports,
     stopped,
     settings,
+    optionalCalendarFailures,
     tests:
       "first-run onboarding, chat shell, settings, native window buttons, draggable headers, clickable header controls, sidebar collapse/expand spacing, theme persistence, no mock worker, models, SSE ready, Hose protocol, hosted backend, new chat, reload, graceful backend exit, restart with persisted chat, renderer isolation",
   };
