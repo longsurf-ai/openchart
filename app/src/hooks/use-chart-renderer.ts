@@ -38,8 +38,24 @@ export function useChartRenderer(
     const renderer = v2.createRenderer({
       container: element,
       getState: store.getState,
-      setState: commit,
-      onVisibleRangeChange: (range) => output.next({ type: "range", ...range }),
+      setState: (recipe) => {
+        const before = v2.XScale.getAxis(store.getState().config.xAxis);
+        commit(recipe);
+        const state = store.getState();
+        const after = v2.XScale.getAxis(state.config.xAxis);
+        if (
+          before.id !== after.id ||
+          before.spacing.barSpacing !== after.spacing.barSpacing ||
+          before.spacing.rightOffset !== after.spacing.rightOffset
+        )
+          output.next({
+            type: "range",
+            source: "interaction",
+            ...v2.ChartStateUtils.getVisibleRange(state),
+          });
+      },
+      onVisibleRangeChange: (range) =>
+        output.next({ type: "range", source: "render", ...range }),
       onRenderComplete: () => output.next({ type: "paint" }),
     });
     renderer.canvas.tabIndex = 0;

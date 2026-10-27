@@ -20,13 +20,19 @@ export function createChartStore(initial: v2.Chart.State) {
 /** One mounted chart's vanilla Zustand store. */
 export type ChartStore = ReturnType<typeof createChartStore>;
 
-/** Committed interactions consumed by the page and data hooks. */
+/** Renderer observations and committed interactions consumed by page and data hooks. */
 export type ChartOutput =
   | { type: "paint" }
   | ({ type: "chart-explain" } & z.infer<
       typeof ChartEvent.ChartExplainRange.schema
     >)
-  | { type: "range"; from: number; to: number }
+  | {
+      type: "range";
+      from: number;
+      to: number;
+      /** Renderer gestures change saved intent; painting only reports its projection. */
+      source: "interaction" | "render";
+    }
   | { type: "crosshair"; index: number | undefined; x: number; y: number };
 
 /** Stable capabilities for one mounted renderer; never persisted. */

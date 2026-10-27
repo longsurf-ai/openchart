@@ -48,7 +48,7 @@ function calendarDate(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** Open the Go to date dialog with this cell's saved window as the starting point.
+/** Open Go to date for the captured cell; focus changes never retarget an open dialog.
  * @example <GoToDateButton localStore={preferences} resolution={cell.resolution} chart={chart} />
  */
 export function GoToDateButton({
@@ -62,8 +62,12 @@ export function GoToDateButton({
   chart: ChartRuntime;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  useWidgetControls(open);
+  const [target, setTarget] = useState<{
+    localStore: ChartPreferencesStore;
+    resolution: Resolution;
+    chart: ChartRuntime;
+  }>();
+  useWidgetControls(!!target);
   return (
     <>
       <Tooltip>
@@ -74,20 +78,15 @@ export function GoToDateButton({
             className="text-muted-foreground hover:text-foreground"
             disabled={disabled}
             aria-label="Go to date"
-            onClick={() => setOpen(true)}
+            onClick={() => setTarget({ localStore, resolution, chart })}
           >
             <CalendarIcon className="size-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>Go to date</TooltipContent>
       </Tooltip>
-      {open ? (
-        <GoToDateDialog
-          localStore={localStore}
-          resolution={resolution}
-          chart={chart}
-          onClose={() => setOpen(false)}
-        />
+      {target ? (
+        <GoToDateDialog {...target} onClose={() => setTarget(undefined)} />
       ) : null}
     </>
   );
@@ -123,7 +122,7 @@ export function GoToDateDialog({
       }}
     >
       <DialogContent
-        className="sm:max-w-md"
+        className="sm:max-w-md lg:max-w-md xl:max-w-md"
         aria-describedby={`${formId}-copy`}
       >
         <DialogHeader>
@@ -156,7 +155,7 @@ export function GoToDateDialog({
                 spanMs: visibleSpanMs(
                   localStore.getState(),
                   resolution,
-                  chart.store.getState().config.chart.dimensions.width,
+                  chart.store.getState(),
                 ),
               }),
               rightOffset: 0,

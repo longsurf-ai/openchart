@@ -356,6 +356,7 @@ it("reads visible cells from one Query cache without rebuilding runtimes or unch
     controls.getByRole("button", { name: "Compare symbol" }),
     controls.getByRole("button", { name: "Interval 1d" }),
     controls.getByRole("button", { name: "Chart type Candlestick" }),
+    controls.getByRole("button", { name: "Go to date" }),
   ]);
   expect(controls.queryByRole("separator")).not.toBeInTheDocument();
   for (const [name, label] of [

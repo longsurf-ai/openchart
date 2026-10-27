@@ -266,7 +266,12 @@ it("pan and zoom cannot expand the calculation window; input edits recompute the
   await waitFor(() => expect(studies).toHaveLength(1));
   act(() => {
     emitStudy(0, 41500);
-    runtimes[0]!.output$.next({ type: "range", from: -1000, to: 1000 });
+    runtimes[0]!.output$.next({
+      type: "range",
+      source: "render",
+      from: -1000,
+      to: 1000,
+    });
   });
   expect(studies).toHaveLength(1);
   view.rerender(preview({ interactive: true, parameters: { length: 21 } }));

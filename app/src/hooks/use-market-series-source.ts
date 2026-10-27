@@ -6,8 +6,8 @@ import {
   type Resolution,
 } from "@openchart/feed";
 import { mergeByTime, type DataFrame } from "@openchart/timeseries";
-import { useLayoutEffect, useMemo, useState } from "react";
-import { debounceTime, filter } from "rxjs";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { debounceTime, filter, map } from "rxjs";
 import { useStore } from "zustand";
 
 import {
@@ -15,6 +15,7 @@ import {
   indexToTime,
   initialBarsRequest,
   mainTimeline,
+  readTimeViewport,
   viewportNeedsReload,
 } from "@openchart/app/lib/chart/data";
 import {
@@ -89,6 +90,11 @@ export function useMarketSeriesSource(
   );
   const bars = useBars(request);
   const { current, status } = bars;
+  const pendingGesture = useRef<{
+    view: NonNullable<typeof current>;
+    baseViewport: ChartPreferences["viewport"];
+    viewport: ChartPreferences["viewport"];
+  }>();
   const [projectionError, setProjectionError] = useState<string>();
   const [materialized, setMaterialized] = useState<{
     view: typeof current;
@@ -126,17 +132,19 @@ export function useMarketSeriesSource(
       next: (update) => {
         try {
           const state = chart.store.getState();
-          const timeline = mainTimeline(state);
-          const range = v2.ChartStateUtils.getVisibleRange(state);
+          const saved = localStore.getState().viewport;
+          const gesture = pendingGesture.current;
           const historical =
             main &&
-            timeline.length &&
-            v2.XScale.getAxis(state.config.xAxis).spacing.rightOffset < 0;
+            (gesture?.view === current && gesture.baseViewport === saved
+              ? gesture.viewport !== null
+              : saved !== null ||
+                v2.XScale.getAxis(state.config.xAxis).spacing.rightOffset < 0);
+          // Preserve continuous coordinates through data changes, including a
+          // resize or a gesture still awaiting persistence. Rounded painted
+          // bounds lose fractional dates when fed back into the next update.
           const viewport = historical
-            ? {
-                from: indexToTime(timeline, range.from, step),
-                to: indexToTime(timeline, range.to, step),
-              }
+            ? readTimeViewport(state, step)
             : undefined;
           data = mergeByTime(data, update);
           setMaterialized({ view: current, data, viewport });
@@ -173,6 +181,83 @@ export function useMarketSeriesSource(
     });
   }, [chart, frame, materialized, current, localStore, main, step]);
 
+  // A control can move within already loaded bars without replacing the frame.
+  // Distant targets wait for their own snapshot instead of projecting onto the
+  // retained frame, whose history constraint belongs to the preceding window.
+  useLayoutEffect(() => {
+    if (
+      !main ||
+      !current ||
+      !sameBarsRequest(current.request, request) ||
+      (preferences.viewport !== null &&
+        viewportNeedsReload(request, preferences.viewport))
+    )
+      return;
+    chart.mutate((state) => {
+      if (preferences.viewport === null) {
+        const saved = localStore.getState();
+        v2.XScale.setAxisSpacing(
+          state.config.xAxis,
+          state.config.xAxis.activeId,
+          {
+            barSpacing: saved.barSpacing,
+            rightOffset: saved.rightOffset,
+          },
+        );
+      } else applyTimeViewport(state, preferences.viewport, step);
+    });
+  }, [chart, current, request, preferences.viewport, localStore, main, step]);
+
+  useLayoutEffect(() => {
+    if (!main) return;
+    const subscription = chart.output$
+      .pipe(
+        filter(
+          (event): event is Extract<ChartOutput, { type: "range" }> =>
+            event.type === "range" && event.source === "interaction",
+        ),
+        // Capture absolute intent before a live prepend can reindex the same
+        // view during the gesture debounce.
+        map(() => {
+          if (!current || !sameBarsRequest(current.request, request)) return;
+          const state = chart.store.getState();
+          const viewport = readTimeViewport(state, step);
+          if (!viewport) return;
+          const spacing = v2.XScale.getAxis(state.config.xAxis).spacing;
+          const intent = {
+            viewport: spacing.rightOffset >= 0 ? null : viewport,
+            barSpacing: spacing.barSpacing,
+            rightOffset: Math.max(0, spacing.rightOffset),
+          };
+          // A gesture can resume live follow before its saved preference is
+          // debounced. Scope that pending intent to the view and preference
+          // from which it was made; a later control action supersedes it.
+          pendingGesture.current = {
+            view: current,
+            baseViewport: localStore.getState().viewport,
+            viewport: intent.viewport,
+          };
+          return intent;
+        }),
+        filter((intent) => intent !== undefined),
+        debounceTime(300),
+      )
+      .subscribe((intent) => {
+        localStore.setState((previous) =>
+          previous.barSpacing === intent.barSpacing &&
+          previous.rightOffset === intent.rightOffset &&
+          previous.viewport?.from === intent.viewport?.from &&
+          previous.viewport?.to === intent.viewport?.to
+            ? previous
+            : intent,
+        );
+      });
+    return () => {
+      subscription.unsubscribe();
+      pendingGesture.current = undefined;
+    };
+  }, [chart, current, request, preferences.viewport, localStore, main, step]);
+
   useLayoutEffect(() => {
     const subscription = chart.output$
       .pipe(
@@ -182,32 +267,21 @@ export function useMarketSeriesSource(
         ),
         debounceTime(300),
       )
-      .subscribe((range) => {
-        const timeline = mainTimeline(chart.store.getState());
+      .subscribe(() => {
+        if (
+          status !== "ready" ||
+          !current?.data.numRows ||
+          !sameBarsRequest(current.request, request)
+        )
+          return;
+        const state = chart.store.getState();
+        const timeline = mainTimeline(state);
         if (!timeline.length) return;
+        const range = v2.ChartStateUtils.getVisibleRange(state);
         const from = indexToTime(timeline, range.from, step),
           to = indexToTime(timeline, range.to, step);
         if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to)
           return;
-        if (main && !(request.to === "now" && current?.request.to !== "now")) {
-          const spacing = v2.XScale.getAxis(
-            chart.store.getState().config.xAxis,
-          ).spacing;
-          const viewport = spacing.rightOffset >= 0 ? null : { from, to };
-          localStore.setState((previous) =>
-            previous.barSpacing === spacing.barSpacing &&
-            previous.rightOffset === Math.max(0, spacing.rightOffset) &&
-            previous.viewport?.from === viewport?.from &&
-            previous.viewport?.to === viewport?.to
-              ? previous
-              : {
-                  viewport,
-                  barSpacing: spacing.barSpacing,
-                  rightOffset: Math.max(0, spacing.rightOffset),
-                },
-          );
-        }
-        if (status !== "ready" || !current?.data.numRows) return;
         const visible = Math.max(1, range.to - range.from),
           pad = Math.max(2, Math.floor(visible * 0.1));
         // History starts at the snapshot's first bar. Depending on the live frame
@@ -229,7 +303,7 @@ export function useMarketSeriesSource(
           }));
       });
     return () => subscription.unsubscribe();
-  }, [chart, current, status, request.to, localStore, main, step]);
+  }, [chart, current, status, request, step]);
 
   useLayoutEffect(() => {
     const viewport = preferences.viewport;

@@ -1,5 +1,6 @@
 // Purpose: Convert the Feed's columns and millisecond windows into chart coordinates.
 import { v2 } from "@openchart/chart-core";
+import { Chart } from "@openchart/chart-core/chart/state";
 import {
   resolutionMs,
   type BarsRequest,
@@ -163,6 +164,33 @@ export function viewportNeedsReload(
   return false;
 }
 
+/**
+ * Read the current ordinal time viewport in milliseconds without rounding its
+ * boundaries to bars. This is the inverse of the renderer's setVisibleRange,
+ * including its extra boundary bar; the axis's full data length owns offsets,
+ * while the main timeline owns time interpolation across trading gaps.
+ * Returns undefined for an empty main timeline or a non-ordinal axis. This
+ * synchronous read owns no resources and does not change saved preferences.
+ * @example const beforeUpdate = readTimeViewport(chart.store.getState(), 60_000);
+ */
+export function readTimeViewport(
+  state: v2.Chart.State,
+  step: number,
+): NonNullable<ChartPreferences["viewport"]> | undefined {
+  const time = mainTimeline(state);
+  const axis = v2.XScale.getAxis(state.config.xAxis);
+  if (!time.length || axis.mode !== "ordinal") return;
+  const { barSpacing, rightOffset } = axis.spacing;
+  const to =
+    v2.ChartStateUtils.getDataLength(state, axis.id) + rightOffset / barSpacing;
+  const from =
+    to - 1 - Chart.computeLayout(state.config).areaWidth / barSpacing;
+  return {
+    from: indexToTime(time, from, step),
+    to: indexToTime(time, to, step),
+  };
+}
+
 /** Re-anchor only when the target actually changed. @example applyTimeViewport(draft, saved, step); */
 export function applyTimeViewport(
   state: v2.Chart.State,
@@ -177,12 +205,8 @@ export function applyTimeViewport(
   }
   const from = timeToIndex(time, viewport.from, step),
     to = timeToIndex(time, viewport.to, step);
-  const current = v2.ChartStateUtils.getVisibleRange(state);
-  if (
-    !current ||
-    Math.abs(current.from - from) > 0.1 ||
-    Math.abs(current.to - to) > 0.1
-  )
+  const current = readTimeViewport(state, step);
+  if (!current || current.from !== viewport.from || current.to !== viewport.to)
     v2.ChartStateUtils.setVisibleRange(state, from, to);
 }
 

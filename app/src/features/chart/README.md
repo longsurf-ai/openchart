@@ -18,7 +18,7 @@ bodies, wicks and borders. Explicit series styles override these defaults.
 Each widget's centered floating controls contain interval (with session and
 adjustment), chart type (with volume), compare, Go to date, grid presets and
 links. Go to date jumps the focused chart to a date and time in the display
-timezone and keeps the visible span. The controls remain mounted and appear on
+timezone and keeps the visible time span. The controls remain mounted and appear on
 hover, keyboard focus and while their menus/dialogs are open. ChartGridProvider
 shares the widget's mounted runtime and preference handles and local maximize
 state. Chart Explain consumes the application's shared Agent through `lib/agent`.

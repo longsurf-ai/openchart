@@ -1,17 +1,18 @@
 // Purpose: Window replacement never removes Resource panes or mismatches retained values to the main timeline.
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Field, Float64, Schema } from "apache-arrow";
-import { EMPTY, Observable, type Subscriber } from "rxjs";
+import { EMPTY, Observable, Subject, type Subscriber } from "rxjs";
 import { expect, it, vi } from "vitest";
 import { v2 } from "@openchart/chart-core";
 import { ProviderId } from "@openchart/market";
 import * as Tea from "@openchart/tea";
 import { fromPoints, fromRows } from "@openchart/timeseries";
 import { useTea, type Node } from "@openchart/app/hooks/use-tea";
+import { useChartWindow } from "@openchart/app/hooks/use-chart-window";
 import {
   chartIds,
   createCell,
@@ -22,8 +23,10 @@ import { ChartSeries } from "@openchart/app/features/chart/components/chart-seri
 import { TeaVisuals } from "@openchart/app/features/chart/components/tea-visuals";
 import { ChartContext } from "@openchart/app/lib/chart/context";
 import { createChartPreferences } from "@openchart/app/lib/chart/preferences";
+import { indexToTime, mainTimeline } from "@openchart/app/lib/chart/data";
 import {
   createChartStore,
+  type ChartOutput,
   type ChartRuntime,
 } from "@openchart/app/lib/chart/store";
 
@@ -266,4 +269,253 @@ it("keeps study panes through loading, rapid scrolling, errors and symbol change
   ).toBe(paneIds[2]);
   expect(calls[4]!.closed).toBe(true);
   view.unmount();
+});
+
+it.each(["1m", "1d"] as const)(
+  "expands historical study demand on resize without following retained frames (%s)",
+  async (resolution) => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    const step = resolution === "1m" ? 60_000 : 86_400_000;
+    const times = Array.from(
+      { length: 1000 },
+      (_, index) =>
+        now -
+        2000 * step +
+        (index + (resolution === "1d" ? Math.floor(index / 5) * 2 : 0)) * step,
+    );
+    // The daily target ends inside a three-day trading gap: its native rounded
+    // right edge is less than one bar, but more than one UTC day, away.
+    const target = {
+      from: times[800]!,
+      to: times[879]! + 0.75 * (times[880]! - times[879]!),
+    };
+    const state = v2.createState({ id: "study-resize" });
+    v2.ChartStateUtils.resize(state, 600, 400);
+    const id = v2.ChartStateUtils.addSeries(state, {
+      id: "main",
+      type: "Line",
+      data: times.map((time) => ({ time: time / 1000, value: 1 })),
+    });
+    v2.ChartStateModel.getSeriesObject(state, id)!.role = "main";
+    v2.ChartStateUtils.setVisibleRange(state, 800, 879.75);
+    const store = createChartStore(state);
+    const output = new Subject<ChartOutput>();
+    const chart: ChartRuntime = {
+      id: "study-resize",
+      store,
+      output$: output,
+      renderer: {} as v2.ChartRenderer,
+      mutate: (recipe) => store.setState(recipe, true),
+    };
+    const preferences = createChartPreferences("study-resize", target);
+    const series = {
+      provider: ProviderId.make("tradingview"),
+      listing: { symbol: "NQ1!", venue: "CME_MINI", currency: "USD" },
+      resolution,
+      session: "regular" as const,
+      adjustment: "split" as const,
+    };
+    const view = renderHook(() => useChartWindow(chart, series, preferences));
+    const paint = () =>
+      output.next({
+        type: "range",
+        source: "render",
+        ...v2.ChartStateUtils.getVisibleRange(store.getState()),
+      });
+    try {
+      const initial = view.result.current;
+      act(() => {
+        chart.mutate((draft) =>
+          v2.ChartStateUtils.setVisibleRange(draft, 400, 950),
+        );
+        paint();
+      });
+      await act(async () => vi.advanceTimersByTime(300));
+      expect(view.result.current).toEqual(initial);
+      act(() => {
+        chart.mutate((draft) => {
+          v2.ChartStateUtils.setVisibleRange(draft, 800, 879.75);
+          v2.ChartStateUtils.resize(draft, 1800, 400);
+        });
+        paint();
+      });
+      await act(async () => vi.advanceTimersByTime(300));
+      const range = v2.ChartStateUtils.getVisibleRange(store.getState());
+      expect(range.from).toBeLessThan(800);
+      const visibleFrom = indexToTime(
+        mainTimeline(store.getState()),
+        range.from,
+        step,
+      );
+      expect(view.result.current.from).toBeLessThanOrEqual(visibleFrom);
+      expect(view.result.current.to).toBe(initial.to);
+      expect(view.result.current.countBack).toBeGreaterThanOrEqual(
+        range.to - range.from,
+      );
+      expect(preferences.getState().viewport).toEqual(target);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  },
+);
+
+it("replaces an attached study with a finite jump window and ignores paints of retained bars", async () => {
+  localStorage.clear();
+  const now = Date.now();
+  const minute = 60_000;
+  const series = {
+    provider: ProviderId.make("tradingview"),
+    listing: { symbol: "NQ1!", venue: "CME_MINI", currency: "USD" },
+    resolution: "1m" as const,
+    session: "regular" as const,
+    adjustment: "split" as const,
+  };
+  const store = createChartStore(v2.createState({ id: "jump-study" }));
+  const output = new Subject<ChartOutput>();
+  const chart: ChartRuntime = {
+    id: "jump-study",
+    store,
+    output$: output,
+    renderer: {} as v2.ChartRenderer,
+    mutate: (recipe) => store.setState(recipe, true),
+  };
+  chart.mutate((state) => {
+    v2.ChartStateUtils.resize(state, 600, 400);
+    v2.ChartStateUtils.addSeries(state, {
+      id: "main",
+      type: "Line",
+      source: "provider",
+      pane: 0,
+      yAxisId: "right",
+      fieldMap: { x: "time", value: "close" },
+    });
+    v2.ChartStateModel.getSeriesObject(state, "main")!.role = "main";
+    v2.ChartStateUtils.setSeriesData(
+      state,
+      "main",
+      Array.from({ length: 200 }, (_, index) => ({
+        time: (now - (200 - index) * minute) / 1000,
+        close: index,
+      })),
+    );
+  });
+  const preferences = createChartPreferences("jump-study");
+  const calls: {
+    request: Tea.ObserveRequest;
+    sink: Subscriber<Tea.Message>;
+  }[] = [];
+  client.compile.mockResolvedValue({
+    id: "jump-node",
+    declaration: {
+      kind: "indicator",
+      title: "Study",
+      overlay: false,
+      timeframe: "",
+    },
+    definition: {
+      parameters: [],
+      inputs: new Schema([]),
+      outputs: new Schema([
+        new Field(
+          "value",
+          new Float64(),
+          true,
+          new Map([["tea:write", "set"]]),
+        ),
+      ]),
+      requests: {},
+    },
+  } satisfies Tea.CompileResponse);
+  client.observe.mockImplementation(
+    (request: Tea.ObserveRequest) =>
+      new Observable<Tea.Message>((sink) => {
+        calls.push({ request, sink });
+      }),
+  );
+  client.dispose.mockResolvedValue(undefined);
+  function Study() {
+    const window = useChartWindow(chart, series, preferences);
+    useTea({
+      source: {
+        entry: "jump.tea",
+        sources: { "jump.tea": 'emit "value" close' },
+      },
+      ...Tea.barsInputs(series),
+      requests: {},
+      parameters: {},
+      ...window,
+      warmupBars: Tea.standardWarmupBars,
+    });
+    return null;
+  }
+  const queryClient = new QueryClient();
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <Study />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(calls).toHaveLength(1));
+  expect(calls[0]!.request.to).toBe("now");
+  const target = {
+    from: now - 365 * 86_400_000,
+    to: now - 365 * 86_400_000 + 80 * minute,
+  };
+  act(() => preferences.setState({ viewport: target }));
+  await waitFor(() => expect(calls).toHaveLength(2));
+  expect(calls[0]!.sink.closed).toBe(true);
+  expect(calls[1]!.request).toMatchObject({
+    from: target.from,
+    to: target.to + minute,
+  });
+  vi.useFakeTimers();
+  try {
+    act(() =>
+      output.next({ type: "range", source: "render", from: 100, to: 200 }),
+    );
+    await act(async () => vi.advanceTimersByTime(300));
+    expect(calls).toHaveLength(2);
+    const nearby = {
+      from: target.from - 20 * minute,
+      to: target.to - 20 * minute,
+    };
+    act(() => preferences.setState({ viewport: nearby }));
+    expect(calls).toHaveLength(3);
+    expect(calls[2]!.request.from).toBeLessThanOrEqual(nearby.from);
+    expect(calls[2]!.request.to).toBe(target.to + minute);
+    act(() =>
+      chart.mutate((state) =>
+        v2.ChartStateUtils.setSeriesData(
+          state,
+          "main",
+          Array.from({ length: 200 }, (_, index) => ({
+            time: (target.to - (200 - index) * minute) / 1000,
+            close: index,
+          })),
+        ),
+      ),
+    );
+    act(() => preferences.setState({ viewport: null }));
+    expect(calls.at(-1)!.request.to).toBe("now");
+    const latest = calls.at(-1)!.request;
+    act(() =>
+      output.next({ type: "range", source: "render", from: 100, to: 200 }),
+    );
+    await act(async () => vi.advanceTimersByTime(300));
+    expect(calls.at(-1)!.request).toBe(latest);
+    expect(latest.from).toBeGreaterThan(now - 86_400_000);
+    act(() => {
+      chart.mutate((state) => v2.ChartStateUtils.resize(state, 3000, 400));
+      output.next({ type: "range", source: "render", from: -300, to: 200 });
+    });
+    await act(async () => vi.advanceTimersByTime(300));
+    expect(calls.at(-1)!.request.countBack).toBeGreaterThanOrEqual(500);
+    expect(calls.at(-1)!.request.from).toBeGreaterThan(now - 86_400_000);
+    view.unmount();
+    expect(calls.at(-1)!.sink.closed).toBe(true);
+  } finally {
+    vi.useRealTimers();
+    queryClient.clear();
+  }
 });

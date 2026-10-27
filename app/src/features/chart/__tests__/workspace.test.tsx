@@ -5,6 +5,7 @@ import { findErrorToast } from "@openchart/app/testing/test-utils";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { Drawing, v2 } from "@openchart/chart-core";
+import { Chart } from "@openchart/chart-core/chart/state";
 import {
   FeedError,
   FeedReasons,
@@ -46,7 +47,11 @@ import {
   resizeGridTracks,
 } from "@openchart/app/features/chart/utils/grid-layout";
 import { ChartCore } from "@openchart/app/lib/chart/core";
-import { indexToTime, timeToIndex } from "@openchart/app/lib/chart/data";
+import {
+  indexToTime,
+  mainTimeline,
+  timeToIndex,
+} from "@openchart/app/lib/chart/data";
 import {
   createChartPreferences,
   SeriesPreferences,
@@ -473,7 +478,7 @@ it("loads history and saves the viewport even when live updates arrive during th
   const originalCalls = fixture.calls.length;
   const renderer = mocks.renderers.at(-1)!;
   act(() => {
-    fixture.runtime.mutate((state) =>
+    renderer.config.setState((state) =>
       v2.ChartStateUtils.setVisibleRange(state, -30, 70),
     );
     renderer.config.onVisibleRangeChange!({ from: -30, to: 70 });
@@ -523,7 +528,7 @@ it.each([true, false])(
     const renderer = mocks.renderers.at(-1)!;
     const pan = (from: number) =>
       act(() => {
-        fixture.runtime.mutate((state) =>
+        renderer.config.setState((state) =>
           v2.ChartStateUtils.setVisibleRange(state, from, from + 100),
         );
         renderer.config.onVisibleRangeChange!(
@@ -1140,9 +1145,11 @@ it("follows appended bars without resetting zoom and holds a historical viewport
     v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()).to,
   ).toBe(102);
   act(() =>
-    fixture.runtime.mutate((state) =>
-      v2.ChartStateUtils.setVisibleRange(state, 20, 60),
-    ),
+    mocks.renderers
+      .at(-1)!
+      .config.setState((state) =>
+        v2.ChartStateUtils.setVisibleRange(state, 20, 60),
+      ),
   );
   const before = v2.ChartStateUtils.getVisibleRange(
     fixture.runtime.store.getState(),
@@ -1230,5 +1237,337 @@ it("replaces a live bars window when a historical viewport is saved outside it",
   expect(fixture.active("AAPL").request.from).toBeLessThanOrEqual(target.from);
   const nextTo = fixture.active("AAPL").request.to;
   expect(nextTo === "now" || nextTo >= target.to).toBe(true);
+  fixture.view.unmount();
+});
+
+function loadedMarket(to = Date.now()) {
+  const fixture = setup();
+  act(() =>
+    fixture.active("AAPL").sink.next({
+      type: "snapshot",
+      snapshot: {
+        data: minuteHistory(to),
+        range: { from: to - 200 * 60_000, to },
+        hasMoreBefore: true,
+      },
+    }),
+  );
+  const visible = () => {
+    const state = fixture.runtime.store.getState();
+    const timeline = mainTimeline(state);
+    const range = v2.ChartStateUtils.getVisibleRange(state);
+    return {
+      from: indexToTime(timeline, range.from, 60_000),
+      to: indexToTime(timeline, range.to, 60_000),
+    };
+  };
+  const exactVisible = () => {
+    const state = fixture.runtime.store.getState();
+    const timeline = mainTimeline(state);
+    const { barSpacing, rightOffset } = v2.XScale.getAxis(
+      state.config.xAxis,
+    ).spacing;
+    const to =
+      v2.ChartStateUtils.getDataLength(state) + rightOffset / barSpacing;
+    const from =
+      to - 1 - Chart.computeLayout(state.config).areaWidth / barSpacing;
+    return {
+      from: indexToTime(timeline, from, 60_000),
+      to: indexToTime(timeline, to, 60_000),
+    };
+  };
+  // The renderer paints after React's layout effects have installed both data
+  // and its restored viewport. Deliver that callback from the resulting state.
+  const paint = () =>
+    act(() =>
+      mocks.renderers.at(-1)!.config.onVisibleRangeChange!(
+        v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()),
+      ),
+    );
+  return { ...fixture, visible, exactVisible, paint, to };
+}
+
+it("applies an in-window jump without another request or a new data frame", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket();
+  const calls = fixture.calls.length;
+  const target = {
+    from: fixture.to - 140 * 60_000,
+    to: fixture.to - 60 * 60_000,
+  };
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  expect(fixture.visible()).toEqual(target);
+  fixture.paint();
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toEqual(target);
+  expect(fixture.calls).toHaveLength(calls);
+  fixture.view.unmount();
+});
+
+it("keeps the newest distant jump while previous bars and their paints are retained", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket();
+  const renderer = mocks.renderers.at(-1)!;
+  const first = {
+    from: fixture.to - 30 * 86_400_000,
+    to: fixture.to - 30 * 86_400_000 + 80 * 60_000,
+  };
+  const target = {
+    from: fixture.to - 10 * 86_400_000,
+    to: fixture.to - 10 * 86_400_000 + 80 * 60_000,
+  };
+  act(() => fixture.local.setState({ viewport: first, rightOffset: 0 }));
+  const abandoned = fixture.active("AAPL");
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  fixture.paint();
+  const replacement = fixture.active("AAPL");
+  expect(abandoned.stop).toHaveBeenCalledOnce();
+  const calls = fixture.calls.length;
+  act(() =>
+    renderer.config.onVisibleRangeChange!(
+      v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()),
+    ),
+  );
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toEqual(target);
+  expect(fixture.calls).toHaveLength(calls);
+  act(() =>
+    replacement.sink.next({
+      type: "snapshot",
+      snapshot: {
+        data: minuteHistory(target.to + 60_000),
+        range: {
+          from: replacement.request.from,
+          to: Number(replacement.request.to),
+        },
+        hasMoreBefore: true,
+      },
+    }),
+  );
+  expect(fixture.visible()).toEqual(target);
+  fixture.paint();
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toEqual(target);
+  fixture.view.unmount();
+});
+
+it("pins a near-now jump across repaint and live append, then follows a renderer gesture to latest", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket();
+  const source = fixture.active("AAPL");
+  const target = { from: fixture.to - 80 * 60_000, to: fixture.to };
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  fixture.paint();
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toEqual(target);
+  act(() =>
+    source.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 3, fixture.to),
+    }),
+  );
+  expect(fixture.visible()).toEqual(target);
+  fixture.paint();
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toEqual(target);
+  const renderer = mocks.renderers.at(-1)!;
+  act(() =>
+    renderer.config.setState((state) =>
+      v2.ChartStateUtils.scrollToRealTime(state),
+    ),
+  );
+  const following = fixture.visible();
+  act(() =>
+    source.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 4, fixture.to + 60_000),
+    }),
+  );
+  expect(fixture.visible().to).toBe(following.to + 60_000);
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toBeNull();
+  const before = fixture.visible();
+  act(() =>
+    source.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 5, fixture.to + 120_000),
+    }),
+  );
+  expect(fixture.visible().to).toBe(before.to + 60_000);
+  fixture.view.unmount();
+});
+
+it("cancels a debounced gesture when a control chooses another viewport", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket();
+  const renderer = mocks.renderers.at(-1)!;
+  act(() =>
+    renderer.config.setState((state) =>
+      v2.ChartStateUtils.setVisibleRange(state, 10, 90),
+    ),
+  );
+  await act(async () => vi.advanceTimersByTime(100));
+  const target = {
+    from: fixture.to - 100 * 60_000,
+    to: fixture.to - 20 * 60_000,
+  };
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toEqual(target);
+  expect(fixture.visible()).toEqual(target);
+  fixture.view.unmount();
+});
+
+it("keeps fractional pinned dates exact through repeated ticks and new bars", () => {
+  const fixture = loadedMarket(Math.floor(Date.now() / 60_000) * 60_000);
+  const source = fixture.active("AAPL");
+  const target = {
+    from: fixture.to - 80 * 60_000 - 9173,
+    to: fixture.to - 9173,
+  };
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  expect(fixture.exactVisible()).toEqual(target);
+  for (const [index, time] of [
+    fixture.to - 60_000,
+    fixture.to - 60_000,
+    fixture.to,
+    fixture.to,
+    fixture.to + 60_000,
+  ].entries()) {
+    act(() =>
+      source.sink.next({
+        type: "updates",
+        data: fixture.data("AAPL", index + 3, time),
+      }),
+    );
+    expect(fixture.local.getState().viewport).toEqual(target);
+    expect(fixture.exactVisible()).toEqual(target);
+  }
+  fixture.view.unmount();
+});
+
+it("retains a resized pinned window and its spacing through live ticks", () => {
+  const fixture = loadedMarket(Math.floor(Date.now() / 60_000) * 60_000);
+  const source = fixture.active("AAPL");
+  const target = {
+    from: fixture.to - 80 * 60_000 - 9173,
+    to: fixture.to - 9173,
+  };
+  act(() => fixture.local.setState({ viewport: target, rightOffset: 0 }));
+  act(() => mocks.resize(900, 400));
+  const resized = fixture.exactVisible();
+  const spacing = v2.XScale.getAxis(
+    fixture.runtime.store.getState().config.xAxis,
+  ).spacing.barSpacing;
+  expect(resized.from).toBeLessThan(target.from);
+  for (const [index, time] of [
+    fixture.to - 60_000,
+    fixture.to,
+    fixture.to + 60_000,
+  ].entries()) {
+    act(() =>
+      source.sink.next({
+        type: "updates",
+        data: fixture.data("AAPL", index + 4, time),
+      }),
+    );
+    expect(fixture.exactVisible()).toEqual(resized);
+    expect(
+      v2.XScale.getAxis(fixture.runtime.store.getState().config.xAxis).spacing
+        .barSpacing,
+    ).toBeCloseTo(spacing, 8);
+  }
+  fixture.view.unmount();
+});
+
+it("holds a pending real gesture through ticks and lets a later explicit jump replace it", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket(Math.floor(Date.now() / 60_000) * 60_000);
+  const source = fixture.active("AAPL");
+  const pinned = {
+    from: fixture.to - 80 * 60_000 - 9173,
+    to: fixture.to - 9173,
+  };
+  act(() => fixture.local.setState({ viewport: pinned, rightOffset: 0 }));
+  const renderer = mocks.renderers.at(-1)!;
+  act(() =>
+    renderer.config.setState((state) =>
+      v2.ChartStateUtils.setVisibleRange(state, 50, 130),
+    ),
+  );
+  const gesture = fixture.exactVisible();
+  await act(async () => vi.advanceTimersByTime(100));
+  act(() =>
+    source.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 3, fixture.to),
+    }),
+  );
+  expect(fixture.exactVisible()).toEqual(gesture);
+  const next = {
+    from: fixture.to - 100 * 60_000 - 173,
+    to: fixture.to - 20 * 60_000 - 173,
+  };
+  act(() => fixture.local.setState({ viewport: next, rightOffset: 0 }));
+  act(() =>
+    source.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 4, fixture.to),
+    }),
+  );
+  expect(fixture.exactVisible()).toEqual(next);
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().viewport).toEqual(next);
+  fixture.view.unmount();
+});
+
+it("saves the gesture's absolute dates when live backfill reindexes bars during its debounce", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket();
+  const source = fixture.active("AAPL");
+  const renderer = mocks.renderers.at(-1)!;
+  act(() =>
+    renderer.config.setState((state) =>
+      v2.ChartStateUtils.setVisibleRange(state, 50, 130),
+    ),
+  );
+  const target = fixture.visible();
+  await act(async () => vi.advanceTimersByTime(100));
+  act(() =>
+    source.sink.next({
+      type: "updates",
+      data: fixture.data("AAPL", 3, fixture.to - 201 * 60_000),
+    }),
+  );
+  expect(
+    v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()).from,
+  ).toBe(51);
+  expect(fixture.visible()).toEqual(target);
+  await act(async () => vi.advanceTimersByTime(200));
+  expect(fixture.local.getState().viewport).toEqual(target);
+  expect(fixture.visible()).toEqual(target);
+  fixture.view.unmount();
+});
+
+it("records fractional renderer movement even when the integer visible range is unchanged", async () => {
+  vi.useFakeTimers();
+  const fixture = loadedMarket();
+  const renderer = mocks.renderers.at(-1)!;
+  const before = v2.ChartStateUtils.getVisibleRange(
+    fixture.runtime.store.getState(),
+  );
+  act(() =>
+    renderer.config.setState((state) => {
+      const axis = v2.XScale.getAxis(state.config.xAxis);
+      v2.XScale.setAxisSpacing(state.config.xAxis, axis.id, {
+        rightOffset: axis.spacing.rightOffset + 0.25,
+      });
+    }),
+  );
+  expect(
+    v2.ChartStateUtils.getVisibleRange(fixture.runtime.store.getState()),
+  ).toEqual(before);
+  await act(async () => vi.advanceTimersByTime(300));
+  expect(fixture.local.getState().rightOffset).toBe(0.25);
   fixture.view.unmount();
 });
