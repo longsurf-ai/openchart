@@ -86,6 +86,21 @@ describe("Locale", () => {
       const result = Locale.volume(123);
       expect(result).toBe("123");
     });
+
+    it("moves to the next unit when rounding reaches 1,000", () => {
+      expect(Locale.volume(999_949)).toBe("999.9K");
+      expect(Locale.volume(999_950)).toBe("1.0M");
+      expect(Locale.volume(-999_999_999)).toBe("-1.0B");
+    });
+  });
+
+  describe("compact", () => {
+    it("moves to the next unit when rounding reaches 1,000", () => {
+      expect(Locale.compact(999_949)).toBe("999.9K");
+      expect(Locale.compact(999_950)).toBe("1.00M");
+      expect(Locale.compact(999_999_999)).toBe("1.00B");
+      expect(Locale.compact(-999_960)).toBe("-1.00M");
+    });
   });
 
   describe("date", () => {

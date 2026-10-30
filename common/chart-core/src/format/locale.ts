@@ -53,14 +53,15 @@ export namespace Locale {
     const absValue = Math.abs(value);
     const sign = value < 0 ? "-" : "";
 
-    if (absValue >= 1e9) {
+    // Values that round to 1,000 of the smaller unit use the larger one.
+    if (absValue >= 999.95e6) {
       const formatted = (absValue / 1e9).toLocaleString(current.locale, {
         minimumFractionDigits: absValue >= 10e9 ? 1 : 2,
         maximumFractionDigits: absValue >= 10e9 ? 1 : 2,
       });
       return sign + formatted + "B";
     }
-    if (absValue >= 1e6) {
+    if (absValue >= 999.95e3) {
       const formatted = (absValue / 1e6).toLocaleString(current.locale, {
         minimumFractionDigits: absValue >= 10e6 ? 1 : 2,
         maximumFractionDigits: absValue >= 10e6 ? 1 : 2,
@@ -122,14 +123,15 @@ export namespace Locale {
     const absValue = Math.abs(value);
     const sign = value < 0 ? "-" : "";
 
-    if (absValue >= 1e9) {
+    // Values that round to 1,000 of the smaller unit use the larger one.
+    if (absValue >= 999.95e6) {
       const formatted = (absValue / 1e9).toLocaleString(current.locale, {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       });
       return sign + formatted + "B";
     }
-    if (absValue >= 1e6) {
+    if (absValue >= 999.95e3) {
       const formatted = (absValue / 1e6).toLocaleString(current.locale, {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
