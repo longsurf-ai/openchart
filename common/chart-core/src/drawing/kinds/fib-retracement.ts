@@ -19,6 +19,17 @@ function formatPrice(value: number): string {
   return value.toFixed(6);
 }
 
+/** Paint color per ratio; each band takes the color of its higher ratio. */
+const LEVEL_COLORS: Record<(typeof FIB_RETRACEMENT_LEVELS)[number], string> = {
+  0: "#787b86",
+  0.236: "#f23645",
+  0.382: "#ff9800",
+  0.5: "#4caf50",
+  0.618: "#089981",
+  0.786: "#00bcd4",
+  1: "#787b86",
+};
+
 /** Attributes and canvas behavior for fib retracement drawings. */
 export const fibRetracement: DrawingDefinition = {
   attributes: {
@@ -40,23 +51,37 @@ export const fibRetracement: DrawingDefinition = {
     const leftX = Math.min(p1.x, p2.x);
     const rightEdge = area.x + area.width;
 
-    // 1. Shaded fill between level 0 and level 1
-    const y0 = p1.y;
-    const y1 = p2.y;
-    ctx.fillStyle = Color.withAlpha(lineColor, 0.08);
-    ctx.fillRect(leftX, Math.min(y0, y1), rightEdge - leftX, Math.abs(y1 - y0));
+    const levelY = (level: number) => p1.y + (p2.y - p1.y) * level;
+
+    // 1. Shaded band between each pair of adjacent levels
+    for (let i = 1; i < FIB_RETRACEMENT_LEVELS.length; i++) {
+      const level = FIB_RETRACEMENT_LEVELS[i]!;
+      const top = levelY(FIB_RETRACEMENT_LEVELS[i - 1]!);
+      const bottom = levelY(level);
+      ctx.fillStyle = Color.withAlpha(LEVEL_COLORS[level], 0.15);
+      ctx.fillRect(
+        leftX,
+        Math.min(top, bottom),
+        rightEdge - leftX,
+        Math.abs(bottom - top),
+      );
+    }
 
     // 2. Level lines from left control point to right edge + text labels
+    ctx.save();
     for (const level of FIB_RETRACEMENT_LEVELS) {
-      const y = p1.y + (p2.y - p1.y) * level;
+      const y = levelY(level);
+      const color = LEVEL_COLORS[level];
+      ctx.strokeStyle = color;
       drawLine(ctx, { x: leftX, y }, { x: rightEdge, y });
 
       if (scale) {
         const price = CoordSys.toValue(y, scale);
         const label = `${level} (${formatPrice(price)})`;
-        drawText(ctx, { x: leftX + 4, y: y - 14 }, label, lineColor, 11);
+        drawText(ctx, { x: leftX + 4, y: y - 14 }, label, color, 11);
       }
     }
+    ctx.restore();
 
     // 3. Dashed connector between the two control points
     ctx.save();
