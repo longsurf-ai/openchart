@@ -354,6 +354,19 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
           invalidResult("Yahoo chart column lengths differ."),
         );
       }
+      // Yahoo can leave a forming weekly/monthly bucket without its close and
+      // repeat that bucket, closed, as the trailing quote row. Only an exact
+      // copy of the other columns supplies the close; that row adds nothing else.
+      const last = timestamps.length - 1;
+      const closedByTail =
+        interval > Day &&
+        last > 0 &&
+        quote.close[last - 1] === null &&
+        quote.close[last] !== null &&
+        ([quote.open, quote.high, quote.low, quote.volume] as const).every(
+          (column) =>
+            column[last - 1] !== null && column[last - 1] === column[last],
+        );
       for (let i = 0; i < timestamps.length; i++) {
         let time = timestamps[i]! * 1000;
         if (i > 0 && time <= timestamps[i - 1]! * 1000) {
@@ -361,6 +374,7 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
             invalidResult("Yahoo chart timestamps are not ordered."),
           );
         }
+        if (closedByTail && i === last) continue;
         if (query.interval === "1d") {
           // History can use the open time while a single live row uses quote
           // time. Both identify the same local date; asOf is observation time.
@@ -380,7 +394,8 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
         const open = quote.open[i]!;
         const high = quote.high[i]!;
         const low = quote.low[i]!;
-        const close = quote.close[i]!;
+        const close =
+          closedByTail && i === last - 1 ? quote.close[last]! : quote.close[i]!;
         const volume = quote.volume[i]!;
         // Yahoo uses empty slots for periods without trades. A partly populated
         // bar is different: dropping it would silently present an older price.

@@ -423,6 +423,38 @@ describe("Yahoo Finance Provider", () => {
     expect([...data].map((row) => row.volume)).toEqual([200]);
   });
 
+  it("closes a forming monthly bucket from Yahoo's trailing copy of it", async () => {
+    const october = Date.UTC(2026, 9, 1, 4);
+    const november = Date.UTC(2026, 10, 1, 4);
+    const quoteTime = Date.UTC(2026, 10, 2, 21);
+    // Observed Yahoo shape: the forming month lacks its close, and the
+    // trailing quote row repeats that month with the close.
+    const body = chart([october, november, quoteTime], [10, 12, 12], "1mo");
+    body.chart.result[0]!.indicators.quote[0]!.close = [11, null, 13];
+    const data = await Effect.runPromise(
+      selectBars(
+        { fetch: async () => Response.json(body) },
+        {
+          symbol: "VOD.L",
+          interval: "1mo",
+          includePrePost: false,
+          time: { from: october, to: quoteTime + 1000 },
+        },
+      ),
+    );
+    expect(
+      [...data].map(({ time, open, close, volume }) => ({
+        time,
+        open,
+        close,
+        volume,
+      })),
+    ).toEqual([
+      { time: october, open: 10, close: 11, volume: 100 },
+      { time: november, open: 12, close: 13, volume: 100 },
+    ]);
+  });
+
   it("asks for weeks from a Monday, so Yahoo's weekly bars start on Mondays", async () => {
     const starts: string[] = [];
     await Effect.runPromise(
