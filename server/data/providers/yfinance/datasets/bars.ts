@@ -211,6 +211,33 @@ const dailyTime = Effect.fn("YFinance.dailyTime")(function* (
   });
 });
 
+const samePeriod = Effect.fn("YFinance.samePeriod")(function* (
+  interval: "1wk" | "1mo",
+  previousTime: number,
+  time: number,
+  timezone: string | undefined,
+) {
+  if (!timezone) {
+    return yield* Effect.fail(
+      invalidResult("Yahoo calendar bars require an exchange timezone."),
+    );
+  }
+  return yield* Effect.try({
+    try: () => {
+      const date = Temporal.Instant.fromEpochMilliseconds(time)
+        .toZonedDateTimeISO(timezone)
+        .toPlainDate();
+      const previous = Temporal.Instant.fromEpochMilliseconds(previousTime)
+        .toZonedDateTimeISO(timezone)
+        .toPlainDate();
+      return interval === "1wk"
+        ? previous.until(date).days < 7
+        : date.year === previous.year && date.month === previous.month;
+    },
+    catch: invalidResult,
+  });
+});
+
 /** Share historical spans within one ready Dataset; recent buckets remain source reads.
  * Create inside the Provider activation and install behind makeDataset admission.
  * @example const { select } = yield* cachedSelectBars(options);
@@ -354,13 +381,26 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
           invalidResult("Yahoo chart column lengths differ."),
         );
       }
-      // Yahoo can leave a forming weekly/monthly bucket without its close and
-      // repeat that bucket, closed, as the trailing quote row. Only an exact
-      // copy of the other columns supplies the close; that row adds nothing else.
+      // A weekly/monthly read's trailing quote row inside the requested range
+      // may belong to the preceding bucket rather than start its own.
       const last = timestamps.length - 1;
-      const closedByTail =
-        interval > Day &&
+      const tailTime = timestamps[last]! * 1000;
+      const tailInBucket =
+        (query.interval === "1wk" || query.interval === "1mo") &&
         last > 0 &&
+        tailTime >= start &&
+        tailTime < cursor &&
+        (yield* samePeriod(
+          query.interval,
+          timestamps[last - 1]! * 1000,
+          tailTime,
+          chart.meta.exchangeTimezoneName,
+        ));
+      // Yahoo can leave a forming bucket without its close and repeat that
+      // bucket, closed, as the trailing row. Only an exact copy of the other
+      // columns supplies the close; that row adds nothing else.
+      const closedByTail =
+        tailInBucket &&
         quote.close[last - 1] === null &&
         quote.close[last] !== null &&
         ([quote.open, quote.high, quote.low, quote.volume] as const).every(
@@ -429,47 +469,21 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
             }),
           );
         const row = { time, open, high, low, close, volume, asOf };
-        if (interval > Day && i === timestamps.length - 1 && i > 0) {
+        if (tailInBucket && i === last) {
+          // Yahoo appends today's OHLCV after the prior-days weekly/monthly
+          // aggregate. Combine those source parts at the existing bucket.
           const previousTime = timestamps[i - 1]! * 1000;
-          const timezone = chart.meta.exchangeTimezoneName;
-          if (!timezone) {
-            return yield* Effect.fail(
-              invalidResult(
-                "Yahoo calendar bars require an exchange timezone.",
-              ),
-            );
-          }
-          const samePeriod = yield* Effect.try({
-            try: () => {
-              const date = Temporal.Instant.fromEpochMilliseconds(time)
-                .toZonedDateTimeISO(timezone)
-                .toPlainDate();
-              const previous = Temporal.Instant.fromEpochMilliseconds(
-                previousTime,
-              )
-                .toZonedDateTimeISO(timezone)
-                .toPlainDate();
-              return query.interval === "1wk"
-                ? previous.until(date).days < 7
-                : date.year === previous.year && date.month === previous.month;
-            },
-            catch: invalidResult,
-          });
-          if (samePeriod) {
-            // Yahoo appends today's OHLCV after the prior-days weekly/monthly
-            // aggregate. Combine those source parts at the existing bucket.
-            const previous = rows.get(previousTime);
-            if (previous)
-              rows.set(previousTime, {
-                ...previous,
-                high: Math.max(previous.high, high),
-                low: Math.min(previous.low, low),
-                close,
-                volume: previous.volume + volume,
-                asOf,
-              });
-            continue;
-          }
+          const previous = rows.get(previousTime);
+          if (previous)
+            rows.set(previousTime, {
+              ...previous,
+              high: Math.max(previous.high, high),
+              low: Math.min(previous.low, low),
+              close,
+              volume: previous.volume + volume,
+              asOf,
+            });
+          continue;
         }
         rows.set(time, row);
       }

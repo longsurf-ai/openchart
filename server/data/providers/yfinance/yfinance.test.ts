@@ -455,6 +455,36 @@ describe("Yahoo Finance Provider", () => {
     ]);
   });
 
+  it("keeps a forming monthly bucket incomplete when its copy is outside the range or another month", async () => {
+    const october = Date.UTC(2026, 9, 1, 4);
+    const november = Date.UTC(2026, 10, 1, 4);
+    const select = (times: number[], to: number) => {
+      const body = chart(times, [12, 12], "1mo", 0, "America/New_York");
+      body.chart.result[0]!.indicators.quote[0]!.close = [null, 13];
+      return Effect.runPromise(
+        selectBars(
+          { fetch: async () => Response.json(body) },
+          {
+            symbol: "VOD.L",
+            interval: "1mo",
+            includePrePost: false,
+            time: { from: times[0]!, to },
+          },
+        ),
+      );
+    };
+    const incomplete = { reason: { _tag: "Dataset.IncompleteData" } };
+    // The copy was quoted after the requested end.
+    const quoteTime = Date.UTC(2026, 10, 2, 21);
+    await expect(
+      select([november, quoteTime], Date.UTC(2026, 10, 2, 12)),
+    ).rejects.toMatchObject(incomplete);
+    // Matching columns alone do not make the next month a copy.
+    await expect(
+      select([october, november], november + 1000),
+    ).rejects.toMatchObject(incomplete);
+  });
+
   it("asks for weeks from a Monday, so Yahoo's weekly bars start on Mondays", async () => {
     const starts: string[] = [];
     await Effect.runPromise(
