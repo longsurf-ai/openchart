@@ -161,6 +161,52 @@ describe("Yahoo Finance Provider", () => {
     ]);
   });
 
+  it("keeps the volume of a window's first bar at a session's open", async () => {
+    // Observed AAPL hourly bars: the first bar of period1's trading day has
+    // zero volume even when period1 is before the open, as when a poll's
+    // overlap starts exactly two days before the newest bar.
+    const day = 86_400_000;
+    const hour = 3_600_000;
+    const open = Math.floor(Date.now() / day) * day - 3 * day + 14.5 * hour;
+    const times = [open - day, open - day + hour, open, open + hour];
+    const data = await Effect.runPromise(
+      selectBars(
+        {
+          fetch: async (input) => {
+            const url = new URL(String(input));
+            const from = Number(url.searchParams.get("period1")) * 1000;
+            const to = Number(url.searchParams.get("period2")) * 1000;
+            const selected = times.filter((time) => time >= from && time < to);
+            const body = chart(
+              selected,
+              selected.map(() => 12),
+              "1h",
+              0,
+              "America/New_York",
+            );
+            body.chart.result[0]!.indicators.quote[0]!.volume = selected.map(
+              (time, index) =>
+                index === 0 && Math.floor(time / day) === Math.floor(from / day)
+                  ? 0
+                  : 100,
+            );
+            return Response.json(body);
+          },
+        },
+        {
+          symbol: "VOD.L",
+          interval: "60m",
+          includePrePost: false,
+          time: { from: open, to: open + 2 * hour },
+        },
+      ),
+    );
+    expect([...data].map(({ time, volume }) => ({ time, volume }))).toEqual([
+      { time: open, volume: 100 },
+      { time: open + hour, volume: 100 },
+    ]);
+  });
+
   it("keeps padded one-minute pages within seven days without losing or repeating boundary bars", async () => {
     const day = 86_400_000;
     const minute = 60_000;
