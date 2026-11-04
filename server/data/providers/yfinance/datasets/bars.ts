@@ -277,11 +277,15 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
   let cursor = end;
   // Window estimates affect only request size; actual bars determine count.
   const padding = interval < Day ? interval : 0;
-  // Leave room for both boundary bars and whole-second wire rounding within
+  // Yahoo zeroes the volume of the first intraday bar of period1's trading
+  // day, even when period1 precedes that bar, such as before a session's
+  // open. Starting a day earlier leaves that bar before the window.
+  const lead = interval < Day ? Day : 0;
+  // Leave room for both boundary reads and whole-second wire rounding within
   // Yahoo's seven-day limit for each one-minute request.
   const maximumWindow =
     query.interval === "1m"
-      ? 7 * Day - 2 * padding - 1000
+      ? 7 * Day - lead - padding - 1000
       : Math.min(available, 3650 * Day);
   const window =
     query.count === undefined
@@ -299,7 +303,7 @@ const readBars = Effect.fn("YFinance.readBars")(function* (
     const sourceStart =
       query.interval === "1wk"
         ? mondayAtOrBefore(start)
-        : Math.max(retentionStart, start - padding);
+        : Math.max(retentionStart, start - lead);
     const sourceEnd = Math.min(
       now,
       cursor + (query.interval === "1d" ? 2 * Day : padding),
