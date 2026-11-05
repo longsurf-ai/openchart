@@ -241,6 +241,62 @@ function shelfWidth(
 }
 
 /**
+ * Resize one placement from its bottom-right corner the way a separator
+ * would: neighbours whose edge touched the edge that moved follow it, so
+ * shrinking leaves no empty columns or rows and growing narrows the neighbour
+ * instead of pushing it below. Right-hand neighbours across the placement's
+ * rows keep their right edges; neighbours below across its columns keep their
+ * bottoms. Planned on `start`, the compacted layout when the gesture began.
+ * Returns undefined when a follower would break its minimum size, leave the
+ * grid or overlap another placement; the caller keeps the grid's own result.
+ * @example const next = resizeWithNeighbours(start, id, 4, 24) ?? gridLayout;
+ */
+export function resizeWithNeighbours(
+  start: Layout,
+  id: string,
+  w: number,
+  h: number,
+): Layout | undefined {
+  const before = getLayoutItem(start, id);
+  if (!before) return undefined;
+  const layout = cloneLayout(start);
+  const item = getLayoutItem(layout, id)!;
+  const right = before.x + before.w;
+  const bottom = before.y + before.h;
+  item.w = w;
+  item.h = h;
+  const rows = (other: LayoutItem) =>
+    other.y < bottom && before.y < other.y + other.h;
+  const columns = (other: LayoutItem) =>
+    other.x < right && before.x < other.x + other.w;
+  for (const other of layout) {
+    if (other.i === id) continue;
+    if (w !== before.w && other.x === right && rows(other)) {
+      const end = other.x + other.w;
+      other.x = before.x + w;
+      other.w = end - other.x;
+      if (other.w < (other.minW ?? 1)) return undefined;
+    }
+    if (h !== before.h && other.y === bottom && columns(other)) {
+      const end = other.y + other.h;
+      other.y = before.y + h;
+      other.h = end - other.y;
+      if (other.h < (other.minH ?? 1)) return undefined;
+    }
+  }
+  if (
+    item.x + item.w > 12 ||
+    item.w < (item.minW ?? 1) ||
+    item.h < (item.minH ?? 1)
+  )
+    return undefined;
+  for (const [index, a] of layout.entries())
+    if (layout.slice(index + 1).some((b) => getFirstCollision([b], a)))
+      return undefined;
+  return verticalCompactor.compact(layout, 12);
+}
+
+/**
  * Remove a placement and let its neighbours take the space it leaves, so no
  * empty columns or rows remain where it was. Planned on the compacted layout
  * the grid shows. Growth stays inside the removed rectangle, and a neighbour

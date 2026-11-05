@@ -13,7 +13,7 @@
   preserve existing geometry. Each kind occurs once. `placeBeside` reuses the kind's placement,
   including pending saves, otherwise docks right. `placeWidgetBeside` chooses
   free right, slide left, split, then push down; saves match displayed geometry.
-  `removeWidget` lets neighbours grow into the removed rectangle only.
+  Removal and corner resizes let edge-touching neighbours fill the space.
 - `api/queries.ts` owns mutations/directories; `lib/resource/dashboard.ts` shares
   identity reads. Missing entities are null. Deletion cancels stale reads,
   caches null and refreshes lists without blocking completion. Query is the

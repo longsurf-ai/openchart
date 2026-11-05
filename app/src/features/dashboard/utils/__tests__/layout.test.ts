@@ -9,6 +9,7 @@ import {
   placeWidgets,
   placeWidgetBeside,
   removeWidget,
+  resizeWithNeighbours,
   widgetLayout,
 } from "@openchart/app/features/dashboard/utils/layout";
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
@@ -593,3 +594,132 @@ test(`random compacted dashboards stay valid after removing any placement (seed 
   // Most removals leave a neighbour room to grow; the generator must reach that path.
   expect(grew).toBeGreaterThan(removals / 4);
 }, 30_000);
+
+const rectangles = (
+  layout:
+    | readonly { i: string; x: number; y: number; w: number; h: number }[]
+    | undefined,
+) =>
+  layout &&
+  Object.fromEntries(layout.map(({ i, x, y, w, h }) => [i, { x, y, w, h }]));
+
+test("narrowing a widget lets its right neighbour take the columns, keeping its right edge", () => {
+  const start = [
+    { i: "watchlist", x: 0, y: 0, w: 6, h: 24, minW: 3 },
+    { i: "strategies", x: 6, y: 0, w: 6, h: 24, minW: 4 },
+  ];
+  expect(rectangles(resizeWithNeighbours(start, "watchlist", 3, 24))).toEqual({
+    watchlist: { x: 0, y: 0, w: 3, h: 24 },
+    strategies: { x: 3, y: 0, w: 9, h: 24 },
+  });
+});
+
+test("widening a widget narrows its right neighbour instead of pushing it below", () => {
+  const start = [
+    { i: "watchlist", x: 0, y: 0, w: 4, h: 12, minW: 3 },
+    { i: "strategies", x: 4, y: 0, w: 8, h: 24, minW: 4 },
+    { i: "chart", x: 0, y: 12, w: 4, h: 12, minW: 3 },
+  ];
+  // A taller neighbour moves its whole left edge; the widget below keeps its columns.
+  expect(rectangles(resizeWithNeighbours(start, "watchlist", 6, 12))).toEqual({
+    watchlist: { x: 0, y: 0, w: 6, h: 12 },
+    strategies: { x: 6, y: 0, w: 6, h: 24 },
+    chart: { x: 0, y: 12, w: 4, h: 12 },
+  });
+  // Narrowing cannot move that edge into the widget below; the grid keeps its own result.
+  const stacked = [
+    { i: "watchlist", x: 0, y: 0, w: 6, h: 12, minW: 3 },
+    { i: "strategies", x: 6, y: 0, w: 6, h: 24, minW: 4 },
+    { i: "chart", x: 0, y: 12, w: 6, h: 12, minW: 3 },
+  ];
+  expect(resizeWithNeighbours(stacked, "watchlist", 4, 12)).toBeUndefined();
+  const pair = start.slice(0, 2).map((item) => ({ ...item, h: 24 }));
+  expect(rectangles(resizeWithNeighbours(pair, "watchlist", 7, 24))).toEqual({
+    watchlist: { x: 0, y: 0, w: 7, h: 24 },
+    strategies: { x: 7, y: 0, w: 5, h: 24 },
+  });
+});
+
+test("shortening a widget lets the one below rise into its rows, keeping its bottom", () => {
+  const start = [
+    { i: "top", x: 0, y: 0, w: 6, h: 12, minH: 6 },
+    { i: "below", x: 0, y: 12, w: 6, h: 12, minH: 6 },
+    { i: "side", x: 6, y: 0, w: 6, h: 24 },
+  ];
+  expect(rectangles(resizeWithNeighbours(start, "top", 6, 8))).toEqual({
+    top: { x: 0, y: 0, w: 6, h: 8 },
+    below: { x: 0, y: 8, w: 6, h: 16 },
+    side: { x: 6, y: 0, w: 6, h: 24 },
+  });
+});
+
+test("a neighbour that would shrink below its minimum keeps the grid's own result", () => {
+  const start = [
+    { i: "watchlist", x: 0, y: 0, w: 6, h: 24, minW: 3 },
+    { i: "strategies", x: 6, y: 0, w: 6, h: 24, minW: 4 },
+  ];
+  expect(resizeWithNeighbours(start, "watchlist", 9, 24)).toBeUndefined();
+  expect(resizeWithNeighbours(start, "missing", 3, 24)).toBeUndefined();
+});
+
+test(`random compacted dashboards stay valid when a corner resize carries its neighbours (seed ${seed})`, () => {
+  const next = random(seed + 2);
+  const int = (min: number, max: number) =>
+    min + Math.floor(next() * (max - min + 1));
+  const kinds = ["chart", "workspace", "other"] as const;
+  let followed = 0;
+  for (let run = 0; run < 4000; run++) {
+    const generated: Dashboard["widgets"] = Array.from(
+      { length: int(1, 6) },
+      (_, index) => {
+        const kind = kinds[int(0, kinds.length - 1)]!;
+        const min = definitions[kind]!.minSize;
+        const w = int(min.w, int(min.w, 12));
+        return {
+          id: placementId.make(`wdg_${index}`),
+          kind,
+          layout: {
+            x: int(0, 12 - w),
+            y: int(0, 30),
+            w,
+            h: int(min.h, min.h + 14),
+          },
+        };
+      },
+    );
+    const start = verticalCompactor.compact(
+      widgetLayout(generated, registry),
+      12,
+    );
+    const target = start[int(0, start.length - 1)]!;
+    const w = int(target.minW ?? 1, 12 - target.x);
+    const h = int(target.minH ?? 1, target.h + 8);
+    const result = resizeWithNeighbours(start, target.i, w, h);
+    if (!result) continue;
+    followed++;
+    try {
+      for (const [index, a] of result.entries()) {
+        expect(a.x).toBeGreaterThanOrEqual(0);
+        expect(a.x + a.w).toBeLessThanOrEqual(12);
+        expect(a.w).toBeGreaterThanOrEqual(a.minW ?? 1);
+        expect(a.h).toBeGreaterThanOrEqual(a.minH ?? 1);
+        for (const b of result.slice(index + 1))
+          expect(overlaps(a, b)).toBe(false);
+      }
+      const resized = result.find((item) => item.i === target.i)!;
+      expect([resized.w, resized.h]).toEqual([w, h]);
+      // A right neighbour that touched the moved edge still touches it.
+      for (const before of start) {
+        if (before.i === target.i || before.x !== target.x + target.w) continue;
+        if (!(before.y < target.y + target.h && target.y < before.y + before.h))
+          continue;
+        expect(result.find((item) => item.i === before.i)!.x).toBe(
+          resized.x + resized.w,
+        );
+      }
+    } catch (error) {
+      throw new Error(`seed ${seed + 2}, dashboard ${run}`, { cause: error });
+    }
+  }
+  expect(followed).toBeGreaterThan(400);
+});
