@@ -240,6 +240,79 @@ function shelfWidth(
   return undefined;
 }
 
+/**
+ * Remove a placement and let its neighbours take the space it leaves, so no
+ * empty columns or rows remain where it was. Planned on the compacted layout
+ * the grid shows. Growth stays inside the removed rectangle, and a neighbour
+ * grows only across cells free on every one of its rows or columns, so gaps
+ * the user left elsewhere stay and nothing overlaps:
+ * 1. neighbours above and below grow down and up into its rows, top to bottom;
+ * 2. neighbours on its right grow left, then those on its left grow right.
+ * The result is compacted as the grid shows it. Identities and order are kept.
+ * @example const widgets = removeWidget(dashboard.widgets, registry, placement.id);
+ */
+export function removeWidget(
+  widgets: Dashboard["widgets"],
+  registry: WidgetResolver,
+  id: string,
+): Dashboard["widgets"] {
+  const shown = verticalCompactor.compact(widgetLayout(widgets, registry), 12);
+  const removed = getLayoutItem(shown, id);
+  if (!removed) throw new Error("This widget no longer exists.");
+  const layout = cloneLayout(shown.filter((item) => item.i !== id));
+  const free = (rectangle: Omit<LayoutItem, "i">, owner: LayoutItem) =>
+    !getFirstCollision(layout, { ...rectangle, i: owner.i });
+  const columns = (item: LayoutItem) =>
+    item.x < removed.x + removed.w && removed.x < item.x + item.w;
+  const rows = (item: LayoutItem) =>
+    item.y < removed.y + removed.h && removed.y < item.y + item.h;
+  const end = removed.y + removed.h;
+  const right = removed.x + removed.w;
+  const byRow = [...layout].sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const item of byRow) {
+    if (!columns(item)) continue;
+    while (
+      item.y + item.h >= removed.y &&
+      item.y + item.h < end &&
+      free({ ...item, y: item.y + item.h, h: 1 }, item)
+    )
+      item.h++;
+    while (
+      item.y > removed.y &&
+      item.y <= end &&
+      free({ ...item, y: item.y - 1, h: 1 }, item)
+    ) {
+      item.y--;
+      item.h++;
+    }
+  }
+  const byColumn = [...layout].sort((a, b) => a.x - b.x || a.y - b.y);
+  for (const item of byColumn) {
+    if (!rows(item)) continue;
+    while (
+      item.x > removed.x &&
+      item.x <= right &&
+      free({ ...item, x: item.x - 1, w: 1 }, item)
+    ) {
+      item.x--;
+      item.w++;
+    }
+  }
+  for (const item of byColumn.reverse()) {
+    if (!rows(item)) continue;
+    while (
+      item.x + item.w >= removed.x &&
+      item.x + item.w < right &&
+      free({ ...item, x: item.x + item.w, w: 1 }, item)
+    )
+      item.w++;
+  }
+  return placeWidgets(
+    widgets.filter((widget) => widget.id !== id),
+    verticalCompactor.compact(layout, 12),
+  );
+}
+
 /** Fill the first viewport, split it for the second widget, then append without moving siblings.
  * Both existing placements and the new rectangle must be saved in one Dashboard mutation.
  * @example const { widgets, layout } = prepareWidgetLayout(dashboard.widgets, definition.defaultSize);

@@ -16,6 +16,7 @@ import {
   dashboardRows,
   editWidgetLayout,
   placeWidgets,
+  removeWidget,
   widgetLayout,
 } from "@openchart/app/features/dashboard/utils/layout";
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
@@ -208,9 +209,7 @@ export function DashboardGrid({
                   onRemove={() =>
                     void onSave(
                       dashboard,
-                      dashboard.widgets.filter(
-                        (widget) => widget.id !== placement.id,
-                      ),
+                      removeWidget(dashboard.widgets, registry, placement.id),
                     ).catch(() => undefined)
                   }
                   onLayout={
