@@ -156,15 +156,19 @@ watch contract while owning their credential refresh independently.
 
 TradingView (`tradingview`) needs no key for anonymous chart data. Its
 `protocol.ts` owns socket.io framing, and `client.ts` owns symbol search,
-WebSocket history paging and one live series per socket; identities stay in
-TradingView's `EXCHANGE:SYMBOL` vocabulary. Browser sign-in stores its cookie
-session as an encrypted Integration OAuth credential; other credential shapes
-deny access. The signed-in homepage validates the session before opening a
-socket, and an invalid stored session fails access rather than silently reading
-as anonymous. Equal sessions share one validated profile for five minutes;
-failures are never cached. Search and profile reads share the parent HTTP
-helper's 429 cooldown. History uses `create_series` plus `modify_series` ranges
-and `request_more_data`; an estimated window never counts as caller coverage.
+WebSocket history paging and multiplexed live series; at most three physical
+sockets carry every chart session, serialized on creation because TradingView
+refuses upgrade bursts with HTTP 429 and holds new connections back after one.
+Identities stay in TradingView's `EXCHANGE:SYMBOL` vocabulary. Browser sign-in
+stores its cookie session as an encrypted Integration OAuth credential; other
+credential shapes deny access. The signed-in homepage validates the session
+before opening a socket, and an invalid stored session fails access rather than
+silently reading as anonymous. Equal sessions share one validated profile for
+five minutes; failures are never cached. Search and profile reads share the
+parent HTTP helper's 429 cooldown. History uses `create_series` plus
+`modify_series` ranges and `request_more_data`; complete spans older than two
+days are cached while newer bars can revise and always come from the source.
+An estimated window never counts as caller coverage.
 Search is not indexable, and TradingView's primary listing flag orders
 duplicate symbols. Search expands futures families into their actual contracts
 and shares Feed's query grammar for exchange-qualified and continuous-futures

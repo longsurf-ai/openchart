@@ -1,6 +1,8 @@
 // Purpose: Adapt TradingView history and live bars to the Dataset declaration.
 
 import { Effect, Stream, type Deferred, type Scope } from "effect";
+import { resolutionMs } from "@openchart/feed";
+import { cacheHistory } from "@openchart/server/feed/bar/history-cache";
 import { Monitoring } from "@openchart/server/monitoring";
 import type {
   DatasetFailure,
@@ -28,11 +30,7 @@ const frame = (bars: readonly Bar[]): SelectResult<typeof tradingviewBars> =>
 export const selectBars = Effect.fn("TradingView.selectBars")(function* (
   client: Client,
   query: SelectQuery<typeof tradingviewBars>,
-): Effect.fn.Return<
-  SelectResult<typeof tradingviewBars>,
-  DatasetFailure,
-  Scope.Scope
-> {
+): Effect.fn.Return<SelectResult<typeof tradingviewBars>, DatasetFailure> {
   return frame(
     yield* client.history({
       symbol: query.symbol,
@@ -44,6 +42,32 @@ export const selectBars = Effect.fn("TradingView.selectBars")(function* (
     }),
   );
 });
+
+/**
+ * Share complete historical spans within one ready Dataset. The newest two
+ * days always come from the source because TradingView can still revise them;
+ * older spans are reused across panning, remounts and charts.
+ * Create once per published Dataset, never per observation.
+ * @example const cached = yield* cachedSelectBars(client);
+ */
+export const cachedSelectBars = Effect.fn("TradingView.cachedSelectBars")(
+  function* (client: Client) {
+    return yield* cacheHistory(
+      (query: SelectQuery<typeof tradingviewBars>) => selectBars(client, query),
+      {
+        window: (query, now) => ({
+          from: 0,
+          // Delayed feeds and data corrections can revise bars well behind
+          // the wall clock; keep the newest two days uncached.
+          to:
+            now - Math.max(2 * 86_400_000, 2 * resolutionMs[query.resolution]),
+        }),
+        // A corporate action can revise adjusted history; an hour bounds it.
+        timeToLive: "1 hour",
+      },
+    );
+  },
+);
 
 /** Acquire live candles before returning; the socket buffers until consumption.
  * Retirement ends the subscription normally so accepted updates can drain.

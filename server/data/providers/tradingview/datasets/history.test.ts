@@ -144,6 +144,34 @@ const readyBars = Effect.fn(function* () {
   return yield* Deferred.await(ready);
 });
 
+test("ready Dataset reuses a complete historical span across reads", async () => {
+  const day = 86_400_000;
+  const rows = [bar(now - 60 * day, 90), bar(now - 55 * day, 91)];
+  const f = fixture(() => rows);
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      yield* TestClock.setTime(now);
+      const bars = yield* readyBars();
+      const query = {
+        ...key,
+        time: { from: now - 70 * day, to: now - 50 * day },
+      };
+      expect([...(yield* bars.select(query))].map((row) => row.close)).toEqual([
+        90, 91,
+      ]);
+      expect([...(yield* bars.select(query))].map((row) => row.close)).toEqual([
+        90, 91,
+      ]);
+      expect(f.sockets).toHaveLength(1);
+      expect(f.sockets.every((socket) => socket.terminated)).toBe(true);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(f.layer),
+      Effect.provide(TestClock.layer()),
+    ),
+  );
+});
+
 test("ready Dataset rereads delayed bars that can still revise behind the wall clock", async () => {
   let upstream = [bar(now - 10 * minute, 100)];
   const f = fixture(() => upstream);
