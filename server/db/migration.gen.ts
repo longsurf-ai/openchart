@@ -563,6 +563,6 @@ export const migrations = [
       .default,
     filename: "20261110080000_yahoo-extended-sessions.ts",
     checksum:
-      "108dbba0c55b26c5f61ae1d5ec79c5ae2326c2694b92306c2cdbfe2b8ca55075",
+      "19e449b9fa6460d37e4b4ba9265626ca533d46a7153a40eed7b7cf7f6cbad4ab",
   },
 ] satisfies DatabaseMigration.RegisteredMigration[];

@@ -13,7 +13,16 @@ import type { BarsRequest, BarsSeries } from "@openchart/feed";
 import type { BarColumn } from "@openchart/market";
 import { mergeByTime, type DataFrame } from "@openchart/timeseries";
 import { useObservable, useObservableState } from "observable-hooks";
-import { catchError, EMPTY, map, of, scan, startWith, switchMap } from "rxjs";
+import {
+  catchError,
+  distinctUntilChanged,
+  EMPTY,
+  map,
+  of,
+  scan,
+  startWith,
+  switchMap,
+} from "rxjs";
 
 import { Button } from "@openchart/app/components/ui/button";
 import {
@@ -31,6 +40,7 @@ import {
   sessionClockWindow,
   sessionInfo,
   withExtendedPrice,
+  type LatestBar,
 } from "@openchart/app/features/chart/utils/session-clock";
 import { ProfileSettingsForm } from "@openchart/app/features/chart/components/profile-settings-form";
 import { SeriesLegend } from "@openchart/app/features/chart/components/series-legend";
@@ -120,27 +130,30 @@ function useExtendedPriceRequest(series: BarsSeries): BarsRequest | undefined {
     : undefined;
 }
 
-function closeOf(frame: DataFrame) {
-  const close = frame.get(frame.numRows - 1)?.close;
-  return typeof close === "number" && Number.isFinite(close)
-    ? close
+function lastBarOf(frame: DataFrame): LatestBar | undefined {
+  const row = frame.get(frame.numRows - 1);
+  return row &&
+    typeof row.close === "number" &&
+    Number.isFinite(row.close) &&
+    typeof row.time === "number"
+    ? { time: row.time, close: row.close }
     : undefined;
 }
 
-/** Report a live request's last close, and undefined on unmount. Pending
- * reads and failures report undefined without a toast: the extended tag is
+/** Report a live request's last bar, and undefined on unmount. Pending reads
+ * and failures report undefined without a toast: the extended tag is
  * decoration. Unmounting ends the subscription.
- * @example <LatestClose request={request} onClose={setPrice} />
+ * @example <LatestBarOf request={request} onBar={setBar} />
  */
-function LatestClose({
+function LatestBarOf({
   request,
-  onClose,
+  onBar,
 }: {
   request: BarsRequest;
-  onClose: (close: number | undefined) => void;
+  onBar: (bar: LatestBar | undefined) => void;
 }) {
   const bars = useBars(request);
-  const close = useObservableState(
+  const bar = useObservableState(
     useObservable(
       (inputs$) =>
         inputs$.pipe(
@@ -153,7 +166,12 @@ function LatestClose({
                     current.data,
                   ),
                   startWith(current.data),
-                  map(closeOf),
+                  map(lastBarOf),
+                  distinctUntilChanged(
+                    (left, right) =>
+                      left?.time === right?.time &&
+                      left?.close === right?.close,
+                  ),
                 )
               : of(undefined),
           ),
@@ -161,21 +179,22 @@ function LatestClose({
       [bars.current, bars.status],
     ),
   );
-  useEffect(() => onClose(close), [close, onClose]);
-  useEffect(() => () => onClose(undefined), [onClose]);
+  useEffect(() => onBar(bar), [bar, onBar]);
+  useEffect(() => () => onBar(undefined), [onBar]);
   return null;
 }
 
 /** Fill price-tag session badges from the calendar. Failures leave them unset.
  * The phase changes at the next boundary; paint reads that close or open time.
- * During pre/post, `extendedPrice` adds core's secondary "Pre"/"Post" tag.
- * @example usePriceSession(chart, series, ["price"], extendedPrice);
+ * During pre/post, the session's latest extended bar adds core's secondary
+ * "Pre"/"Post" tag.
+ * @example usePriceSession(chart, series, ["price"], latestExtended);
  */
 function usePriceSession(
   chart: ReturnType<typeof useChart>,
   series: Pick<BarsSeries, "provider" | "listing" | "session">,
   seriesIds: readonly string[],
-  extendedPrice?: number,
+  latestExtended?: LatestBar,
 ) {
   const key = seriesIds.join("\0");
   const [day, setDay] = useState(() => Math.floor(Date.now() / 86_400_000));
@@ -215,7 +234,7 @@ function usePriceSession(
         return;
       }
       const status = sessionClockStatus({ days, now, coverage });
-      const info = withExtendedPrice(sessionInfo(status), extendedPrice);
+      const info = withExtendedPrice(sessionInfo(status), latestExtended);
       chart.mutate((state) => {
         for (const id of ids) {
           if (info) (state.session ??= {})[id] = { ...info };
@@ -233,7 +252,7 @@ function usePriceSession(
       window.clearTimeout(timer);
       clear();
     };
-  }, [chart, coverage, day, days, extendedPrice, key]);
+  }, [chart, coverage, day, days, latestExtended, key]);
 }
 
 /** One source owns one useBars; portals move only its display rows. @example <MarketSource {...props} /> */
@@ -268,14 +287,14 @@ export function MarketSource({
   const shown = bars.current?.request ?? input.series;
   const days = useSessionDays(shown, bars.frame);
   const extendedRequest = useExtendedPriceRequest(shown);
-  const [extendedPrice, setExtendedPrice] = useState<number>();
+  const [latestExtended, setLatestExtended] = useState<LatestBar>();
   usePriceSession(
     chart,
     shown,
     input.bindings.flatMap((binding) =>
       binding.output === "price" ? [binding.id] : [],
     ),
-    extendedPrice,
+    latestExtended,
   );
   const failure = bars.status === "error" ? bars.error : undefined;
   // A local projection failure can always be retried; Feed failures say so themselves.
@@ -293,7 +312,7 @@ export function MarketSource({
   return (
     <>
       {extendedRequest ? (
-        <LatestClose request={extendedRequest} onClose={setExtendedPrice} />
+        <LatestBarOf request={extendedRequest} onBar={setLatestExtended} />
       ) : null}
       <MarketVisuals
         input={input}

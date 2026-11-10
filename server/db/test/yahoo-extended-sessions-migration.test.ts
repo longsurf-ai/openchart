@@ -10,6 +10,7 @@ import { expect, test } from "vitest";
 const aapl = '{"symbol":"AAPL","currency":"USD","class":"stock"}';
 const spy = '{"symbol":"SPY","currency":"USD","class":"etf"}';
 const vod = '{"symbol":"VOD.L","currency":"GBp","class":"stock"}';
+const unclassified = '{"symbol":"AAPL","currency":"USD"}';
 const btc = '{"symbol":"BTCUSDT","currency":"USDT","class":"crypto"}';
 
 test("switches regular cells whose every source is a Yahoo US equity", () =>
@@ -58,6 +59,12 @@ test("switches regular cells whose every source is a Yahoo US equity", () =>
           sources: [["tradingview", aapl]],
         },
         {
+          id: "unclassified",
+          session: "regular",
+          adjustment: "split",
+          sources: [["yfinance", unclassified]],
+        },
+        {
           id: "raw",
           session: "regular",
           adjustment: "raw",
@@ -90,6 +97,7 @@ test("switches regular cells whose every source is a Yahoo US equity", () =>
         { id: "ccl_mixed", session: "regular", revision: 1 },
         { id: "ccl_raw", session: "regular", revision: 1 },
         { id: "ccl_tradingview", session: "regular", revision: 1 },
+        { id: "ccl_unclassified", session: "regular", revision: 1 },
         { id: "ccl_us", session: "extended", revision: 2 },
       ]);
     }).pipe(

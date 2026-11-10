@@ -112,21 +112,29 @@ it("treats overnight as open for 24h and closed for extended", () => {
   ).toEqual({ phase: "closed" });
 });
 
-it("adds the Pre/Post price tag only during extended phases", () => {
-  expect(withExtendedPrice({ phase: "post", nextCloseAt: 1 }, 350.2)).toEqual({
-    phase: "post",
-    nextCloseAt: 1,
+it("tags only a bar from the current pre/post session", () => {
+  const open = 1_794_258_000; // post-market open, Unix seconds
+  const post = { phase: "post", currentSessionOpenAt: open } as const;
+  const bar = (offset: number) => ({
+    time: open * 1000 + offset,
+    close: 350.2,
+  });
+  expect(withExtendedPrice(post, bar(60_000))).toEqual({
+    ...post,
     extendedPrice: 350.2,
     extendedLabel: "Post",
   });
-  expect(withExtendedPrice({ phase: "pre" }, 349)).toMatchObject({
+  expect(withExtendedPrice({ ...post, phase: "pre" }, bar(0))).toMatchObject({
     extendedLabel: "Pre",
   });
-  expect(withExtendedPrice({ phase: "open" }, 350.2)).toEqual({
+  // The 15:59 regular bar before the first post-market trade.
+  expect(withExtendedPrice(post, bar(-60_000))).toEqual(post);
+  expect(withExtendedPrice({ phase: "open" }, bar(60_000))).toEqual({
     phase: "open",
   });
-  expect(withExtendedPrice({ phase: "post" }, undefined)).toEqual({
+  expect(withExtendedPrice({ phase: "post" }, bar(60_000))).toEqual({
     phase: "post",
   });
-  expect(withExtendedPrice(undefined, 350.2)).toBeUndefined();
+  expect(withExtendedPrice(post, undefined)).toEqual(post);
+  expect(withExtendedPrice(undefined, bar(60_000))).toBeUndefined();
 });

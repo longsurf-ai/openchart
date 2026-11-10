@@ -13,14 +13,16 @@ const usEquity = (source: string) => `
   AND json_extract(${source}.listing, '$.currency') = 'USD'
   AND instr(json_extract(${source}.listing, '$.symbol'), '.') = 0`;
 
-/** Regular split-adjusted cells whose every market source is a Yahoo US equity. */
+/** Regular split-adjusted cells whose every market source is a Yahoo US equity.
+ * A missing class or symbol makes the predicate NULL; COALESCE counts that
+ * source as ineligible rather than letting NOT EXISTS skip it. */
 const eligible = `
   cell.session = 'regular'
   AND cell.adjustment = 'split'
   AND EXISTS (SELECT 1 FROM chart_market_source source WHERE source.cell_id = cell.id)
   AND NOT EXISTS (
     SELECT 1 FROM chart_market_source source
-    WHERE source.cell_id = cell.id AND NOT (${usEquity("source")})
+    WHERE source.cell_id = cell.id AND NOT COALESCE((${usEquity("source")}), 0)
   )`;
 
 const migration: DatabaseMigration.Migration = {
