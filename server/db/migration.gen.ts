@@ -558,4 +558,11 @@ export const migrations = [
     checksum:
       "42c2b525246188a9b34f4265928991edeb6e7962b59557ba3ed5c96d78c27371",
   },
+  {
+    ...(await import("./migration/20261110080000_yahoo-extended-sessions"))
+      .default,
+    filename: "20261110080000_yahoo-extended-sessions.ts",
+    checksum:
+      "108dbba0c55b26c5f61ae1d5ec79c5ae2326c2694b92306c2cdbfe2b8ca55075",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];

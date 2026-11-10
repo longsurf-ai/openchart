@@ -3,6 +3,7 @@
 import { Context, Effect, Layer, type Deferred } from "effect";
 import {
   yfinanceBars,
+  yfinanceCalendar,
   yfinanceSymbology,
 } from "@openchart/server/data/providers/yfinance/datasets/definitions";
 import { makeDataset } from "@openchart/server/data/dataset/dataset";
@@ -13,6 +14,7 @@ import {
   cachedSelectBars,
   streamBars,
 } from "@openchart/server/data/providers/yfinance/datasets/bars";
+import { cachedSelectCalendar } from "@openchart/server/data/providers/yfinance/datasets/calendar";
 import { cachedSearchSymbols } from "@openchart/server/data/providers/yfinance/datasets/symbology";
 import { config } from "./config";
 import { feeds } from "@openchart/server/data/providers/yfinance/feed/feed";
@@ -48,7 +50,10 @@ export class YFinanceProvider extends Context.Service<
       const symbology = yield* makeDataset(yfinanceSymbology, {
         search: (yield* cachedSearchSymbols(options)).search,
       });
-      return [bars, symbology];
+      const calendar = yield* makeDataset(yfinanceCalendar, {
+        select: yield* cachedSelectCalendar(options),
+      });
+      return [bars, symbology, calendar];
     });
     return Layer.effect(
       YFinanceProvider,
@@ -66,7 +71,7 @@ export class YFinanceProvider extends Context.Service<
           checkAccess,
         );
         return {
-          definitions: [yfinanceBars, yfinanceSymbology],
+          definitions: [yfinanceBars, yfinanceSymbology, yfinanceCalendar],
           watch: () => stream,
           checkAccess,
           refresh: () => Effect.void,

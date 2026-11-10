@@ -6,6 +6,7 @@ import {
   sessionClockStatus,
   sessionClockWindow,
   sessionInfo,
+  withExtendedPrice,
 } from "@openchart/app/features/chart/utils/session-clock";
 
 const day: TradingDay = {
@@ -109,4 +110,23 @@ it("treats overnight as open for 24h and closed for extended", () => {
   expect(
     sessionInfo(sessionClockStatus({ days: [day], now, coverage: "extended" })),
   ).toEqual({ phase: "closed" });
+});
+
+it("adds the Pre/Post price tag only during extended phases", () => {
+  expect(withExtendedPrice({ phase: "post", nextCloseAt: 1 }, 350.2)).toEqual({
+    phase: "post",
+    nextCloseAt: 1,
+    extendedPrice: 350.2,
+    extendedLabel: "Post",
+  });
+  expect(withExtendedPrice({ phase: "pre" }, 349)).toMatchObject({
+    extendedLabel: "Pre",
+  });
+  expect(withExtendedPrice({ phase: "open" }, 350.2)).toEqual({
+    phase: "open",
+  });
+  expect(withExtendedPrice({ phase: "post" }, undefined)).toEqual({
+    phase: "post",
+  });
+  expect(withExtendedPrice(undefined, 350.2)).toBeUndefined();
 });

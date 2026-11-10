@@ -6,9 +6,11 @@ import {
 } from "@openchart/server/feed/adapter";
 import {
   yfinanceBars,
+  yfinanceCalendar,
   yfinanceSymbology,
 } from "@openchart/server/data/providers/yfinance/datasets/definitions";
 import { yfinanceBarsFeed } from "./bars";
+import { yfinanceCalendarFeed } from "./calendar";
 import { yfinanceSymbologyFeed } from "./symbology";
 const providerId = ProviderId.make("yfinance");
 /** Exact declarations and static capabilities, available before activation. */
@@ -24,4 +26,8 @@ export const feeds: ProviderFeeds = {
     providerId,
     indexable: false,
   },
+  calendar: datasetAdapter(yfinanceCalendar, (dataset) => ({
+    provider: providerId,
+    feed: yfinanceCalendarFeed(dataset, providerId),
+  })),
 };

@@ -94,3 +94,25 @@ export function sessionInfo(
     ? { phase: "closed", nextOpenAt: status.next.start / 1000 }
     : { phase: "closed" };
 }
+
+/**
+ * Add core's secondary "Pre"/"Post" price tag to a pre/post badge. Other
+ * phases, and a missing price, return `info` unchanged.
+ * @example withExtendedPrice({ phase: "post" }, 350.2); // { phase: "post", extendedPrice: 350.2, extendedLabel: "Post" }
+ */
+export function withExtendedPrice(
+  info: Chart.SessionInfo | undefined,
+  extendedPrice: number | undefined,
+): Chart.SessionInfo | undefined {
+  if (
+    !info ||
+    extendedPrice === undefined ||
+    (info.phase !== "pre" && info.phase !== "post")
+  )
+    return info;
+  return {
+    ...info,
+    extendedPrice,
+    extendedLabel: info.phase === "pre" ? "Pre" : "Post",
+  };
+}
