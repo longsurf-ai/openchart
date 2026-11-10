@@ -978,7 +978,7 @@ it("holds generic widget controls while a fixture popup is portaled outside its 
   expect(harness.mounted).toHaveBeenCalledTimes(2);
 });
 
-it("removes a widget directly with the X button and saves the remaining placements", async () => {
+it("removes a widget directly with the X button, letting the widget below take its rows", async () => {
   const { resource, patch, user } = setup();
   patch.mockReturnValue(new Promise(() => undefined));
   const first = screen.getAllByRole("region", { name: "Fixture" })[0]!;
@@ -990,7 +990,17 @@ it("removes a widget directly with the X button and saves the remaining placemen
     id: resource.id,
     expectedRevision: resource.revision,
     operations: [
-      { op: "replace", path: "/widgets", value: resource.widgets.slice(1) },
+      {
+        op: "replace",
+        path: "/widgets",
+        value: [
+          resource.widgets[1],
+          {
+            ...resource.widgets[2]!,
+            layout: { x: 0, y: 0, w: 6, h: 16 },
+          },
+        ],
+      },
     ],
   });
   expect(

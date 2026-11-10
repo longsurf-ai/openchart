@@ -240,6 +240,144 @@ function shelfWidth(
   return undefined;
 }
 
+/**
+ * Resize one placement from its bottom-right corner the way a separator
+ * would: neighbours whose edge touched the edge that moved follow it, so
+ * shrinking leaves no empty columns or rows and growing narrows the neighbour
+ * instead of pushing it below. Right-hand neighbours across the placement's
+ * rows keep their right edges; neighbours below across its columns keep their
+ * bottoms. Planned on `start`, the compacted layout when the gesture began.
+ * Returns undefined when a follower would break its minimum size, leave the
+ * grid or overlap another placement; the caller keeps the grid's own result.
+ * @example const next = resizeWithNeighbours(start, id, 4, 24) ?? gridLayout;
+ */
+export function resizeWithNeighbours(
+  start: Layout,
+  id: string,
+  w: number,
+  h: number,
+): Layout | undefined {
+  const before = getLayoutItem(start, id);
+  if (!before) return undefined;
+  const layout = cloneLayout(start);
+  const item = getLayoutItem(layout, id)!;
+  const right = before.x + before.w;
+  const bottom = before.y + before.h;
+  item.w = w;
+  item.h = h;
+  const rows = (other: LayoutItem) =>
+    other.y < bottom && before.y < other.y + other.h;
+  const columns = (other: LayoutItem) =>
+    other.x < right && before.x < other.x + other.w;
+  for (const other of layout) {
+    if (other.i === id) continue;
+    if (w !== before.w && other.x === right && rows(other)) {
+      const end = other.x + other.w;
+      other.x = before.x + w;
+      other.w = end - other.x;
+      if (other.w < (other.minW ?? 1)) return undefined;
+    }
+    if (h !== before.h && other.y === bottom && columns(other)) {
+      const end = other.y + other.h;
+      other.y = before.y + h;
+      other.h = end - other.y;
+      if (other.h < (other.minH ?? 1)) return undefined;
+    }
+  }
+  if (
+    item.x + item.w > 12 ||
+    item.w < (item.minW ?? 1) ||
+    item.h < (item.minH ?? 1)
+  )
+    return undefined;
+  for (const [index, a] of layout.entries())
+    if (layout.slice(index + 1).some((b) => getFirstCollision([b], a)))
+      return undefined;
+  return verticalCompactor.compact(layout, 12);
+}
+
+/**
+ * Remove a placement and let its neighbours take the space it leaves, so no
+ * empty columns or rows remain where it was. Planned on the compacted layout
+ * the grid shows. Growth uses only cells of the removed rectangle: a neighbour
+ * grows vertically only when its columns lie within the removed columns, and
+ * horizontally only when its rows lie within the removed rows, so gaps the
+ * user left elsewhere stay and nothing overlaps:
+ * 1. neighbours above and below grow down and up into its rows, top to bottom;
+ * 2. neighbours on its right grow left, then those on its left grow right.
+ * Space no neighbour can take this way stays empty.
+ *
+ * Pure: the inputs are not mutated, and the result is a new placement list,
+ * compacted as the grid shows it, with identities and order kept. The caller
+ * owns saving it as one Dashboard mutation; nothing needs cleanup.
+ * @throws Error `"This widget no longer exists."` when `id` names no placement
+ * in `widgets`, for example after a concurrent removal.
+ * @example const widgets = removeWidget(dashboard.widgets, registry, placement.id);
+ */
+export function removeWidget(
+  widgets: Dashboard["widgets"],
+  registry: WidgetResolver,
+  id: string,
+): Dashboard["widgets"] {
+  const shown = verticalCompactor.compact(widgetLayout(widgets, registry), 12);
+  const removed = getLayoutItem(shown, id);
+  if (!removed) throw new Error("This widget no longer exists.");
+  const layout = cloneLayout(shown.filter((item) => item.i !== id));
+  const free = (rectangle: Omit<LayoutItem, "i">, owner: LayoutItem) =>
+    !getFirstCollision(layout, { ...rectangle, i: owner.i });
+  const end = removed.y + removed.h;
+  const right = removed.x + removed.w;
+  // Only a neighbour spanning a subset of the removed columns or rows can grow
+  // across them without leaving the removed rectangle.
+  const columns = (item: LayoutItem) =>
+    removed.x <= item.x && item.x + item.w <= right;
+  const rows = (item: LayoutItem) =>
+    removed.y <= item.y && item.y + item.h <= end;
+  const byRow = [...layout].sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const item of byRow) {
+    if (!columns(item)) continue;
+    while (
+      item.y + item.h >= removed.y &&
+      item.y + item.h < end &&
+      free({ ...item, y: item.y + item.h, h: 1 }, item)
+    )
+      item.h++;
+    while (
+      item.y > removed.y &&
+      item.y <= end &&
+      free({ ...item, y: item.y - 1, h: 1 }, item)
+    ) {
+      item.y--;
+      item.h++;
+    }
+  }
+  const byColumn = [...layout].sort((a, b) => a.x - b.x || a.y - b.y);
+  for (const item of byColumn) {
+    if (!rows(item)) continue;
+    while (
+      item.x > removed.x &&
+      item.x <= right &&
+      free({ ...item, x: item.x - 1, w: 1 }, item)
+    ) {
+      item.x--;
+      item.w++;
+    }
+  }
+  for (const item of byColumn.reverse()) {
+    if (!rows(item)) continue;
+    while (
+      item.x + item.w >= removed.x &&
+      item.x + item.w < right &&
+      free({ ...item, x: item.x + item.w, w: 1 }, item)
+    )
+      item.w++;
+  }
+  return placeWidgets(
+    widgets.filter((widget) => widget.id !== id),
+    verticalCompactor.compact(layout, 12),
+  );
+}
+
 /** Fill the first viewport, split it for the second widget, then append without moving siblings.
  * Both existing placements and the new rectangle must be saved in one Dashboard mutation.
  * @example const { widgets, layout } = prepareWidgetLayout(dashboard.widgets, definition.defaultSize);

@@ -8,6 +8,8 @@ import {
   appendWidget,
   placeWidgets,
   placeWidgetBeside,
+  removeWidget,
+  resizeWithNeighbours,
   widgetLayout,
 } from "@openchart/app/features/dashboard/utils/layout";
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
@@ -424,3 +426,338 @@ test(`random compacted dashboards dock beside any anchor (seed ${seed}, ${dashbo
   expect(Math.min(...Object.values(branches))).toBeGreaterThan(10);
   // About 1 s locally and 5 s on CI runners; the case count keeps rare branches covered.
 }, 30_000);
+
+/** Remove one placement and check what every result must satisfy; returns the saved rectangles by ID. */
+function removeChecked(widgets: Dashboard["widgets"], id: string) {
+  const shown = placeWidgets(
+    widgets,
+    verticalCompactor.compact(widgetLayout(widgets, registry), 12),
+  );
+  const removed = shown.find((widget) => widget.id === id)!.layout;
+  const result = removeWidget(widgets, registry, id);
+  const saved = result.map(({ layout }) => layout);
+  for (const [index, a] of saved.entries()) {
+    expect(a.x).toBeGreaterThanOrEqual(0);
+    expect(a.x + a.w).toBeLessThanOrEqual(12);
+    for (const b of saved.slice(index + 1)) expect(overlaps(a, b)).toBe(false);
+  }
+  // Saved exactly as the compacting grid shows it.
+  expect(
+    verticalCompactor
+      .compact(widgetLayout(result, registry), 12)
+      .map(({ x, y, w, h }) => ({ x, y, w, h })),
+  ).toEqual(saved);
+  // Identity and order are kept; only the removed placement is gone.
+  expect(result.map((widget) => widget.id)).toEqual(
+    widgets.filter((widget) => widget.id !== id).map((widget) => widget.id),
+  );
+  // Neighbours only widen, and only into the removed columns.
+  for (const widget of result) {
+    const before = shown.find(({ id }) => id === widget.id)!.layout;
+    const after = widget.layout;
+    expect(after.x).toBeLessThanOrEqual(before.x);
+    expect(after.x + after.w).toBeGreaterThanOrEqual(before.x + before.w);
+    expect(after.x).toBeGreaterThanOrEqual(Math.min(before.x, removed.x));
+    expect(after.x + after.w).toBeLessThanOrEqual(
+      Math.max(before.x + before.w, removed.x + removed.w),
+    );
+    expect(after.h).toBeGreaterThanOrEqual(before.h);
+    // Growth stays inside the removed rectangle: only a neighbour within its
+    // rows widens, and only one within its columns grows taller.
+    if (after.w > before.w) {
+      expect(before.y).toBeGreaterThanOrEqual(removed.y);
+      expect(before.y + before.h).toBeLessThanOrEqual(removed.y + removed.h);
+    }
+    if (after.h > before.h) {
+      expect(before.x).toBeGreaterThanOrEqual(removed.x);
+      expect(before.x + before.w).toBeLessThanOrEqual(removed.x + removed.w);
+    }
+  }
+  return Object.fromEntries(result.map(({ id, layout }) => [id, layout]));
+}
+
+const placed = (layouts: Record<string, Rectangle>) =>
+  Object.entries(layouts).map(([id, layout]) => ({
+    id: placementId.make(id),
+    kind: "other",
+    layout,
+  }));
+
+test("removing one half of a split gives the other half the full width", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_chart: { x: 0, y: 0, w: 6, h: 24 },
+        wdg_prediction: { x: 6, y: 0, w: 6, h: 24 },
+      }),
+      "wdg_chart",
+    ),
+  ).toEqual({ wdg_prediction: { x: 0, y: 0, w: 12, h: 24 } });
+});
+
+test("left and right neighbours share a removed middle column: the right one takes it", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_left: { x: 0, y: 0, w: 4, h: 24 },
+        wdg_middle: { x: 4, y: 0, w: 4, h: 24 },
+        wdg_right: { x: 8, y: 0, w: 4, h: 24 },
+      }),
+      "wdg_middle",
+    ),
+  ).toEqual({
+    wdg_left: { x: 0, y: 0, w: 4, h: 24 },
+    wdg_right: { x: 4, y: 0, w: 8, h: 24 },
+  });
+});
+
+test("a widget below the removed one grows up into its rows instead of leaving the bottom empty", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_top: { x: 0, y: 0, w: 6, h: 8 },
+        wdg_below: { x: 0, y: 8, w: 6, h: 16 },
+        wdg_side: { x: 6, y: 0, w: 6, h: 24 },
+      }),
+      "wdg_top",
+    ),
+  ).toEqual({
+    wdg_below: { x: 0, y: 0, w: 6, h: 24 },
+    wdg_side: { x: 6, y: 0, w: 6, h: 24 },
+  });
+});
+
+test("a neighbour crossing only part of the removed rows stays its width when another fills below it", () => {
+  const result = removeChecked(
+    placed({
+      wdg_removed: { x: 0, y: 0, w: 6, h: 24 },
+      wdg_upper: { x: 6, y: 0, w: 6, h: 12 },
+      wdg_lower: { x: 6, y: 12, w: 6, h: 12 },
+    }),
+    "wdg_removed",
+  );
+  expect(result).toEqual({
+    wdg_upper: { x: 0, y: 0, w: 12, h: 12 },
+    wdg_lower: { x: 0, y: 12, w: 12, h: 12 },
+  });
+});
+
+test("a gap the user left outside the removed rectangle stays", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_removed: { x: 0, y: 0, w: 4, h: 24 },
+        wdg_kept: { x: 4, y: 0, w: 4, h: 24 },
+      }),
+      "wdg_removed",
+    ),
+  ).toEqual({ wdg_kept: { x: 0, y: 0, w: 8, h: 24 } });
+});
+
+test("a side neighbour taller than the removed widget keeps its width instead of taking the empty space below", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_removed: { x: 0, y: 0, w: 4, h: 8 },
+        wdg_tall: { x: 4, y: 0, w: 4, h: 16 },
+      }),
+      "wdg_removed",
+    ),
+  ).toEqual({ wdg_tall: { x: 4, y: 0, w: 4, h: 16 } });
+});
+
+test("a neighbour below wider than the removed widget keeps its height instead of taking the empty space beside", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_removed: { x: 0, y: 0, w: 4, h: 8 },
+        wdg_wide: { x: 0, y: 8, w: 8, h: 8 },
+        wdg_side: { x: 8, y: 0, w: 4, h: 8 },
+      }),
+      "wdg_removed",
+    ),
+  ).toEqual({
+    wdg_wide: { x: 0, y: 0, w: 8, h: 8 },
+    wdg_side: { x: 8, y: 0, w: 4, h: 8 },
+  });
+});
+
+const removals = 4000;
+
+test(`random compacted dashboards stay valid after removing any placement (seed ${seed}, ${removals} dashboards)`, () => {
+  const next = random(seed + 1);
+  const int = (min: number, max: number) =>
+    min + Math.floor(next() * (max - min + 1));
+  const kinds = ["chart", "workspace", "other"] as const;
+  let grew = 0;
+  for (let run = 0; run < removals; run++) {
+    const generated: Dashboard["widgets"] = Array.from(
+      { length: int(1, 9) },
+      (_, index) => {
+        const kind = kinds[int(0, kinds.length - 1)]!;
+        const min = definitions[kind]!.minSize;
+        const w = int(min.w, int(min.w, 12));
+        return {
+          id: placementId.make(`wdg_${index}`),
+          kind,
+          layout: {
+            x: int(0, 12 - w),
+            y: int(0, 40),
+            w,
+            h: int(min.h, min.h + 14),
+          },
+        };
+      },
+    );
+    const widgets = placeWidgets(
+      generated,
+      verticalCompactor.compact(widgetLayout(generated, registry), 12),
+    );
+    try {
+      const after = removeChecked(
+        widgets,
+        widgets[int(0, widgets.length - 1)]!.id,
+      );
+      if (
+        widgets.some(({ id, layout }) => {
+          const next = after[id];
+          return next !== undefined && next.w * next.h > layout.w * layout.h;
+        })
+      )
+        grew++;
+    } catch (error) {
+      throw new Error(`seed ${seed + 1}, dashboard ${run}`, { cause: error });
+    }
+  }
+  // Most removals leave a neighbour room to grow; the generator must reach that path.
+  expect(grew).toBeGreaterThan(removals / 4);
+}, 30_000);
+
+const rectangles = (
+  layout:
+    | readonly { i: string; x: number; y: number; w: number; h: number }[]
+    | undefined,
+) =>
+  layout &&
+  Object.fromEntries(layout.map(({ i, x, y, w, h }) => [i, { x, y, w, h }]));
+
+test("narrowing a widget lets its right neighbour take the columns, keeping its right edge", () => {
+  const start = [
+    { i: "watchlist", x: 0, y: 0, w: 6, h: 24, minW: 3 },
+    { i: "strategies", x: 6, y: 0, w: 6, h: 24, minW: 4 },
+  ];
+  expect(rectangles(resizeWithNeighbours(start, "watchlist", 3, 24))).toEqual({
+    watchlist: { x: 0, y: 0, w: 3, h: 24 },
+    strategies: { x: 3, y: 0, w: 9, h: 24 },
+  });
+});
+
+test("widening a widget narrows its right neighbour instead of pushing it below", () => {
+  const start = [
+    { i: "watchlist", x: 0, y: 0, w: 4, h: 12, minW: 3 },
+    { i: "strategies", x: 4, y: 0, w: 8, h: 24, minW: 4 },
+    { i: "chart", x: 0, y: 12, w: 4, h: 12, minW: 3 },
+  ];
+  // A taller neighbour moves its whole left edge; the widget below keeps its columns.
+  expect(rectangles(resizeWithNeighbours(start, "watchlist", 6, 12))).toEqual({
+    watchlist: { x: 0, y: 0, w: 6, h: 12 },
+    strategies: { x: 6, y: 0, w: 6, h: 24 },
+    chart: { x: 0, y: 12, w: 4, h: 12 },
+  });
+  // Narrowing cannot move that edge into the widget below; the grid keeps its own result.
+  const stacked = [
+    { i: "watchlist", x: 0, y: 0, w: 6, h: 12, minW: 3 },
+    { i: "strategies", x: 6, y: 0, w: 6, h: 24, minW: 4 },
+    { i: "chart", x: 0, y: 12, w: 6, h: 12, minW: 3 },
+  ];
+  expect(resizeWithNeighbours(stacked, "watchlist", 4, 12)).toBeUndefined();
+  const pair = start.slice(0, 2).map((item) => ({ ...item, h: 24 }));
+  expect(rectangles(resizeWithNeighbours(pair, "watchlist", 7, 24))).toEqual({
+    watchlist: { x: 0, y: 0, w: 7, h: 24 },
+    strategies: { x: 7, y: 0, w: 5, h: 24 },
+  });
+});
+
+test("shortening a widget lets the one below rise into its rows, keeping its bottom", () => {
+  const start = [
+    { i: "top", x: 0, y: 0, w: 6, h: 12, minH: 6 },
+    { i: "below", x: 0, y: 12, w: 6, h: 12, minH: 6 },
+    { i: "side", x: 6, y: 0, w: 6, h: 24 },
+  ];
+  expect(rectangles(resizeWithNeighbours(start, "top", 6, 8))).toEqual({
+    top: { x: 0, y: 0, w: 6, h: 8 },
+    below: { x: 0, y: 8, w: 6, h: 16 },
+    side: { x: 6, y: 0, w: 6, h: 24 },
+  });
+});
+
+test("a neighbour that would shrink below its minimum keeps the grid's own result", () => {
+  const start = [
+    { i: "watchlist", x: 0, y: 0, w: 6, h: 24, minW: 3 },
+    { i: "strategies", x: 6, y: 0, w: 6, h: 24, minW: 4 },
+  ];
+  expect(resizeWithNeighbours(start, "watchlist", 9, 24)).toBeUndefined();
+  expect(resizeWithNeighbours(start, "missing", 3, 24)).toBeUndefined();
+});
+
+test(`random compacted dashboards stay valid when a corner resize carries its neighbours (seed ${seed})`, () => {
+  const next = random(seed + 2);
+  const int = (min: number, max: number) =>
+    min + Math.floor(next() * (max - min + 1));
+  const kinds = ["chart", "workspace", "other"] as const;
+  let followed = 0;
+  for (let run = 0; run < 4000; run++) {
+    const generated: Dashboard["widgets"] = Array.from(
+      { length: int(1, 6) },
+      (_, index) => {
+        const kind = kinds[int(0, kinds.length - 1)]!;
+        const min = definitions[kind]!.minSize;
+        const w = int(min.w, int(min.w, 12));
+        return {
+          id: placementId.make(`wdg_${index}`),
+          kind,
+          layout: {
+            x: int(0, 12 - w),
+            y: int(0, 30),
+            w,
+            h: int(min.h, min.h + 14),
+          },
+        };
+      },
+    );
+    const start = verticalCompactor.compact(
+      widgetLayout(generated, registry),
+      12,
+    );
+    const target = start[int(0, start.length - 1)]!;
+    const w = int(target.minW ?? 1, 12 - target.x);
+    const h = int(target.minH ?? 1, target.h + 8);
+    const result = resizeWithNeighbours(start, target.i, w, h);
+    if (!result) continue;
+    followed++;
+    try {
+      for (const [index, a] of result.entries()) {
+        expect(a.x).toBeGreaterThanOrEqual(0);
+        expect(a.x + a.w).toBeLessThanOrEqual(12);
+        expect(a.w).toBeGreaterThanOrEqual(a.minW ?? 1);
+        expect(a.h).toBeGreaterThanOrEqual(a.minH ?? 1);
+        for (const b of result.slice(index + 1))
+          expect(overlaps(a, b)).toBe(false);
+      }
+      const resized = result.find((item) => item.i === target.i)!;
+      expect([resized.w, resized.h]).toEqual([w, h]);
+      // A right neighbour that touched the moved edge still touches it.
+      for (const before of start) {
+        if (before.i === target.i || before.x !== target.x + target.w) continue;
+        if (!(before.y < target.y + target.h && target.y < before.y + before.h))
+          continue;
+        expect(result.find((item) => item.i === before.i)!.x).toBe(
+          resized.x + resized.w,
+        );
+      }
+    } catch (error) {
+      throw new Error(`seed ${seed + 2}, dashboard ${run}`, { cause: error });
+    }
+  }
+  expect(followed).toBeGreaterThan(400);
+});

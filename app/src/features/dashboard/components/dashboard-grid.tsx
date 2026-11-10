@@ -16,6 +16,8 @@ import {
   dashboardRows,
   editWidgetLayout,
   placeWidgets,
+  removeWidget,
+  resizeWithNeighbours,
   widgetLayout,
 } from "@openchart/app/features/dashboard/utils/layout";
 import type { Dashboard } from "@openchart/app/lib/resource/dashboard";
@@ -68,6 +70,8 @@ export function DashboardGrid({
     return () => observer.disconnect();
   }, [containerRef]);
   const gesture = useRef<Dashboard>();
+  // The layout shown when a corner resize began; neighbours follow from it.
+  const resizeStart = useRef<Layout>();
   const [interaction, setInteraction] = useState<"widget" | "separator">();
   const [preview, setPreview] = useState<{
     layout: Layout;
@@ -191,10 +195,21 @@ export function DashboardGrid({
             }}
             onResizeStart={() => {
               gesture.current = dashboard;
+              resizeStart.current = displayed;
               setInteraction("widget");
             }}
             onDragStop={stop}
-            onResizeStop={stop}
+            onResizeStop={(next, _old, item) => {
+              const start = resizeStart.current;
+              resizeStart.current = undefined;
+              const followed =
+                start && item
+                  ? resizeWithNeighbours(start, item.i, item.w, item.h)
+                  : undefined;
+              // Show where the neighbours settle at once, as a separator does.
+              if (followed) previewLayout(followed);
+              stop(followed ?? next);
+            }}
           >
             {dashboard.widgets.map((placement) => (
               <div key={placement.id} id={placement.id}>
@@ -208,9 +223,7 @@ export function DashboardGrid({
                   onRemove={() =>
                     void onSave(
                       dashboard,
-                      dashboard.widgets.filter(
-                        (widget) => widget.id !== placement.id,
-                      ),
+                      removeWidget(dashboard.widgets, registry, placement.id),
                     ).catch(() => undefined)
                   }
                   onLayout={
