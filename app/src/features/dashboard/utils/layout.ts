@@ -299,12 +299,19 @@ export function resizeWithNeighbours(
 /**
  * Remove a placement and let its neighbours take the space it leaves, so no
  * empty columns or rows remain where it was. Planned on the compacted layout
- * the grid shows. Growth stays inside the removed rectangle, and a neighbour
- * grows only across cells free on every one of its rows or columns, so gaps
- * the user left elsewhere stay and nothing overlaps:
+ * the grid shows. Growth uses only cells of the removed rectangle: a neighbour
+ * grows vertically only when its columns lie within the removed columns, and
+ * horizontally only when its rows lie within the removed rows, so gaps the
+ * user left elsewhere stay and nothing overlaps:
  * 1. neighbours above and below grow down and up into its rows, top to bottom;
  * 2. neighbours on its right grow left, then those on its left grow right.
- * The result is compacted as the grid shows it. Identities and order are kept.
+ * Space no neighbour can take this way stays empty.
+ *
+ * Pure: the inputs are not mutated, and the result is a new placement list,
+ * compacted as the grid shows it, with identities and order kept. The caller
+ * owns saving it as one Dashboard mutation; nothing needs cleanup.
+ * @throws Error `"This widget no longer exists."` when `id` names no placement
+ * in `widgets`, for example after a concurrent removal.
  * @example const widgets = removeWidget(dashboard.widgets, registry, placement.id);
  */
 export function removeWidget(
@@ -318,12 +325,14 @@ export function removeWidget(
   const layout = cloneLayout(shown.filter((item) => item.i !== id));
   const free = (rectangle: Omit<LayoutItem, "i">, owner: LayoutItem) =>
     !getFirstCollision(layout, { ...rectangle, i: owner.i });
-  const columns = (item: LayoutItem) =>
-    item.x < removed.x + removed.w && removed.x < item.x + item.w;
-  const rows = (item: LayoutItem) =>
-    item.y < removed.y + removed.h && removed.y < item.y + item.h;
   const end = removed.y + removed.h;
   const right = removed.x + removed.w;
+  // Only a neighbour spanning a subset of the removed columns or rows can grow
+  // across them without leaving the removed rectangle.
+  const columns = (item: LayoutItem) =>
+    removed.x <= item.x && item.x + item.w <= right;
+  const rows = (item: LayoutItem) =>
+    removed.y <= item.y && item.y + item.h <= end;
   const byRow = [...layout].sort((a, b) => a.y - b.y || a.x - b.x);
   for (const item of byRow) {
     if (!columns(item)) continue;

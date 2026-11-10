@@ -462,6 +462,16 @@ function removeChecked(widgets: Dashboard["widgets"], id: string) {
       Math.max(before.x + before.w, removed.x + removed.w),
     );
     expect(after.h).toBeGreaterThanOrEqual(before.h);
+    // Growth stays inside the removed rectangle: only a neighbour within its
+    // rows widens, and only one within its columns grows taller.
+    if (after.w > before.w) {
+      expect(before.y).toBeGreaterThanOrEqual(removed.y);
+      expect(before.y + before.h).toBeLessThanOrEqual(removed.y + removed.h);
+    }
+    if (after.h > before.h) {
+      expect(before.x).toBeGreaterThanOrEqual(removed.x);
+      expect(before.x + before.w).toBeLessThanOrEqual(removed.x + removed.w);
+    }
   }
   return Object.fromEntries(result.map(({ id, layout }) => [id, layout]));
 }
@@ -542,6 +552,34 @@ test("a gap the user left outside the removed rectangle stays", () => {
       "wdg_removed",
     ),
   ).toEqual({ wdg_kept: { x: 0, y: 0, w: 8, h: 24 } });
+});
+
+test("a side neighbour taller than the removed widget keeps its width instead of taking the empty space below", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_removed: { x: 0, y: 0, w: 4, h: 8 },
+        wdg_tall: { x: 4, y: 0, w: 4, h: 16 },
+      }),
+      "wdg_removed",
+    ),
+  ).toEqual({ wdg_tall: { x: 4, y: 0, w: 4, h: 16 } });
+});
+
+test("a neighbour below wider than the removed widget keeps its height instead of taking the empty space beside", () => {
+  expect(
+    removeChecked(
+      placed({
+        wdg_removed: { x: 0, y: 0, w: 4, h: 8 },
+        wdg_wide: { x: 0, y: 8, w: 8, h: 8 },
+        wdg_side: { x: 8, y: 0, w: 4, h: 8 },
+      }),
+      "wdg_removed",
+    ),
+  ).toEqual({
+    wdg_wide: { x: 0, y: 0, w: 8, h: 8 },
+    wdg_side: { x: 8, y: 0, w: 4, h: 8 },
+  });
 });
 
 const removals = 4000;
