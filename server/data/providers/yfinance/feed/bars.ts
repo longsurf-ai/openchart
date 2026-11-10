@@ -25,18 +25,42 @@ const intervals = {
   "1W": "1wk",
   "1M": "1mo",
 } as const;
-// Extended-session support is listing-specific; do not advertise it without source metadata.
-const yfinanceCapabilities: BarsCapabilities = Object.keys(intervals).map(
-  (resolution) => ({
-    resolution: resolution as Resolution,
-    session: "regular",
-    adjustment: "split",
-    modes: ["history", "delayed"],
-  }),
-);
+const resolutions = Object.keys(intervals) as Resolution[];
+const intraday = new Set<Resolution>(["1m", "5m", "15m", "30m", "1h"]);
+
+/** Yahoo reports pre/post-market data (`hasPrePostMarketData`) only for US
+ * equities: USD stocks and ETFs whose symbols carry no exchange suffix. */
+function hasExtendedHours(listing: BarsRequest["listing"]) {
+  return (
+    (listing.class === "stock" || listing.class === "etf") &&
+    listing.currency === "USD" &&
+    !listing.symbol.includes(".")
+  );
+}
+
+/** US equities offer extended before regular at every interval, so new and
+ * re-resolved charts keep pre/post-market bars across interval changes. Yahoo's
+ * daily and longer bars cover the regular session only, so both sessions read
+ * the same bars there, as on TradingView. Other listings offer regular only. */
+function yfinanceCapabilities(
+  listing: BarsRequest["listing"],
+): BarsCapabilities {
+  const sessions = hasExtendedHours(listing)
+    ? (["extended", "regular"] as const)
+    : (["regular"] as const);
+  return resolutions.flatMap((resolution) =>
+    sessions.map((session) => ({
+      resolution,
+      session,
+      adjustment: "split" as const,
+      modes: ["history", "delayed"] as const,
+    })),
+  );
+}
 
 /** Adapt split-adjusted Yahoo OHLCV; polling never claims an exchange tick stream.
- * Other resolution, session or adjustment requests fail with `Feed.Unsupported`.
+ * The extended session reads Yahoo's intraday pre- and post-market bars for US equities.
+ * Combinations outside {@link yfinanceCapabilities} fail with `Feed.Unsupported`.
  * @example const bars = yfinanceBarsFeed(dataset, providerId);
  */
 export function yfinanceBarsFeed(
@@ -44,15 +68,20 @@ export function yfinanceBarsFeed(
   providerId: ProviderId,
 ): IBarsFeedService {
   return {
-    getCapabilities: () => Effect.succeed(yfinanceCapabilities),
+    getCapabilities: ({ listing }) =>
+      Effect.succeed(yfinanceCapabilities(listing)),
     observe: Effect.fn("yfinanceBarsFeed.observe")(function* (
       request: BarsRequest,
     ) {
       const interval = intervals[request.resolution as keyof typeof intervals];
       if (
         !interval ||
-        request.adjustment !== "split" ||
-        request.session !== "regular"
+        !yfinanceCapabilities(request.listing).some(
+          (value) =>
+            value.resolution === request.resolution &&
+            value.session === request.session &&
+            value.adjustment === request.adjustment,
+        )
       ) {
         return yield* Effect.fail(
           feedError(new FeedReasons.Unsupported({ provider: providerId })),
@@ -61,7 +90,9 @@ export function yfinanceBarsFeed(
       const key = {
         symbol: request.listing.symbol,
         interval,
-        includePrePost: false,
+        // Daily and longer bars ignore pre/post data; share their regular reads.
+        includePrePost:
+          request.session === "extended" && intraday.has(request.resolution),
       };
       // Yahoo acquisition prepares polling; the first poll runs only after this snapshot.
       const updates =

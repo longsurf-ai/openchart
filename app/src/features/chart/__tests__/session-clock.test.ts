@@ -6,6 +6,7 @@ import {
   sessionClockStatus,
   sessionClockWindow,
   sessionInfo,
+  withExtendedPrice,
 } from "@openchart/app/features/chart/utils/session-clock";
 
 const day: TradingDay = {
@@ -109,4 +110,31 @@ it("treats overnight as open for 24h and closed for extended", () => {
   expect(
     sessionInfo(sessionClockStatus({ days: [day], now, coverage: "extended" })),
   ).toEqual({ phase: "closed" });
+});
+
+it("tags only a bar from the current pre/post session", () => {
+  const open = 1_794_258_000; // post-market open, Unix seconds
+  const post = { phase: "post", currentSessionOpenAt: open } as const;
+  const bar = (offset: number) => ({
+    time: open * 1000 + offset,
+    close: 350.2,
+  });
+  expect(withExtendedPrice(post, bar(60_000))).toEqual({
+    ...post,
+    extendedPrice: 350.2,
+    extendedLabel: "Post",
+  });
+  expect(withExtendedPrice({ ...post, phase: "pre" }, bar(0))).toMatchObject({
+    extendedLabel: "Pre",
+  });
+  // The 15:59 regular bar before the first post-market trade.
+  expect(withExtendedPrice(post, bar(-60_000))).toEqual(post);
+  expect(withExtendedPrice({ phase: "open" }, bar(60_000))).toEqual({
+    phase: "open",
+  });
+  expect(withExtendedPrice({ phase: "post" }, bar(60_000))).toEqual({
+    phase: "post",
+  });
+  expect(withExtendedPrice(post, undefined)).toEqual(post);
+  expect(withExtendedPrice(undefined, bar(60_000))).toBeUndefined();
 });

@@ -94,3 +94,33 @@ export function sessionInfo(
     ? { phase: "closed", nextOpenAt: status.next.start / 1000 }
     : { phase: "closed" };
 }
+
+/** A bar's start time (Unix milliseconds) and close. */
+export type LatestBar = { readonly time: number; readonly close: number };
+
+/**
+ * Add core's secondary "Pre"/"Post" price tag to a pre/post badge, from the
+ * latest 1m Extended bar. A bar that started before the current pre/post
+ * session (a regular bar, or one from an earlier session) is not that
+ * session's price, so the badge stays unchanged until the first trade. Other
+ * phases and a missing bar also return `info` unchanged.
+ * @example withExtendedPrice({ phase: "post", currentSessionOpenAt: 1_794_258_000 }, { time: 1_794_258_060_000, close: 350.2 });
+ */
+export function withExtendedPrice(
+  info: Chart.SessionInfo | undefined,
+  latest: LatestBar | undefined,
+): Chart.SessionInfo | undefined {
+  if (
+    !info ||
+    !latest ||
+    (info.phase !== "pre" && info.phase !== "post") ||
+    info.currentSessionOpenAt === undefined ||
+    latest.time < info.currentSessionOpenAt * 1000
+  )
+    return info;
+  return {
+    ...info,
+    extendedPrice: latest.close,
+    extendedLabel: info.phase === "pre" ? "Pre" : "Post",
+  };
+}

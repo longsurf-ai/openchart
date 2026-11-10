@@ -58,6 +58,8 @@ const Quote = Schema.Struct({
     Schema.NullOr(Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))),
   ),
 });
+/** One trading period in Unix seconds. */
+const Period = Schema.Struct({ start: Schema.Finite, end: Schema.Finite });
 const Metadata = Schema.Struct({
   symbol: Schema.String.check(Schema.isMinLength(1)),
   // Null for some quotes, such as the XAGAMD=X currency pair.
@@ -73,8 +75,21 @@ const Metadata = Schema.Struct({
   hasPrePostMarketData: Schema.optionalKey(Schema.Boolean),
   currentTradingPeriod: Schema.optionalKey(
     Schema.Struct({
-      regular: Schema.Struct({ start: Schema.Finite, end: Schema.Finite }),
+      regular: Period,
+      pre: Schema.optionalKey(Period),
+      post: Schema.optionalKey(Period),
     }),
+  ),
+  /** Per-day periods: `{pre, regular, post}` with pre/post data, else regular days only. */
+  tradingPeriods: Schema.optionalKey(
+    Schema.Union([
+      Schema.Struct({
+        pre: Schema.Array(Schema.Array(Period)),
+        regular: Schema.Array(Schema.Array(Period)),
+        post: Schema.Array(Schema.Array(Period)),
+      }),
+      Schema.Array(Schema.Array(Period)),
+    ]),
   ),
 });
 type Metadata = typeof Metadata.Type;

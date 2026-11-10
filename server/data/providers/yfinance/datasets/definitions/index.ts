@@ -2,3 +2,4 @@
 
 export { yfinanceBars, YFinanceInterval } from "./bars";
 export { yfinanceSymbology } from "./symbology";
+export { yfinanceCalendar } from "./calendar";
