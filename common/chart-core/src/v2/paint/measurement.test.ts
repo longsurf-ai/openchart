@@ -118,6 +118,9 @@ it.each([
       const state = createState({
         series: { price: { type: "Candlestick", data: rows } },
       });
+      // Exercise preferred placement with room for host-font differences.
+      // The narrow right-edge case below separately verifies viewport clamping.
+      state.config.chart.dimensions.width = 1200;
       state.config.chart.dimensions.height = chartHeight;
       ChartStateModel.getSeriesObject(state, "price")!.role = "main";
       ChartStateUtils.addSeries(state, {
