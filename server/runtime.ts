@@ -32,10 +32,6 @@ import {
   layer as billingLayer,
   type Configuration as BillingConfiguration,
 } from "@openchart/server/access/billing/layer";
-import {
-  OpenChartClient,
-  layer as openchartClientLayer,
-} from "@openchart/server/data/providers/openchart/client";
 
 import { Catalog, catalogLayer } from "@openchart/server/data";
 import {
@@ -88,8 +84,6 @@ export interface RuntimeOptions {
   readonly auth?: Omit<AuthConfiguration, "resetConnections">;
   /** Independent billing API endpoint; omitted hosts expose unavailable Billing. */
   readonly billing?: BillingConfiguration;
-  /** Host-selected default Cloud data endpoint, paired with its account environment. */
-  readonly openchartUrl?: string;
 }
 
 function makeDatabaseLayer(root: string, options: RuntimeOptions) {
@@ -102,22 +96,11 @@ function makeDatabaseLayer(root: string, options: RuntimeOptions) {
 }
 
 function makeAccessLayer(options: RuntimeOptions) {
-  return Layer.unwrap(
-    Effect.map(OpenChartClient, (openchart) =>
-      authLayer(
-        options.auth && {
-          ...options.auth,
-          resetConnections: () => openchart.reset(),
-        },
-      ),
-    ),
+  // Billing resolves credentials per request; no account-owned data connection remains.
+  return authLayer(
+    options.auth && { ...options.auth, resetConnections: () => Effect.void },
   ).pipe(
-    Layer.provideMerge(
-      Layer.merge(
-        openchartClientLayer(options.openchartUrl),
-        billingLayer(options.billing),
-      ),
-    ),
+    Layer.provideMerge(billingLayer(options.billing)),
     Layer.provideMerge(
       integrationLayer(options.integrations).pipe(
         Layer.provideMerge(Credential.layer(options.credentialEncryption)),

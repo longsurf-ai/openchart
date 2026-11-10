@@ -1,5 +1,4 @@
 // Purpose: Compose the application-wide left navigation from independent sections.
-import { useNavigate } from "react-router";
 import {
   Sidebar,
   SidebarContent,
@@ -9,9 +8,6 @@ import {
   SidebarTrigger,
 } from "@openchart/app/components/ui/sidebar";
 import { AccountButton } from "@openchart/app/features/account/account-button";
-import { useAccount } from "@openchart/app/features/account/use-account";
-import { SubscribeBanner } from "@openchart/app/features/billing/components/subscribe-banner";
-import { useRefreshProviderAccess } from "@openchart/app/app/routes/settings/provider-access";
 
 import { NavChats, type NavChatsProps } from "./nav-chats";
 import { NavMain } from "./nav-main";
@@ -53,7 +49,6 @@ export function LeftSidebar({
         <NavChats {...chats} onCreate={onCreateChat} />
       </SidebarContent>
       <SidebarFooter className="px-1">
-        <CloudOffer transport={transport} />
         <AccountButton actions={<AccountActions />} />
       </SidebarFooter>
       <SidebarRail />
@@ -65,21 +60,4 @@ export function LeftSidebar({
 function AccountActions() {
   const release = useUpdateReady();
   return release ? <UpdateButton release={release} /> : <CommunityLinks />;
-}
-
-/** Billing needs the Cloud key, which arrives in the background after sign-in. */
-function CloudOffer({ transport }: { transport: AppTransport }) {
-  const navigate = useNavigate();
-  const account = useAccount(transport);
-  const refreshProviders = useRefreshProviderAccess(transport);
-  if (account.data?.status !== "signed-in") return null;
-  return (
-    <SubscribeBanner
-      transport={transport}
-      onStatusChange={refreshProviders.mutate}
-      onInviteFriends={() => {
-        void navigate("/app/settings/subscription");
-      }}
-    />
-  );
 }

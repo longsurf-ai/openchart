@@ -36,7 +36,6 @@ async function start(init: Init): Promise<Server> {
       models: { installOnStartup: true },
       auth: { integrationID: OPENCHART_CLOUD.integrationID },
       billing: { baseUrl: init.billingUrl },
-      openchartUrl: init.openchartUrl,
       integrations: {
         integrations: [
           { id: OPENCHART_CLOUD.integrationID, name: "OpenChart" },

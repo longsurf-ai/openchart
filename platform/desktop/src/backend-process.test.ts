@@ -21,7 +21,6 @@ const init = {
   home: "/profile",
   rendererOrigin: "openchart://app",
   billingUrl: "https://billing.example.com",
-  openchartUrl: "https://api.sandbox.longsurf.ai",
 };
 let child: FakeChild;
 const onExit = vi.fn();

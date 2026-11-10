@@ -33,3 +33,6 @@ owns routing, search policy, and history-window/countBack composition.
 - `http.ts` owns cancellation, concurrency, Retry-After; quotas survive
   reactivation. Parse responses once; paginate to exhaustion.
 - Never fabricate OHLCV; omit empty slots, reject partial bars.
+
+- OpenChart source is retained but excluded from production registration.
+  `retired.ts` owns permanent retirement; saved identities are never remapped.

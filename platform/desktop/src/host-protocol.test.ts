@@ -12,7 +12,6 @@ test("parses init and shutdown, rejecting unknown or incomplete messages", () =>
     documentationDirectory: "/app/Contents/Resources/docs",
     rendererOrigin: "openchart://app",
     billingUrl: "https://billing.example.com",
-    openchartUrl: "https://api.sandbox.longsurf.ai",
   };
   expect(HostMessage.parse(init)).toEqual(init);
   expect(HostMessage.parse({ type: "shutdown" })).toEqual({ type: "shutdown" });

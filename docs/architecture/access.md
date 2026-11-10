@@ -7,7 +7,7 @@ and encrypted credentials. Their composition lives in `server/runtime.ts`;
 | Owner                        | Responsibility                                                           |
 | ---------------------------- | ------------------------------------------------------------------------ |
 | `server/access/auth/`        | Account sign-in, restoration, sign-out, and connection cleanup           |
-| `server/access/billing/`     | Subscription reads and hosted checkout or portal links                   |
+| `server/access/billing/`     | Existing subscription reads and hosted portal links                      |
 | `server/access/integration/` | Provider registrations, authentication methods, and credential selection |
 | `server/access/credential/`  | Encrypted durable credential storage                                     |
 
@@ -38,3 +38,12 @@ the hosted service.
 
 See [the access ownership rules](../../server/access/AGENTS.md) and
 [desktop hosting](desktop.md).
+
+## Market-data retirement
+
+Production composition no longer constructs OpenChartClient or registers the
+OpenChart data provider. Auth retains serialized credential writes, but no
+account-owned data connection needs cleanup. Billing resolves credentials for
+each request and rechecks them before returning. Third-party connections remain
+independent of account login. Cloud purchases and promotional access are retired;
+the remote service rejects those operations while preserving customer management.

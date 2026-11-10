@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.1.23",
+    "date": "2026-11-10",
+    "items": [
+      "OpenChart Cloud market data is retired. Use TradingView, Yahoo Finance, Binance or your own datasets.",
+      "Removed purchase offers. Existing customers can still manage their subscriptions in Settings.",
+      "Choose another data source for saved charts and watchlist rows without deleting your work.",
+      "Alerts using retired market data stay visibly failed until their source is changed.",
+      "Jump the focused chart to a chosen date and choose how to connect TradingView in Data Providers.",
+      "Fixed compact volume labels rounding across thousand, million and billion boundaries."
+    ]
+  },
+  {
     "version": "0.1.22",
     "date": "2026-10-27",
     "items": [
@@ -86,8 +98,8 @@
     "date": "2026-10-06",
     "items": [
       "You can now use OpenChart without signing in; sign in from the sidebar when you want OpenChart Cloud.",
-      "Settings → Data Providers offers Sign in for OpenChart Cloud instead of an error while you're signed out.",
-      "Fixed deleting the open dashboard getting stuck on Deleting… or ending on a load error.",
+      "Settings \u2192 Data Providers offers Sign in for OpenChart Cloud instead of an error while you're signed out.",
+      "Fixed deleting the open dashboard getting stuck on Deleting\u2026 or ending on a load error.",
       "Opening a deleted dashboard now says it's no longer available, with a link home."
     ]
   },
@@ -119,7 +131,7 @@
     "version": "0.1.10",
     "date": "2026-10-05",
     "items": [
-      "OpenChart Cloud adds US stock, ETF and crypto data; subscribe or redeem an invite in Settings → Subscription.",
+      "OpenChart Cloud adds US stock, ETF and crypto data; subscribe or redeem an invite in Settings \u2192 Subscription.",
       "The indicator library previews every study on real market history, with how to read it and its inputs.",
       "Add Volume Profile from the chart menu and Session Volume Profile from the library, with their own bars and colors.",
       "Antigravity joins Claude Code and Codex as a model provider, and the model picker offers Sonnet 5.5 and Sol 6.1.",
@@ -169,14 +181,14 @@
     "items": [
       "Error messages now close on their own after a few seconds instead of piling up.",
       "A ready update now appears as a button beside your account instead of a dialog.",
-      "Settings → Changelog lists what changed in each release."
+      "Settings \u2192 Changelog lists what changed in each release."
     ]
   },
   {
     "version": "0.1.5",
     "date": "2026-09-23",
     "items": [
-      "Settings → Models installs Codex and Claude Code for you and walks through signing in.",
+      "Settings \u2192 Models installs Codex and Claude Code for you and walks through signing in.",
       "Codex and Claude Code follow the new Permissions setting: Ask, Auto, or Always allow (the default).",
       "GPT-6 Sol and Luna are available, and Claude models now show full names such as Opus 5.5.",
       "Fixed a dark band above the message box when content scrolled beneath it."

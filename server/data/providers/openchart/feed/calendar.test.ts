@@ -10,6 +10,7 @@ import { cachedSelectCalendar } from "@openchart/server/data/providers/openchart
 import { openchartCalendar } from "@openchart/server/data/providers/openchart/datasets/definitions";
 import { OpenChartRejected } from "@openchart/server/data/providers/openchart/errors";
 import { calendarResponse } from "@openchart/server/data/providers/openchart/client.test-utils";
+import { openchartCalendarFeed } from "./calendar";
 
 const request: CalendarRequest = {
   provider: ProviderId.make("openchart"),
@@ -30,7 +31,7 @@ function serve(readCalendar: Client["readCalendar"]) {
           const dataset = yield* makeDataset(openchartCalendar, {
             select: yield* cachedSelectCalendar(client),
           });
-          return yield* use(calendarFeed([dataset]));
+          return yield* use(openchartCalendarFeed(dataset, request.provider));
         }),
       ),
     );
@@ -90,7 +91,13 @@ test("rejects requests it cannot resolve and never routes to another provider", 
     _tag: "Feed.InvalidRequest",
   });
   expect(
-    await failure({ ...request, provider: ProviderId.make("yfinance") }),
+    (
+      await Effect.runPromise(
+        calendarFeed()
+          .getCalendar({ ...request, provider: ProviderId.make("yfinance") })
+          .pipe(Effect.flip),
+      )
+    ).reason,
   ).toMatchObject({ _tag: "Feed.SourceUnavailable", provider: "yfinance" });
 });
 

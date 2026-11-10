@@ -193,6 +193,7 @@ function setup(editingInitially = true, creating = false) {
           addFormula: vi.fn(),
           configureFormula: vi.fn(),
           addSymbol: vi.fn(),
+          replaceSymbol: vi.fn(),
           openDialog: vi.fn(),
           switchTo: vi.fn(),
         }}

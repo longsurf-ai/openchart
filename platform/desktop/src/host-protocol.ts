@@ -17,8 +17,6 @@ export const Init = z.object({
   rendererOrigin: z.string().min(1),
   /** Host-selected public billing endpoint, paired with the Clerk environment. */
   billingUrl: z.url(),
-  /** Host-selected data endpoint, paired with the same Clerk environment. */
-  openchartUrl: z.url(),
 });
 export type Init = z.infer<typeof Init>;
 

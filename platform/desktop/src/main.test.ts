@@ -589,7 +589,6 @@ test("billing IPC validates the caller and destination, and passes the sandbox e
     expect.objectContaining({
       init: expect.objectContaining({
         billingUrl: "https://billing.sandbox.longsurf.ai",
-        openchartUrl: "https://api.sandbox.longsurf.ai",
       }),
     }),
   );

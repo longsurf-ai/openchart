@@ -22,3 +22,6 @@ Owns Watchlist browsing, sections, quote, Formula and research columns.
   cells sort.
 - Selection, collapse and stable-column-ID sorting are placement-local.
   Version 1 metric sorts resolve after the selected list loads.
+
+- Explicit symbol/provider replacement keeps the row ID, section and other rows.
+  Retired-source quote errors offer replacement, never a retry or purchase.

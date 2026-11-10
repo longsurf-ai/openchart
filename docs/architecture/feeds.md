@@ -111,7 +111,7 @@ Providers supply available-history bounds and recent correction windows; open
 bars and recent tails remain source reads. TTL bounds older corrections and
 corporate-action changes. Cache access follows Dataset admission: retired Datasets
 reject new reads, accepted reads may finish, and replacements start empty.
-OpenChart account reset triggers Dataset replacement; explicit live
+The archived OpenChart adapter used account reset to trigger Dataset replacement; explicit live
 resynchronization invalidates coverage before catch-up. This cache lives in the
 App backend and does not require Cloud changes or cache-aware callers.
 
@@ -289,7 +289,7 @@ right inside its card, retaining the free service's minimum 12pt text size.
 
 Calendar requests carry the same `{provider, listing}` pair as Bars and route to
 that provider only; a provider without a calendar is `Feed.SourceUnavailable`.
-OpenChart Cloud serves a listing's venue calendar as stored rows (`GET /calendar`):
+The retained, unregistered OpenChart adapter reads a listing's venue calendar as stored rows (`GET /calendar`):
 the calendar, its ancestors, weekly session rules and dated overrides. The
 Provider caches them per listing for an hour per activation and expands them with
 the local calendar's schedule code into venue days; failed reads are not kept.
@@ -417,3 +417,16 @@ passes the same selection to both reads and stitches finalized history with live
 bars. Unsupported sessions and unavailable adjustment factors fail explicitly.
 History windows intersect OpenChart's Unix-epoch lower bound, so zooming out before
 1970 returns the available history without sending negative timestamps upstream.
+
+## Permanently retired providers
+
+`server/data/providers/retired.ts` owns retired identities independently of
+active providers. OpenChart is absent from production provider, access and Feed
+registration. Saved provider/listing pairs stay valid and are never remapped.
+Bars, capabilities and calendar requests for a retired identity fail with
+`Feed.SourceRetired`, whose shared wording explains how to select another source
+and whose retryability is false. Temporary source outages remain distinct.
+Charts and watchlists offer explicit replacement using the existing symbol
+picker; watchlist row IDs, sections and chart resource content are preserved.
+Tea propagates the safe failure; affected alerts remain visibly failed without
+retrying until the owning resource changes. No persisted schema changes occur.

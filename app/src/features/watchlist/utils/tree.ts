@@ -119,6 +119,25 @@ export function indexWatchlist(
   return nodes;
 }
 
+/** Replace only a row's explicitly selected market identity, retaining its id and section.
+ * @example replaceListing(watchlist, itemId, chosenListing);
+ */
+export function replaceListing(
+  watchlist: Watchlist,
+  itemId: string,
+  listing: ProviderListing,
+): WatchlistOperation[] {
+  const node = indexWatchlist(watchlist).get(itemId);
+  if (node?.kind !== "item")
+    throw new Error(
+      "This watchlist row no longer exists. Reload the watchlist.",
+    );
+  return [
+    { op: "replace", path: `${node.path}/provider`, value: listing.provider },
+    { op: "replace", path: `${node.path}/listing`, value: listing.listing },
+  ];
+}
+
 /**
  * The one RFC 6902 `move` that places node `id` among `parentId`'s children,
  * as Headless Tree reports a drop: `index` counts children after the node has
