@@ -118,8 +118,8 @@ it.each([
       const state = createState({
         series: { price: { type: "Candlestick", data: rows } },
       });
-      // Exercise preferred placement with room for host-font differences.
-      // The narrow right-edge case below separately verifies viewport clamping.
+      // Future slots, not canvas width alone, leave room when bar spacing caps.
+      // The right-edge case below separately verifies viewport clamping.
       state.config.chart.dimensions.width = 1200;
       state.config.chart.dimensions.height = chartHeight;
       ChartStateModel.getSeriesObject(state, "price")!.role = "main";
@@ -130,7 +130,7 @@ it.each([
         yAxisId: "indicator",
         data: rows.map((row) => ({ time: row.time, value: 10 })),
       });
-      ChartStateUtils.setVisibleRange(state, 0, 10);
+      ChartStateUtils.setVisibleRange(state, 0, 20);
       state.measurement = {
         kind: "cagr",
         seriesId: "price",
@@ -178,6 +178,9 @@ it.each([
       const layout = Chart.computeLayout(state.config);
       const regions = runtime.measurementHitRegions!;
       expect(regions[0]).toMatchObject({ y: 0, height: layout.areaHeight });
+      expect(
+        layout.areaX + layout.areaWidth - (regions[0]!.x + regions[0]!.width),
+      ).toBeGreaterThan(regions[1]!.width + 10);
       expect(regions[1]!.x).toBeGreaterThan(regions[0]!.x + regions[0]!.width);
       expect(
         regions
