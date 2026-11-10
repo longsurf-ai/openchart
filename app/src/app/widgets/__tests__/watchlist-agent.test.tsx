@@ -10,6 +10,11 @@ import userEvent from "@testing-library/user-event";
 import { BehaviorSubject } from "rxjs";
 import fastJsonPatch from "fast-json-patch";
 import { defineId } from "@openchart/identifier";
+import {
+  ProviderId,
+  providerListingKey,
+  type ProviderListing,
+} from "@openchart/market";
 
 import { WatchlistAgent } from "../watchlist-agent";
 import { CopilotControlsProvider } from "@openchart/app/app/agent/copilot-controls";
@@ -27,6 +32,7 @@ import {
 } from "@openchart/app/features/watchlist/api/queries";
 import { createWatchlistViewStore } from "@openchart/app/features/watchlist/stores/view";
 import { columnTitle } from "@openchart/app/features/watchlist/utils/columns";
+import { replaceListing } from "@openchart/app/features/watchlist/utils/tree";
 import { createQueryClient } from "@openchart/app/lib/react-query/react-query";
 import type {
   AgentInputs,
@@ -83,6 +89,21 @@ vi.mock("@openchart/app/lib/agent/use-bound-session", () => ({
   useBoundSession: mocks.bound,
 }));
 
+const apple: ProviderListing = {
+  provider: ProviderId.make("openchart"),
+  listing: { id: 7, symbol: "AAPL", currency: "USD" },
+};
+const researchContext = (market: ProviderListing) => ({
+  type: "context",
+  context: {
+    kind: "plugin",
+    pluginId: "watchlist-semantic",
+    hook: "run.before",
+    content: "Captured context",
+    marketIdentity: providerListingKey(market),
+  },
+});
+
 const answer =
   "# Product launch\n\nA product launch is expected. [Company announcement](https://example.com/launch).";
 beforeEach(() => {
@@ -92,7 +113,12 @@ beforeEach(() => {
     loading: false,
     snapshot: {
       messages: [
-        { id: "msg_question", role: "user", content: "Summarize Q3 catalysts" },
+        {
+          id: "msg_question",
+          role: "user",
+          content: "Summarize Q3 catalysts",
+          metadata: { parts: [researchContext(apple)] },
+        },
         {
           id: "msg_answer",
           role: "assistant",
@@ -139,7 +165,18 @@ function setup(editingInitially = true, creating = false) {
     createdAt: 1,
     updatedAt: 1,
     columns: creating ? [] : [column],
-    sections: [],
+    sections: [
+      {
+        id: defineId("wsc", "WatchlistSection.ID").make("wsc_research"),
+        items: [
+          {
+            id: defineId("wit", "WatchlistItem.ID").make("wit_apple"),
+            ...apple,
+          },
+        ],
+        sections: [],
+      },
+    ],
   };
   const semanticValues = new BehaviorSubject<SemanticValues>({});
   const transport = {
@@ -210,6 +247,7 @@ function setup(editingInitially = true, creating = false) {
             <SemanticCell
               columnId={saved.columns[0].id}
               itemId="wit_apple"
+              market={saved.sections[0]!.items[0]!}
               title={columnTitle(saved.columns[0])}
             />
           ) : null}
@@ -217,7 +255,7 @@ function setup(editingInitially = true, creating = false) {
       </WatchlistPlacementContext.Provider>
     );
   }
-  render(
+  const tree = () => (
     <QueryClientProvider client={client}>
       <CopilotControlsProvider
         value={{
@@ -231,9 +269,27 @@ function setup(editingInitially = true, creating = false) {
           <Host />
         </WatchlistAgent>
       </CopilotControlsProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  let view = render(tree());
   return {
+    rerender: () => view.rerender(tree()),
+    remount: () => {
+      view.unmount();
+      client.clear();
+      view = render(tree());
+    },
+    replaceMarket: (market: ProviderListing) => {
+      saved = {
+        ...fastJsonPatch.applyPatch(
+          structuredClone(saved),
+          replaceListing(saved, "wit_apple", market),
+        ).newDocument,
+        revision: saved.revision + 1,
+      };
+      client.setQueryData(watchlistDetail(transport, saved.id).queryKey, saved);
+      view.rerender(tree());
+    },
     saved: () => saved,
     semanticValues,
     updateColumn: (title: string) => {
@@ -567,7 +623,9 @@ test("a completed empty answer stays inspectable without publishing a sort value
     snapshot: { messages: [] },
   });
   const fixture = setup(false);
-  await userEvent.setup().click(screen.getByRole("button", { name: "—" }));
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Saved research" }));
   expect(mocks.select).toHaveBeenCalledExactlyOnceWith("ses_empty");
   expect(fixture.semanticValues.value).toEqual({});
 });
@@ -619,5 +677,75 @@ test.each(["ses_child_followup", "ses_external_parent"])(
       .click(screen.getByRole("button", { name: "Stop Catalysts research" }));
     await waitFor(() => expect(mocks.cancel).toHaveBeenCalledOnce());
     expect(mocks.getSession).toHaveBeenCalledWith(executionSessionId);
+  },
+);
+
+test.each([
+  {
+    provider: ProviderId.make("tradingview"),
+    listing: { symbol: "MSFT", venue: "NASDAQ", currency: "USD" },
+  },
+  {
+    provider: ProviderId.make("tradingview"),
+    listing: { symbol: "AAPL", venue: "NASDAQ", currency: "USD" },
+  },
+])(
+  "replacement preserves the row and transcript while hiding another market's research after reload: $listing.symbol",
+  async (replacement) => {
+    const fixture = setup(false);
+    const user = userEvent.setup();
+    expect(await screen.findByText("Product launch")).toBeVisible();
+    await waitFor(() =>
+      expect(fixture.semanticValues.value.wit_apple?.wcl_research).toBe(
+        "Product launch",
+      ),
+    );
+    fixture.replaceMarket(replacement);
+    expect(fixture.saved().sections[0]!.items[0]!.id).toBe("wit_apple");
+    expect(screen.queryByText("Product launch")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Previous research" }),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(
+        fixture.semanticValues.value.wit_apple?.wcl_research,
+      ).toBeUndefined(),
+    );
+    await user.click(screen.getByRole("button", { name: "Previous research" }));
+    expect(mocks.select).toHaveBeenCalledWith("ses_research");
+    fixture.remount();
+    expect(screen.queryByText("Product launch")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Previous research" }),
+    ).toBeVisible();
+    mocks.bound.mockReturnValue({
+      session: { id: "ses_new_research" },
+      loading: false,
+      snapshot: {
+        messages: [
+          {
+            id: "new_request",
+            role: "user",
+            content: "Research",
+            metadata: { parts: [researchContext(replacement)] },
+          },
+          {
+            id: "new_answer",
+            role: "assistant",
+            content: "# New source answer\n\nEvidence.",
+          },
+        ],
+      },
+    });
+    fixture.rerender();
+    expect(await screen.findByText("New source answer")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Previous research" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(fixture.semanticValues.value.wit_apple?.wcl_research).toBe(
+        "New source answer",
+      ),
+    );
   },
 );

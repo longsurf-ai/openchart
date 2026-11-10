@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.1.25",
+    "date": "2026-11-10",
+    "items": [
+      "OpenChart Cloud market data is retired. Use TradingView, Yahoo Finance, Binance or your own datasets.",
+      "Removed purchase offers. Existing customers can still manage subscriptions in Settings.",
+      "Switch data sources while keeping charts, watchlist rows and research transcripts.",
+      "Research from another or unverified listing stays in history until refreshed for the selected source.",
+      "Alerts using retired market data stay visibly failed until their source is changed.",
+      "This replaces the withdrawn 0.1.24 release."
+    ]
+  },
+  {
     "version": "0.1.24",
     "date": "2026-11-10",
     "items": [

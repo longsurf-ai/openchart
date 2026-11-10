@@ -584,6 +584,7 @@ function MetricCells({
           key={column.id}
           columnId={column.id}
           itemId={item.id}
+          market={item}
           title={columnTitle(column)}
         />
       );

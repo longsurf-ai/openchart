@@ -1,5 +1,6 @@
 // Purpose: Renders a Markdown answer preview and opens its ordinary bound Agent Session.
 import { useMutation } from "@tanstack/react-query";
+import { providerListingKey, type ProviderListing } from "@openchart/market";
 import {
   useContext,
   useLayoutEffect,
@@ -15,7 +16,10 @@ import { useWidget } from "@openchart/app/hooks/use-widget";
 import { useAgentContext } from "@openchart/app/lib/agent/provider";
 import { useBoundSession } from "@openchart/app/lib/agent/use-bound-session";
 import { usePublishSemanticValue } from "../hooks/use-semantic-values";
-import { latestSemanticAnswer } from "../utils/semantic-answer";
+import {
+  latestSemanticAnswer,
+  researchMarketIdentity,
+} from "../utils/semantic-answer";
 import { WatchlistOpenSession } from "./context";
 import {
   useSemanticContext,
@@ -29,10 +33,12 @@ import "./semantic-cell.css";
 export function SemanticCell({
   columnId,
   itemId,
+  market,
   title,
 }: {
   columnId: string;
   itemId: string;
+  market: ProviderListing;
   title: string;
 }) {
   const { watchlist, start } = useSemanticContext();
@@ -46,28 +52,46 @@ export function SemanticCell({
   );
   const messages = bound.snapshot.messages;
   const preview = useMemo(() => latestSemanticAnswer(messages), [messages]);
+  const recordedMarket = useMemo(
+    () => researchMarketIdentity(messages),
+    [messages],
+  );
+  const currentMarket = providerListingKey(market);
+  const matchesMarket = recordedMarket === currentMarket;
   const failed =
     bound.execution === "failed" || bound.execution === "cancelled";
   const queued =
     !!column.request &&
     (!column.request.itemIds || column.request.itemIds.includes(itemId)) &&
     (!bound.session || bound.session.createdAt < column.request.createdAt);
-  const result = bound.progress || queued || failed ? undefined : preview;
+  const previousResearch =
+    !bound.progress &&
+    !queued &&
+    !failed &&
+    !matchesMarket &&
+    (preview !== undefined || bound.execution === "completed");
+  // A stable row ID does not make old research valid for a replacement listing.
+  const result =
+    bound.progress || queued || failed || !matchesMarket ? undefined : preview;
   const answered =
     !queued &&
     !failed &&
+    matchesMarket &&
     (result !== undefined || bound.execution === "completed");
   usePublishSemanticValue(itemId, columnId, result);
   const progress = bound.progress;
   const attention =
     !!bound.snapshot.state?.permissions.length ||
     !!bound.snapshot.state?.questions.length;
-  const progressLabel = attention
-    ? "Needs your response"
-    : (progress?.lines.at(-1) ??
-      (queued || progress?.status === "queued"
-        ? "Queued…"
-        : "Preparing research…"));
+  const progressLabel =
+    recordedMarket !== null && !matchesMarket
+      ? "Research for previous source…"
+      : attention
+        ? "Needs your response"
+        : (progress?.lines.at(-1) ??
+          (queued || progress?.status === "queued"
+            ? "Queued…"
+            : "Preparing research…"));
   const executionSessionId =
     bound.executionSessionId ?? (queued ? column.bound.session?.id : undefined);
   const stop = useMutation({
@@ -92,6 +116,16 @@ export function SemanticCell({
         >
           <CellText text={progressLabel} shimmer={!attention} />
         </span>
+      ) : previousResearch ? (
+        <button
+          type="button"
+          className="min-w-0 flex-1 text-left text-xs text-muted-foreground focus-visible:outline focus-visible:outline-ring"
+          title="This saved research belongs to a different or unverified listing. Open its transcript or refresh for this listing."
+          disabled={!openSession || !bound.session}
+          onClick={() => openSession?.(bound.session!.id)}
+        >
+          {recordedMarket === null ? "Saved research" : "Previous research"}
+        </button>
       ) : answered ? (
         <button
           type="button"
@@ -131,7 +165,7 @@ export function SemanticCell({
         >
           <Square className="size-3" />
         </Button>
-      ) : answered ? (
+      ) : answered || previousResearch ? (
         <Button
           size="icon-xs"
           variant="ghost"

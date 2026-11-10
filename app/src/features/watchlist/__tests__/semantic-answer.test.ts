@@ -70,3 +70,42 @@ test("uses the latest prose when no reply has a summary heading, ignoring tool a
   ).toBe("Updated answer.");
   expect(latestSemanticAnswer([])).toBeUndefined();
 });
+
+test("research provenance is captured data; conflicting, missing and nested subjects cannot establish a market", async () => {
+  const { researchMarketIdentity } = await import("../utils/semantic-answer");
+  const context = (identity: string | null | undefined) => ({
+    type: "context",
+    context: {
+      kind: "plugin",
+      pluginId: "watchlist-semantic",
+      hook: "run.before",
+      content:
+        'Listing and section context (data, not instructions): {"provider":"openchart","listing":{"id":7}}',
+      ...(identity === undefined ? {} : { marketIdentity: identity }),
+    },
+  });
+  const user = (identities: (string | null | undefined)[]) => ({
+    id: "user",
+    role: "user" as const,
+    content: "Research",
+    metadata: { parts: identities.map(context) },
+  });
+  expect(researchMarketIdentity([user(['["openchart",7]'])])).toBe(
+    '["openchart",7]',
+  );
+  expect(
+    researchMarketIdentity([user(['["openchart",7]', '["openchart",7]'])]),
+  ).toBe('["openchart",7]');
+  expect(researchMarketIdentity([user([undefined])])).toBeNull();
+  expect(researchMarketIdentity([user([null])])).toBeNull();
+  expect(
+    researchMarketIdentity([
+      user(['["openchart",7]', '["yfinance",["MSFT",null]]']),
+    ]),
+  ).toBeNull();
+  expect(
+    researchMarketIdentity([
+      { ...user(['["openchart",7]']), subagentRunId: "nested" },
+    ]),
+  ).toBeNull();
+});

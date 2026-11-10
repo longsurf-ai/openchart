@@ -90,6 +90,12 @@ export const PluginContext = Schema.Struct({
   pluginId: AgentPluginId,
   hook: Schema.String.check(Schema.isMinLength(1)),
   content: Schema.String.check(Schema.isMinLength(1)),
+  /** Captured provider/listing identity, never a live UI target or authorization claim.
+   * Null records unverifiable legacy provenance; other plugins may have no market.
+   */
+  marketIdentity: Schema.optionalKey(
+    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  ),
 })
   .mapFields(Struct.map(Schema.mutableKey))
   .annotate({ parseOptions: { onExcessProperty: "error" } })
