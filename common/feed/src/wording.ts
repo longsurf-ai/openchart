@@ -37,6 +37,8 @@ const sentences = {
     failure.provider === undefined
       ? "No data source is available right now."
       : `${providerName(failure.provider)} is unavailable right now.`,
+  "Feed.SourceRetired": (failure) =>
+    `${providerName(failure.provider)} market data has been retired. Choose another data provider for this instrument.`,
   "Feed.InvalidSourceData": (failure) =>
     `${providerName(failure.provider)} returned data that couldn't be read.`,
   "Feed.IncompleteData": (failure) =>

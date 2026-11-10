@@ -114,3 +114,21 @@ when no event qualifies. A retry matches existing event Drawings before writing.
 The plugin itself writes no Drawing and performs no external search; ordinary
 prompts contribute no selection context. Semantic watchlist plugins remain
 uninstalled.
+
+## Watchlist research provenance
+
+The watchlist researcher captures `providerListingKey(row)` in its immutable
+plugin context as `marketIdentity`, from the same row snapshot used in the prompt.
+Row IDs and Session bindings remain stable across an explicit data-source change.
+The cell displays and publishes a sort value only when the recorded identity
+matches its current provider/listing. Missing or contradictory provenance is
+unknown; a previous/unverified answer remains accessible through its transcript
+and can be refreshed explicitly for the selected source. No new research starts
+merely because a source changes.
+
+The forward data migration recovers historical identities from the original
+watchlist context's captured listing, never from a current row. It preserves
+content, IDs, timestamps and bindings, and records null when the old source
+cannot be established. UI readers consume the structured field only. Generic
+plugin contexts need not be market-bound; this provenance is not authorization
+or a claim that an old analysis is up to date.

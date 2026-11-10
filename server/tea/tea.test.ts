@@ -2412,3 +2412,15 @@ it("runs Samples an auto script reads as given", async () => {
   ]);
   expect(f.captures()).toBe(0);
 });
+
+it("request.security rejects a retired ticker before searching other providers", async () => {
+  const f = await fixture(
+    'child = request.security("openchart:AAPL", "", close)\nemit "child" child',
+  );
+  expect(await f.invalid(f.request(f.node))).toMatchObject({
+    code: "upstream",
+    message: expect.stringContaining("has been retired"),
+  });
+  expect(f.search).not.toHaveBeenCalled();
+  expect(f.calls).toEqual([]);
+});

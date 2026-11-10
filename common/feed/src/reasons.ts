@@ -112,6 +112,20 @@ export class SourceUnavailable extends Schema.TaggedError<SourceUnavailable>()(
 }
 
 /**
+ * The provider has permanently stopped serving data. Saved identities remain valid.
+ * @example new SourceRetired({ provider: ProviderId.make("openchart") });
+ */
+export class SourceRetired extends Schema.TaggedError<SourceRetired>()(
+  "Feed.SourceRetired",
+  { provider: ProviderId },
+) {
+  /** Recovery requires choosing a different source, never retrying the retired one. */
+  get isRetryable(): boolean {
+    return false;
+  }
+}
+
+/**
  * The source returned data that could not be read.
  *
  * @example new InvalidSourceData({ provider: ProviderId.make("yfinance") });

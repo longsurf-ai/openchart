@@ -227,6 +227,20 @@ test("a cell's bound Session holds its Markdown reply; the workflow researches c
           expect(JSON.stringify(messages)).toContain(
             "Preserve this research context.",
           );
+          expect(
+            messages.history.flatMap((message) => message.parts),
+          ).toContainEqual(
+            expect.objectContaining({
+              type: "context",
+              context: expect.objectContaining({
+                pluginId: "watchlist-semantic",
+                marketIdentity: JSON.stringify([
+                  "yfinance",
+                  [itemId === "wit_a" ? "AAPL" : "MSFT", null],
+                ]),
+              }),
+            }),
+          );
         }
         expect(workflowResults).toEqual([
           {

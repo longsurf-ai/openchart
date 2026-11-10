@@ -2,13 +2,11 @@
 import { Effect, Layer, Schema, Struct } from "effect";
 import { BinanceProvider } from "@openchart/server/data/providers/binance/binance";
 import { YFinanceProvider } from "@openchart/server/data/providers/yfinance/yfinance";
-import { OpenChartProvider } from "@openchart/server/data/providers/openchart/openchart";
 import { TradingViewProvider } from "@openchart/server/data/providers/tradingview/tradingview";
 import { WorkspaceDatasetsProvider } from "@openchart/server/data/providers/local/workspace/workspace";
 export {
   BinanceProvider,
   YFinanceProvider,
-  OpenChartProvider,
   TradingViewProvider,
   WorkspaceDatasetsProvider,
 };
@@ -16,7 +14,6 @@ export {
 const providers = [
   BinanceProvider,
   YFinanceProvider,
-  OpenChartProvider,
   TradingViewProvider,
   WorkspaceDatasetsProvider,
 ] as const;
@@ -27,7 +24,6 @@ export const dataProviders = Effect.all(providers);
 const accessChecked = {
   binance: BinanceProvider,
   yfinance: YFinanceProvider,
-  openchart: OpenChartProvider,
   tradingview: TradingViewProvider,
 };
 /** Access-checked Providers by Settings ID, independent of ready datasets. */

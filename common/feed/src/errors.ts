@@ -14,6 +14,7 @@ export const FeedReason = Schema.Union([
   FeedReasons.AccessDenied,
   FeedReasons.RateLimited,
   FeedReasons.SourceUnavailable,
+  FeedReasons.SourceRetired,
   FeedReasons.InvalidSourceData,
   FeedReasons.IncompleteData,
   FeedReasons.ResyncRequired,

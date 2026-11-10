@@ -10,8 +10,8 @@
 - Profile offers sign-in, or read-only Clerk identity and sign-out; account data stays out of Config.
 - Subscription scopes Billing to the signed-in account; neither lives in Config.
 - Data Provider actions come from provider-owned access checks, including while
-  disabled. Errors offer retry; sign-in opens Clerk's modal, billing opens Subscription.
-  Subscription changes refresh activation without changing enabled preferences.
+  disabled. Errors offer retry; sign-in opens Clerk's modal. Data access never
+  offers an OpenChart purchase. Subscription is existing-customer management only.
 - Changelog uses Desktop-bundled AppHost entries; never fetch release notes.
   Use a version/date rail and bullets in one settings Card.
 - Query hooks own reads and saves; page state holds only unsubmitted drafts.

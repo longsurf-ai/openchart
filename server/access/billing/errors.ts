@@ -12,6 +12,7 @@ export class OperationFailed extends Schema.TaggedError<OperationFailed>()(
   "Billing.OperationFailed",
   {
     reason: Schema.Literals([
+      "service-retired",
       "referral-invalid",
       "referral-used",
       "referral-already-redeemed",

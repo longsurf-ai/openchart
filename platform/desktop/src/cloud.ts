@@ -1,14 +1,12 @@
-// Purpose: Keep Desktop's billing and data endpoints in the same Clerk environment.
+// Purpose: Keep Desktop's customer-management endpoint in its Clerk environment.
 
 /** Public endpoints only; credentials remain in Clerk and the backend credential store. */
 export const cloudEndpoints = {
   development: {
     billingUrl: "https://billing.sandbox.longsurf.ai",
-    openchartUrl: "https://api.sandbox.longsurf.ai",
   },
   production: {
     billingUrl: "https://billing.longsurf.ai",
-    openchartUrl: "https://api.alpha.longsurf.ai",
   },
 } as const;
 

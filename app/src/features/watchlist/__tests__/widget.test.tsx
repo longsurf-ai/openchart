@@ -1,7 +1,12 @@
 /// <reference types="vitest/jsdom" />
 // Purpose: Prove the Watchlist widget renders its tree, live metrics, collapse, sort, row removal through the Resource, and raises ViewChart for rows.
 import { defineId } from "@openchart/identifier";
-import { BarColumns, type ProviderListing } from "@openchart/market";
+import {
+  BarColumns,
+  ProviderId,
+  type ProviderListing,
+} from "@openchart/market";
+import { FeedError, FeedReasons } from "@openchart/feed";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
@@ -27,6 +32,25 @@ import { WidgetContext } from "@openchart/app/lib/widget/widget";
 
 import { watchlistDetail, type Watchlist } from "../api/queries";
 import { watchlistWidget } from "../components/widget";
+import {
+  WatchlistSymbolPicker,
+  type SymbolPickerProps,
+} from "../components/context";
+
+function TestSymbolPicker({ onSelect, initialQuery }: SymbolPickerProps) {
+  return (
+    <button
+      onClick={() =>
+        onSelect({
+          provider: ProviderId.make("tradingview"),
+          listing: { symbol: "NASDAQ:AAPL", currency: "USD" },
+        })
+      }
+    >
+      Use TradingView {initialQuery}
+    </button>
+  );
+}
 
 vi.mock("@openchart/app/hooks/use-tea", () => ({
   useTeaGroup: () => ({ states: formulaStates, retry: formulaRetry }),
@@ -296,9 +320,11 @@ function setup(
           </WidgetContext.Provider>
           <WidgetContext.Provider value={placement(placementId)}>
             <TooltipProvider delayDuration={0}>
-              <Placement>
-                <Content />
-              </Placement>
+              <WatchlistSymbolPicker.Provider value={TestSymbolPicker}>
+                <Placement>
+                  <Content />
+                </Placement>
+              </WatchlistSymbolPicker.Provider>
             </TooltipProvider>
           </WidgetContext.Provider>
         </WidgetIntentProvider>
@@ -349,7 +375,15 @@ beforeEach(() => {
 test("failed quote capabilities show an explicit retry instead of silent missing values", async () => {
   capabilities.mockImplementation((request) =>
     request.listing.symbol === "AAPL"
-      ? { ...daily, error: new Error("offline"), data: [] }
+      ? {
+          ...daily,
+          error: new FeedError({
+            reason: new FeedReasons.SourceUnavailable({
+              provider: ProviderId.make("yfinance"),
+            }),
+          }),
+          data: [],
+        }
       : daily,
   );
   const { user } = setup();
@@ -776,5 +810,49 @@ test("Formula retry works by click and Enter without opening the row in Chart", 
   expect(viewed).not.toHaveBeenCalled();
   await user.keyboard("{Enter}");
   expect(formulaRetry).toHaveBeenCalledTimes(2);
+  expect(viewed).not.toHaveBeenCalled();
+});
+
+test("retired quote opens explicit source selection and saves only that row's market identity", async () => {
+  capabilities.mockImplementation((request) =>
+    request.listing.symbol === "AAPL"
+      ? {
+          ...daily,
+          error: new FeedError({
+            reason: new FeedReasons.SourceRetired({
+              provider: ProviderId.make("openchart"),
+            }),
+          }),
+          data: [],
+        }
+      : daily,
+  );
+  const { user, patch } = setup();
+  await user.click(
+    await screen.findByRole("button", {
+      name: "Change data provider for AAPL",
+    }),
+  );
+  expect(daily.refetch).not.toHaveBeenCalled();
+  expect(patch).not.toHaveBeenCalled();
+  await user.click(
+    await screen.findByRole("button", { name: "Use TradingView AAPL" }),
+  );
+  expect(patch).toHaveBeenCalledWith(
+    expect.objectContaining({
+      operations: [
+        {
+          op: "replace",
+          path: "/sections/0/items/0/provider",
+          value: "tradingview",
+        },
+        {
+          op: "replace",
+          path: "/sections/0/items/0/listing",
+          value: { symbol: "NASDAQ:AAPL", currency: "USD" },
+        },
+      ],
+    }),
+  );
   expect(viewed).not.toHaveBeenCalled();
 });

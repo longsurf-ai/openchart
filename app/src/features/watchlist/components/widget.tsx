@@ -38,6 +38,7 @@ import {
 } from "../stores/view";
 import {
   addListing,
+  replaceListing,
   addSection,
   renameSection,
   removeNode,
@@ -128,7 +129,10 @@ function WatchlistSession({
     });
   const remove = useMutation(deleteWatchlist(transport, client));
   const Picker = useContext(WatchlistSymbolPicker);
-  const [picking, setPicking] = useState<{ sectionId?: string }>();
+  const [picking, setPicking] = useState<
+    | { kind: "add"; sectionId?: string }
+    | { kind: "replace"; itemId: string; initialQuery: string }
+  >();
   const [action, setAction] = useState<WatchlistAction>();
   const [quotes] = useState(() => new BehaviorSubject<Quotes>({}));
   const [crosshair] = useState(() => new BehaviorSubject<number | null>(null));
@@ -201,7 +205,9 @@ function WatchlistSession({
         else setPickingFormula(true);
       },
       configureFormula,
-      addSymbol: (sectionId?: string) => setPicking({ sectionId }),
+      addSymbol: (sectionId?: string) => setPicking({ kind: "add", sectionId }),
+      replaceSymbol: (itemId: string, initialQuery: string) =>
+        setPicking({ kind: "replace", itemId, initialQuery }),
       openDialog: setAction,
       switchTo,
     }),
@@ -302,10 +308,15 @@ function WatchlistSession({
       ) : null}
       {picking && Picker ? (
         <Picker
+          initialQuery={
+            picking.kind === "replace" ? picking.initialQuery : undefined
+          }
           onClose={() => setPicking(undefined)}
           onSelect={async (listing) => {
             await save.mutateAsync((watchlist) =>
-              addListing(watchlist, listing, picking.sectionId),
+              picking.kind === "replace"
+                ? replaceListing(watchlist, picking.itemId, listing)
+                : addListing(watchlist, listing, picking.sectionId),
             );
             setPicking(undefined);
           }}

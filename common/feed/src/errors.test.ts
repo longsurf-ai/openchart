@@ -26,6 +26,7 @@ const reasons = [
   [new FeedReasons.RateLimited({ provider }), true],
   [new FeedReasons.SourceUnavailable({}), true],
   [new FeedReasons.SourceUnavailable({ provider }), true],
+  [new FeedReasons.SourceRetired({ provider }), false],
   [new FeedReasons.InvalidSourceData({ provider }), false],
   [new FeedReasons.IncompleteData({ provider }), true],
   [new FeedReasons.ResyncRequired({ provider }), true],

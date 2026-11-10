@@ -62,7 +62,7 @@ only DOM libraries, Node/Vite types and local file selection. Editors and
 ## Run and package
 
 Run from the repository root using Node 24 and Bun for dependency installation. The local
-workspace includes a public Clerk development key; OpenChart Cloud requires sign-in.
+workspace includes a public Clerk development key; account management uses Clerk sign-in; third-party market data does not.
 
 ```sh
 just install
@@ -125,14 +125,12 @@ building, and embeds it in the main bundle. Production configuration requires
 Missing keys, secret keys and test keys fail release builds. No per-user `clerk.json` or runtime environment variable is required.
 Publishable keys are public; never put a Clerk secret key in these files or bundles.
 
-Desktop selects billing and data endpoints together in `src/cloud.ts`, alongside
-Clerk's build environment. Development uses Clerk test, Stripe sandbox and
-`https://api.sandbox.longsurf.ai`; production uses Clerk live, Stripe live and
-`https://api.alpha.longsurf.ai`. The sandbox API requires the Longsurf Tailscale
-network (both Sean and Weilun already have access). `just desktop` needs no local
-proxy or server credentials. An active sandbox subscription unlocks the same
-shared MarketFeed read path. The host supplies the data endpoint as the default;
-an explicit `openchart.baseUrl` in settings.json still overrides it for fixtures.
+Desktop selects the customer-management endpoint in `src/cloud.ts` alongside
+Clerk's build environment. No Longsurf market-data endpoint is injected into
+the backend. TradingView, Yahoo Finance and Binance connect independently of
+OpenChart account login; their provider credentials remain separate. Existing
+`openchart` settings are preserved as inert content and cannot reactivate the
+retired provider.
 
 ### Subscription
 
@@ -143,7 +141,10 @@ and passed to backend startup. Preload exposes only `openBilling` and
 The fixed return is `openchart://billing/return` for production and
 `openchart-dev://billing/return` for development. Early returns are retained until
 the renderer subscribes. App navigates to Subscription and queries cloud facts;
-window focus also refreshes after manual return from Checkout or Portal.
+window focus also refreshes after manual return. This route manages existing
+subscriptions only. The sidebar, chart errors and unsupported options never
+offer purchases, trials or invitations. Old billing return links still resolve
+to this management route.
 
 Development startup failures print to the terminal and exit nonzero. Production
 startup failures show an error after Electron is ready.

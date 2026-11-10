@@ -48,7 +48,6 @@ import {
 } from "@openchart/app/hooks/use-market-series-source";
 import type { ChartPreferencesStore } from "@openchart/app/lib/chart/preferences";
 import { cn } from "@openchart/app/utils/cn";
-import { reportUpsell } from "@openchart/app/lib/upsell/upsell";
 
 /** Bar columns each legend shows: the main bar in full, a comparison's close, or volume alone. */
 const legendColumns = {
@@ -194,18 +193,19 @@ export function MarketSource({
     ),
   );
   const failure = bars.status === "error" ? bars.error : undefined;
+  const retired =
+    failure?._tag === "FeedError" &&
+    failure.reason._tag === "Feed.SourceRetired";
   // A local projection failure can always be retried; Feed failures say so themselves.
   const retryable =
     !!bars.projectionError || (!!failure && offersRetry(failure));
-  useErrorToast(bars.projectionError ?? failure, {
+  // Permanent retirement has an in-place recovery action; capability queries
+  // already announce it, so this observation must not add a duplicate toast.
+  useErrorToast(bars.projectionError ?? (retired ? undefined : failure), {
     id: `market:${chart.id}:${input.id}`,
     title: `Couldn’t update ${bars.projectionError ? shown.listing.symbol : input.series.listing.symbol}`,
     retry: retryable ? bars.retry : undefined,
   });
-  // The user just saw this failure; the Cloud offer decides whether it applies.
-  useEffect(() => {
-    if (failure?._tag === "FeedError") reportUpsell(failure);
-  }, [failure]);
   return (
     <>
       <MarketVisuals
@@ -363,6 +363,16 @@ export function MarketSource({
                             Retry
                           </Button>
                         </span>
+                      ) : null}
+                      {retired && !readOnly ? (
+                        <Button
+                          variant="link"
+                          size="xs"
+                          disabled={disabled || busy}
+                          onClick={() => setPicking(true)}
+                        >
+                          Choose data provider
+                        </Button>
                       ) : null}
                     </>
                   ) : null

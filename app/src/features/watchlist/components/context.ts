@@ -76,6 +76,8 @@ type WatchlistPlacement = {
   configureFormula: (columnId: string) => void;
   /** Open symbol search; the pick goes to that section or the first one. */
   addSymbol: (sectionId?: string) => void;
+  /** Explicitly replace a row's provider listing while keeping its stable row identity. */
+  replaceSymbol: (itemId: string, initialQuery: string) => void;
   /** Open a naming or deletion dialog for a section or Watchlist. */
   openDialog: (target: WatchlistAction) => void;
   /** Show another Watchlist in this placement. */

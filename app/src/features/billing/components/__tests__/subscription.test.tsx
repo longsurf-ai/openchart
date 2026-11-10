@@ -106,92 +106,40 @@ function fixture(initial: object = { status: "none" }) {
   };
 }
 
-test("checkout opens once and only a fresh cloud response changes the displayed subscription", async () => {
-  const app = fixture();
-  await userEvent.click(
-    await screen.findByRole("button", { name: "Subscribe" }),
-  );
-  expect(app.createCheckout).toHaveBeenCalledWith({
-    planId: "openchart",
-    interval: "year",
-  });
-  expect(app.openBilling).toHaveBeenCalledOnce();
-  expect(app.onStatusChange).not.toHaveBeenCalled();
-  expect(screen.getByRole("switch", { name: "Yearly billing" })).toBeVisible();
-  app.returned();
-  await waitFor(() => expect(app.getSubscription).toHaveBeenCalledTimes(2));
-  expect(app.onStatusChange).not.toHaveBeenCalled();
-  expect(screen.getByRole("switch", { name: "Yearly billing" })).toBeVisible();
-  app.getSubscription.mockResolvedValue(trial);
-  app.returned();
-  expect(await screen.findByText("Free trial")).toBeVisible();
-  expect(app.onStatusChange).toHaveBeenCalledOnce();
-  await userEvent.click(
-    screen.getByRole("button", { name: "Manage subscription" }),
-  );
-  expect(app.createPortal).toHaveBeenCalledOnce();
-  app.getSubscription.mockResolvedValue({ ...trial, cancelAtPeriodEnd: true });
-  app.returned();
-  expect(await screen.findByText("Scheduled to end")).toBeVisible();
-  expect(screen.getByText("Free trial")).toBeVisible();
-  expect(
-    screen.queryByRole("button", { name: "Subscribe" }),
-  ).not.toBeInTheDocument();
-});
+test.each([
+  "none",
+  "canceled",
+  "incomplete_expired",
+  "active",
+  "trialing",
+  "past_due",
+])(
+  "%s never offers purchases, trials or invitations after retirement",
+  async (status) => {
+    const app = fixture(status === "none" ? { status } : { ...trial, status });
+    await screen.findByRole("button", { name: "Refresh" });
+    expect(screen.getByText(/market data has been retired/)).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Subscribe" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "Yearly billing" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Invite friends")).not.toBeInTheDocument();
+    expect(app.createCheckout).not.toHaveBeenCalled();
+  },
+);
 
-test("the billing toggle sends the selected monthly price to checkout", async () => {
-  const app = fixture();
-  const toggle = await screen.findByRole("switch", { name: "Yearly billing" });
-  expect(toggle).toBeChecked();
-  expect(screen.getByText("$99")).toBeVisible();
-  await userEvent.click(toggle);
-  expect(toggle).not.toBeChecked();
-  expect(screen.getByText("$9")).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "Subscribe" }));
-  expect(app.createCheckout).toHaveBeenCalledWith({
-    planId: "openchart",
-    interval: "month",
-  });
-});
-
-test("an unavailable subscription does not show an offer until retry confirms none", async () => {
+test("unavailable billing remains an error until a fresh read confirms no subscription", async () => {
   const app = fixture(new Error("Offline"));
   expect(await screen.findByText(/details are unavailable/)).toBeVisible();
   expect(
-    screen.queryByRole("button", { name: "Subscribe" }),
+    screen.queryByText("No existing subscription."),
   ).not.toBeInTheDocument();
-  expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   app.getSubscription.mockResolvedValue({ status: "none" });
   await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-  expect(
-    await screen.findByRole("button", { name: "Subscribe" }),
-  ).toBeEnabled();
-});
-
-test("a failed refresh disables the offer until subscription facts recover", async () => {
-  const app = fixture();
-  await screen.findByRole("button", { name: "Subscribe" });
-  app.getSubscription.mockRejectedValue(new Error("Offline"));
-  app.returned();
-  expect(await screen.findByText(/may be out of date/)).toBeVisible();
-  expect(screen.getByRole("button", { name: "Subscribe" })).toBeDisabled();
-  expect(screen.getByRole("switch")).toHaveAttribute("aria-disabled", "true");
+  expect(await screen.findByText("No existing subscription.")).toBeVisible();
   expect(app.createCheckout).not.toHaveBeenCalled();
-  app.getSubscription.mockResolvedValue({ status: "none" });
-  await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Subscribe" })).toBeEnabled(),
-  );
-});
-
-test("annual subscribers keep the management design and see their billing interval", async () => {
-  fixture({ ...trial, status: "active", interval: "year" });
-  expect(await screen.findByText("Active")).toBeVisible();
-  expect(screen.getByText("$99 USD / year")).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: "Manage subscription" }),
-  ).toBeEnabled();
-  expect(screen.queryByRole("switch")).not.toBeInTheDocument();
 });
 
 test("query failures preserve facts and never offer checkout for an unknown subscription", async () => {
@@ -236,29 +184,25 @@ test("another user never sees the previous user's cached facts", async () => {
   app.remount();
   expect(screen.queryByText("Free trial")).not.toBeInTheDocument();
   expect(screen.getByText("Loading subscription…")).toBeVisible();
-  expect(
-    await screen.findByRole("button", { name: "Subscribe" }),
-  ).toBeVisible();
+  expect(await screen.findByText("No existing subscription.")).toBeVisible();
 });
 
 // Subscription settings remount Billing for each signed-in account.
-test("pending checkout cannot open after unmount", async () => {
-  const app = fixture();
+test("pending billing management cannot open after unmount", async () => {
+  const app = fixture(trial);
   let resolve!: (link: { url: string }) => void;
-  app.createCheckout.mockImplementation(
+  app.createPortal.mockImplementation(
     () =>
       new Promise((done) => {
         resolve = done;
       }),
   );
   await userEvent.click(
-    await screen.findByRole("button", { name: "Subscribe" }),
+    await screen.findByRole("button", { name: "Manage subscription" }),
   );
-  expect(screen.getByRole("button", { name: "Opening…" })).toBeDisabled();
-  expect(screen.getByRole("switch")).toHaveAttribute("aria-disabled", "true");
   app.unmount();
   await act(async () => {
-    resolve({ url: "https://checkout.stripe.com/c/pay/old" });
+    resolve({ url: "https://billing.stripe.com/p/session/old" });
   });
   expect(app.openBilling).not.toHaveBeenCalled();
 });
@@ -276,21 +220,14 @@ test.each(["past_due", "unpaid", "paused", "incomplete"])(
 );
 
 test.each(["canceled", "incomplete_expired"])(
-  "%s subscriptions offer checkout without billing management and refresh on focus",
+  "%s retains customer management and never offers resubscription",
   async (status) => {
-    const app = fixture({
-      ...trial,
-      status,
-      cancelAtPeriodEnd: true,
-    });
-    expect(
-      await screen.findByRole("button", { name: "Subscribe" }),
-    ).toBeEnabled();
-    expect(
-      screen.queryByRole("button", { name: /Manage/ }),
-    ).not.toBeInTheDocument();
-    expect(app.createPortal).not.toHaveBeenCalled();
-    expect(screen.getByText(/Billing period end/)).toBeVisible();
+    const app = fixture({ ...trial, status, cancelAtPeriodEnd: true });
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Manage subscription" }),
+    );
+    expect(app.createPortal).toHaveBeenCalledOnce();
+    expect(app.createCheckout).not.toHaveBeenCalled();
     app.getSubscription.mockResolvedValue(trial);
     await act(() => window.dispatchEvent(new Event("focus")));
     expect(await screen.findByText("Free trial")).toBeVisible();

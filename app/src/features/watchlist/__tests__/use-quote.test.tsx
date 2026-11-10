@@ -66,6 +66,7 @@ test("corrects the previous close, rolls to a new day, and keeps other sessions 
       view: createWatchlistViewStore(crypto.randomUUID()),
       watchlistId: "wtl_test",
       addSymbol: vi.fn(),
+      replaceSymbol: vi.fn(),
       openDialog: vi.fn(),
       switchTo: vi.fn(),
     };

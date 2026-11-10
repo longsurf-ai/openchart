@@ -22,3 +22,6 @@ Browser-safe Effect Schema contracts; common/market owns market vocabulary.
   branch on string codes, only `_tag`. `isRetryable` lives on the reason.
 - Failure wording lives only in `describeFailure`. Upstream text is never
   encoded; server causes stay on the server.
+
+- `SourceRetired` is permanent and nonretryable; persisted provider identities
+  remain valid. It is distinct from temporary unavailability or reconfiguration.

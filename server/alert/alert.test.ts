@@ -89,7 +89,7 @@ const frames = (
  * Real Tea, SQLite, Events and Bus over a fake Feed. The current bar is already
  * above the threshold in history, so any fire from a snapshot row would show.
  */
-function environment(events = Events.layer) {
+function environment(events = Events.layer, failure = sourceFailure) {
   const history = frames([
     { time: BAR - 60_000, close: 11, final: true },
     { time: BAR, close: 11, final: false },
@@ -108,7 +108,7 @@ function environment(events = Events.layer) {
       calls.push(request);
       if (failingOpens > 0) {
         failingOpens--;
-        return yield* Effect.fail(sourceFailure);
+        return yield* Effect.fail(failure);
       }
       yield* Effect.addFinalizer(() => Effect.sync(() => releases++));
       const snapshot = yield* readBarsHistory(request, (bounds) => {
@@ -1000,6 +1000,40 @@ test("a false condition still counts as a successful evaluation", () => {
       yield* TestClock.adjust("2 seconds");
       env.tick(9);
       yield* until(() => expect(check()!.lastOkAt).toBe(warmed + 2_000));
+      expect(yield* firedEvents).toEqual([]);
+    }),
+  );
+});
+
+test("permanently retired data remains failed without retrying or firing", () => {
+  const failure = new FeedError({
+    reason: new FeedReasons.SourceRetired({
+      provider: ProviderId.make("binance"),
+    }),
+  });
+  const env = environment(Events.layer, failure);
+  env.failOpens(Infinity);
+  return run(
+    env,
+    Effect.gen(function* () {
+      const rule = yield* createRule();
+      const monitoring = yield* Monitoring.Service;
+      const status = () =>
+        Effect.runSync(monitoring.status).find(
+          (item) => item.key === `alert/${rule.id}`,
+        );
+      yield* start;
+      yield* until(() =>
+        expect(status()?.health).toMatchObject({
+          state: "failed",
+          reason: { message: failure.message },
+        }),
+      );
+      expect(env.calls).toHaveLength(1);
+      yield* TestClock.adjust("1 hour");
+      yield* Effect.yieldNow;
+      expect(env.calls).toHaveLength(1);
+      expect(status()?.health.state).toBe("failed");
       expect(yield* firedEvents).toEqual([]);
     }),
   );
