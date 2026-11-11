@@ -110,6 +110,7 @@ const feedStatus: Record<FeedReason["_tag"], TRPC_ERROR_CODE_KEY> = {
   "Feed.AccessDenied": "FORBIDDEN",
   "Feed.RateLimited": "TOO_MANY_REQUESTS",
   "Feed.SourceUnavailable": "SERVICE_UNAVAILABLE",
+  "Feed.SourceRetired": "PRECONDITION_FAILED",
   "Feed.InvalidSourceData": "BAD_GATEWAY",
   "Feed.IncompleteData": "BAD_GATEWAY",
   "Feed.ResyncRequired": "CONFLICT",
@@ -127,6 +128,10 @@ const teaStatus: Record<Tea.Failure["code"], TRPC_ERROR_CODE_KEY> = {
 };
 
 const billingFailures = {
+  "service-retired": [
+    "PRECONDITION_FAILED",
+    "OpenChart Cloud market data has been retired. No new purchases or promotional access are available.",
+  ],
   "referral-invalid": ["BAD_REQUEST", "This invitation code is invalid."],
   "referral-used": [
     "CONFLICT",
@@ -172,7 +177,7 @@ const billingFailures = {
   ],
   "customer-not-found": [
     "NOT_FOUND",
-    "No billing account exists yet. Start a subscription first.",
+    "No existing billing account is available to manage.",
   ],
   "checkout-in-progress": [
     "CONFLICT",

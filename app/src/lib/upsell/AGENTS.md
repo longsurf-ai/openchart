@@ -1,5 +1,8 @@
 # Upsell
 
+Archived source only. Production chart failures and locked options no longer
+report offers, and AppLayout never mounts the offer card.
+
 Decides when OpenChart Cloud would help and paces how often its offer appears.
 [CloudOfferCard](../../features/billing/components/cloud-offer-card.tsx) renders it.
 

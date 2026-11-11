@@ -5,6 +5,7 @@ import type { ProviderListing } from "@openchart/market";
 import type { Watchlist, WatchlistOperation } from "../api/queries";
 import {
   addListing,
+  replaceListing,
   addSection,
   indexWatchlist,
   moveColumn,
@@ -234,4 +235,24 @@ test("hiding a formula retains its id, code, overrides and position", () => {
     { op: "remove", path: "/columns/0" },
   ]);
   expect(toggleColumnVisibility(source, "wcl_removed")).toEqual([]);
+});
+
+test("explicit provider replacement retains row identity, section order and unrelated rows", () => {
+  const before = structuredClone(watchlist);
+  const selected = {
+    ...listing("NASDAQ:AAPL"),
+    provider: "tradingview",
+  } as ProviderListing;
+  const operations = replaceListing(before, "wit_aapl", selected);
+  const after = operations.reduce<unknown>(
+    (value, operation) => apply(value, operation),
+    before,
+  ) as Watchlist;
+  expect(after.sections[0]!.items[0]).toEqual({ id: "wit_aapl", ...selected });
+  expect(after.sections[0]!.items[1]).toEqual(watchlist.sections[0]!.items[1]);
+  expect(after.sections[0]!.sections).toEqual(watchlist.sections[0]!.sections);
+  expect(before).toEqual(watchlist);
+  expect(() => replaceListing(before, "wit_missing", selected)).toThrow(
+    "no longer exists",
+  );
 });

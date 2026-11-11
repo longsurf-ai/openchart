@@ -31,12 +31,7 @@ import {
   useTradingViewConnection,
 } from "./tradingview-account";
 
-const providerSettingsIds = [
-  "openchart",
-  "tradingview",
-  "binance",
-  "yfinance",
-] as const;
+const providerSettingsIds = ["tradingview", "binance", "yfinance"] as const;
 
 /** Provider configuration and saved-listing coverage stay visible independently of availability. @example <ProviderSettings /> */
 export default function ProviderSettings() {

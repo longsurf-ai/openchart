@@ -9,6 +9,7 @@ Owns Alertable observation and editing. See
 - `alert.ts` runs one FiberMap fiber per enabled rule; disposal precedes
   replacement. Each reports Monitoring `alert/<ruleId>`: every evaluation, even
   `[]`, is healthy; failures report failed and retry with capped backoff.
+  `Feed.SourceRetired` stays failed without retries until a resource edit restarts it.
 - `drawing-alerts.ts` lowers Drawing anchors to `geometry` Tea with confirmed
   Crossing/Touch; Touch is a one-slot low–high rectangle, never viewport
   pixels. Over 1,000 anchors fail authoring. Drawing edits restart rules,

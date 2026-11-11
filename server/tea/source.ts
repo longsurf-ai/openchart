@@ -14,7 +14,8 @@ import {
   type FeedError,
   type Resolution,
 } from "@openchart/feed";
-import { BarColumns } from "@openchart/market";
+import { BarColumns, ProviderId } from "@openchart/market";
+import { retiredProviderFailure } from "@openchart/server/feed/errors";
 import {
   defineDataFrame,
   type DataFrame,
@@ -392,6 +393,8 @@ export const requestedBars = Effect.fn("Tea.requestedBars")(function* (
   );
   // A saved index can hold other providers' listings and not this one, so a
   // miss there searches the providers themselves.
+  const retired = retiredProviderFailure(ProviderId.make(ticker.provider));
+  if (retired) return yield* Effect.fail(upstream(retired));
   const { bars, symbology } = yield* feed;
   const find = (indexed: boolean) =>
     symbology.search({ query: ticker.symbol, indexed, limit: 100 }).pipe(

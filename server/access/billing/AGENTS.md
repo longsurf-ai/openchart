@@ -17,6 +17,6 @@ contract; `layer.ts` owns HTTP and `router.ts` exposes current-account operation
   never request headers, hosted links, or provider payloads.
 - A failed query never means `none`. Return/focus events trigger a fresh query;
   browser navigation never proves payment success.
-- `getAccess` reports complimentary access separately from subscriptions.
-  Redemption requires no plan and preserves `none`. Cloud owns three lifetime
-  codes, rewards, expiry and retry recovery; store no invitation state locally.
+- The hosted service is management-only. `service-retired` is a distinct failure
+  for old purchase/reward operations; retired access never becomes a new plan.
+  Keep existing subscription facts and portal access independent of market data.

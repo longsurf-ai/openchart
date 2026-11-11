@@ -1,5 +1,9 @@
 # OpenChart Provider
 
+Retained implementation only: production no longer registers this provider or
+constructs its client. Retirement tests enforce that boundary; client tests
+preserve the archived protocol behavior.
+
 `openchart.ts` owns activation; `access.ts` checks access; `datasets/` owns native
 access/declarations; `feed/` adapts consumers. `client.ts` owns authenticated I/O
 and decoding; `live.ts` owns the shared socket and series subscriptions; `contract.ts` defines results; `config.ts`/`errors.ts` own settings/failures.

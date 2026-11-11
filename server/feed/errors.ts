@@ -3,6 +3,7 @@
 import { FeedError, FeedReasons } from "@openchart/feed";
 import type { FeedReason } from "@openchart/feed";
 import type { ProviderId } from "@openchart/market";
+import { isRetiredProvider } from "@openchart/server/data";
 import type {
   DatasetError,
   DatasetFailure,
@@ -20,12 +21,24 @@ export function feedError(reason: FeedReason, cause?: unknown): FeedError {
   return cause === undefined ? error : Object.assign(error, { cause });
 }
 
+/** Reject a permanently retired source before discovery or acquisition, preserving its identity.
+ * @example const failure = retiredProviderFailure(provider);
+ */
+export function retiredProviderFailure(
+  provider: ProviderId,
+): FeedError | undefined {
+  return isRetiredProvider(provider)
+    ? feedError(new FeedReasons.SourceRetired({ provider }))
+    : undefined;
+}
+
 /**
  * No ready source serves the request; names the provider when one was asked for.
  *
  * @example unavailable(request.provider);
  */
 export const unavailable = (provider?: ProviderId) =>
+  (provider === undefined ? undefined : retiredProviderFailure(provider)) ??
   feedError(
     new FeedReasons.SourceUnavailable(
       provider === undefined ? {} : { provider },

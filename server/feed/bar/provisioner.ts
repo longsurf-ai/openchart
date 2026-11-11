@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import type { ProviderId } from "@openchart/market";
 import type { Dataset } from "@openchart/server/data";
 import { providerFeeds } from "@openchart/server/data/providers";
+import { isRetiredProvider } from "@openchart/server/data";
 import { adaptDataset } from "@openchart/server/feed/adapter";
 import { unavailable } from "@openchart/server/feed/errors";
 import type { IBarsFeedService } from "./service";
@@ -29,8 +30,10 @@ export function provisionBars(
     }
     return {
       getCapabilities: (request) =>
-        routes.get(request.provider)?.getCapabilities(request) ??
-        Effect.succeed([]),
+        isRetiredProvider(request.provider)
+          ? Effect.fail(unavailable(request.provider))
+          : (routes.get(request.provider)?.getCapabilities(request) ??
+            Effect.succeed([])),
       observe: (request) => {
         const feed = routes.get(request.provider);
         if (!feed) return Effect.fail(unavailable(request.provider));

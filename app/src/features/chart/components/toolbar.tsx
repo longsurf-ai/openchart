@@ -13,7 +13,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Lock, Plus, FunctionSquare } from "lucide-react";
+import { Plus, FunctionSquare } from "lucide-react";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 
@@ -72,11 +72,6 @@ import { SymbolPicker } from "./symbol-picker";
 import { IndicatorLibraryNavigation } from "@openchart/app/lib/indicator-library/indicator-library";
 import { WorkspaceFileNavigation } from "@openchart/app/lib/workspace/workspace";
 import { GridPresetMenu } from "./layout-menu";
-import {
-  cloudOffersOption,
-  reportLockedOption,
-  type ChartOption,
-} from "@openchart/app/lib/upsell/upsell";
 
 const resolutions: readonly Resolution[] = [
   "1s",
@@ -204,49 +199,28 @@ export function ChartToolbar() {
   );
 }
 
-/**
- * One interval, session or adjustment choice. A choice the source lacks is
- * disabled, unless Cloud offers it: then it is muted with a lock, explains on
- * hover which source lacks it, and stays clickable so the menu can raise the
- * Cloud offer.
- */
+/** A provider's unsupported choices stay disabled and explain their limitation. */
 function OptionItem({
   value,
   supported,
-  locked,
   missing,
   children,
 }: {
   value: string;
   supported: boolean;
-  locked: boolean;
   /** What the source lacks, e.g. "Yahoo Finance doesn't provide 1s bars". */
   missing: string;
   children: ReactNode;
 }) {
-  if (!locked)
-    return (
-      <DropdownMenuRadioItem value={value} disabled={!supported}>
-        {children}
-      </DropdownMenuRadioItem>
-    );
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <DropdownMenuRadioItem
-          value={value}
-          className="group text-muted-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
-        >
-          {children}
-          <Lock
-            aria-hidden
-            className="ml-auto size-3.5 text-muted-foreground group-data-[highlighted]:text-accent-foreground"
-          />
-          <span className="sr-only">, available with OpenChart Cloud</span>
-        </DropdownMenuRadioItem>
-      </TooltipTrigger>
-      <TooltipContent side="right">{missing}</TooltipContent>
-    </Tooltip>
+    <DropdownMenuRadioItem
+      value={value}
+      disabled={!supported}
+      title={supported ? undefined : missing}
+    >
+      {children}
+      {!supported ? <span className="sr-only">, {missing}</span> : null}
+    </DropdownMenuRadioItem>
   );
 }
 
@@ -294,14 +268,6 @@ function ChartControls({
         (choice.adjustment === undefined ||
           value.adjustment === choice.adjustment),
     );
-  // An option the source lacks stays clickable when Cloud offers it: choosing it
-  // raises the Cloud offer and leaves the chart unchanged.
-  const chart = {
-    provider: source.provider,
-    listingClass: source.listing.class,
-  };
-  const locked = (option: ChartOption, supported: boolean) =>
-    !supported && cloudOffersOption(option, chart);
   const missing = (what: string) =>
     `${providerName(source.provider)} doesn't provide ${what}`;
   const style = { ...defaultSeriesPreferences, ...prefs.series[main.id] };
@@ -428,8 +394,7 @@ function ChartControls({
             value={cell.resolution}
             onValueChange={(value) => {
               const resolution = value as Resolution;
-              if (!supports({ resolution }))
-                return reportLockedOption("resolution", chart);
+              if (!supports({ resolution })) return;
               onChange((current) => ({
                 ...current,
                 ...chooseBarsOptions(choices, { ...current, resolution }),
@@ -443,7 +408,6 @@ function ChartControls({
                   key={resolution}
                   value={resolution}
                   supported={supported}
-                  locked={locked("resolution", supported)}
                   missing={missing(`${resolution} bars`)}
                 >
                   {resolution}
@@ -466,7 +430,7 @@ function ChartControls({
                       adjustment: cell.adjustment,
                     })
                   )
-                    return reportLockedOption("session", chart);
+                    return;
                   onChange((current) => ({ ...current, session }));
                 }}
               >
@@ -481,7 +445,6 @@ function ChartControls({
                       key={session}
                       value={session}
                       supported={supported}
-                      locked={locked("session", supported)}
                       missing={missing(sessionCoverage[session])}
                     >
                       {session === "24h"
@@ -509,7 +472,7 @@ function ChartControls({
                       adjustment,
                     })
                   )
-                    return reportLockedOption("adjustment", chart);
+                    return;
                   onChange((current) => ({ ...current, adjustment }));
                 }}
               >
@@ -524,7 +487,6 @@ function ChartControls({
                       key={adjustment.value}
                       value={adjustment.value}
                       supported={supported}
-                      locked={locked("adjustment", supported)}
                       missing={missing(adjustment.coverage)}
                     >
                       {adjustment.name}

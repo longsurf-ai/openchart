@@ -35,6 +35,7 @@ const ConfigurationSchema = Schema.Struct({
   ),
 });
 const reasons = {
+  service_retired: "service-retired",
   referral_invalid: "referral-invalid",
   referral_used: "referral-used",
   referral_already_redeemed: "referral-already-redeemed",

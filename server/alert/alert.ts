@@ -7,7 +7,7 @@
 export * as Alert from "./alert";
 
 import { isDeepStrictEqual } from "node:util";
-import type { BarsSeries } from "@openchart/feed";
+import { FeedError, type BarsSeries } from "@openchart/feed";
 import { Bus } from "@openchart/server/bus";
 import { Events } from "@openchart/server/events";
 import { Transactor } from "@openchart/server/lib/resource";
@@ -238,6 +238,19 @@ const observeRule = Effect.fn("Alert.observeRule")(
               state: "failed",
               reason: reasonFor(failure),
             });
+            if (
+              failure instanceof Tea.Error &&
+              failure.cause instanceof FeedError &&
+              failure.cause.reason._tag === "Feed.SourceRetired"
+            ) {
+              // Keep failed health visible until a resource edit restarts this rule.
+              // Permanent retirement never polls or rewrites the saved rule.
+              yield* Effect.logWarning(
+                "Alert source has been retired",
+                failure,
+              );
+              return yield* Effect.never;
+            }
             yield* Effect.logError(
               "Alert rule observation failed; retrying",
               failure,

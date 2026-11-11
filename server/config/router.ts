@@ -16,7 +16,6 @@ export const Settings = Schema.Struct({
     Schema.withDecodingDefaultKey(Effect.succeed({})),
   ),
   providers: Schema.Struct({
-    openchart: ProviderSettings,
     tradingview: ProviderSettings,
     binance: ProviderSettings,
     yfinance: ProviderSettings,

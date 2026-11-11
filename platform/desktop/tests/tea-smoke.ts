@@ -77,7 +77,6 @@ process.send({type: 'bootstrapped'});
     documentationDirectory: join(root, "docs"),
     rendererOrigin: "openchart://app",
     billingUrl: "http://127.0.0.1:1",
-    openchartUrl: "http://127.0.0.1:1",
   });
   const message = await ready;
   assert.equal(message.type, "ready");

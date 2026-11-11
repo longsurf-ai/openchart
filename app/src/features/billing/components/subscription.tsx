@@ -4,13 +4,8 @@ import { Badge } from "@openchart/app/components/ui/badge";
 import { Button } from "@openchart/app/components/ui/button";
 import { Card, CardItem } from "@openchart/app/components/ui/settings/card";
 import type { AppTransport } from "@openchart/app/lib/transport/transport";
-import {
-  offersSubscription,
-  useSubscription,
-} from "@openchart/app/features/billing/api/use-subscription";
+import { useSubscription } from "@openchart/app/features/billing/api/use-subscription";
 import { cloudPlan } from "@openchart/app/features/billing/cloud-plan";
-import { SubscriptionPlanCard } from "./subscription-plan-card";
-import { Invitations } from "./invitations";
 
 const labels = {
   trialing: "Free trial",
@@ -27,7 +22,9 @@ const date = (value: string) =>
     new Date(value),
   );
 
-/** Shows the signed-in account's facts. Cloud alone decides trial eligibility and data access. @example <Subscription transport={transport} /> */
+/** Manage an existing subscription after Cloud retirement; never offer a new purchase.
+ * @example <Subscription transport={transport} />
+ */
 export function Subscription(props: {
   transport: AppTransport;
   onStatusChange?: () => void;
@@ -35,11 +32,12 @@ export function Subscription(props: {
 }) {
   return (
     <div className="w-full max-w-3xl space-y-8">
+      <p className="text-sm text-muted-foreground">
+        OpenChart Desktop is free. OpenChart Cloud market data has been retired.
+        Use TradingView, Yahoo Finance or another available data provider.
+        Existing billing details remain available below.
+      </p>
       <SubscriptionDetails {...props} />
-      <Invitations
-        transport={props.transport}
-        onAccessChange={props.onAccessChange}
-      />
     </div>
   );
 }
@@ -84,38 +82,19 @@ function SubscriptionDetails({
     );
   }
 
-  if (offersSubscription(value)) {
+  if (value.status === "none") {
     return (
-      <div className="w-full max-w-3xl">
-        <SubscriptionPlanCard
-          onSubscribe={(interval) =>
-            open.mutate({ kind: "checkout", interval })
-          }
-          pending={open.isPending}
-          disabled={subscription.isError}
-        />
+      <Card title="Existing subscription">
+        <p>No existing subscription.</p>
         {readError}
-        <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-          {value.status !== "none" && (
-            <span className="mr-auto text-xs text-muted-foreground">
-              {labels[value.status]} · Billing period end:{" "}
-              {date(value.cancelAt ?? value.currentPeriodEnd)}
-            </span>
-          )}
-          {refresh}
-        </div>
-      </div>
+        <div className="mt-4">{refresh}</div>
+      </Card>
     );
   }
 
   const ended = value.cancelAtPeriodEnd || value.cancelAt !== null;
-  const yearly = value.interval === "year";
   return (
     <Card title={cloudPlan.name}>
-      <CardItem
-        title={`$${cloudPlan.prices[value.interval]} USD / ${value.interval}`}
-        description={`30-day free trial for eligible accounts, then billed ${yearly ? "yearly" : "monthly"}. Taxes may apply. Cancel anytime.`}
-      />
       <CardItem
         title="Status"
         actions={<Badge variant="secondary">{labels[value.status]}</Badge>}

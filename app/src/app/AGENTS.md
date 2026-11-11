@@ -11,8 +11,7 @@
 - Layout's assistant-ui modelContext joins page contributors and Copilot.
   Contributors retain their state; Copilot captures context before submission.
   Conversation runtimes remain isolated.
-- `left-sidebar/` composes navigation, queried Dashboards/Alerts, Chats, the
-  Cloud SubscribeBanner (which rechecks providers on billing change) and the
+- `left-sidebar/` composes navigation, queried Dashboards/Alerts, Chats and the
   AccountButton row: GitHub/Discord (`community-urls.ts`), or the restart
   button once an update downloads.
   Section headings reuse creation actions and select timestamp sorting before

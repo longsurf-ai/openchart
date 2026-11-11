@@ -1,5 +1,41 @@
 // Purpose: Project a compact text preview from a research Session's ordinary Markdown replies.
 import type { SessionSnapshot } from "@openchart/app/lib/agent/session-store";
+import { z } from "zod";
+
+const marketContext = z.object({
+  type: z.literal("context"),
+  context: z.object({
+    kind: z.literal("plugin"),
+    pluginId: z.literal("watchlist-semantic"),
+    hook: z.literal("run.before"),
+    marketIdentity: z.string().min(1).nullable().optional(),
+  }),
+});
+
+/** Read a research Session's captured market. Missing or contradictory provenance
+ * is unknown; nested agent contexts never establish this Session's subject.
+ * Legacy text is converted by the database migration, never by this reader.
+ * @example researchMarketIdentity(snapshot.messages) === providerListingKey(item);
+ */
+export function researchMarketIdentity(
+  messages: SessionSnapshot["messages"],
+): string | null {
+  let identity: string | undefined;
+  for (const message of messages) {
+    if (message.role !== "user" || message.subagentRunId !== undefined)
+      continue;
+    const parts = z.array(z.unknown()).parse(message.metadata?.parts ?? []);
+    for (const part of parts) {
+      const parsed = marketContext.safeParse(part);
+      if (!parsed.success) continue;
+      const current = parsed.data.context.marketIdentity;
+      if (current == null || (identity !== undefined && current !== identity))
+        return null;
+      identity = current;
+    }
+  }
+  return identity ?? null;
+}
 
 const sentences = new Intl.Segmenter(undefined, { granularity: "sentence" });
 

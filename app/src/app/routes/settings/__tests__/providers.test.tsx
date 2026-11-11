@@ -43,7 +43,7 @@ const rpc = vi.hoisted(() => ({
 const updateConfig = vi.hoisted(() => vi.fn());
 const refreshConfig = vi.hoisted(() => vi.fn());
 const preference = vi.hoisted(() => ({
-  openchart: true,
+  yfinance: true,
   tradingview: true,
   isSaving: false,
   configAvailable: true,
@@ -72,8 +72,7 @@ vi.mock("@openchart/app/hooks/use-config", () => ({
       ? {
           providers: {
             binance: { enabled: true },
-            yfinance: { enabled: true },
-            openchart: { enabled: preference.openchart },
+            yfinance: { enabled: preference.yfinance },
             tradingview: { enabled: preference.tradingview },
           },
         }
@@ -92,7 +91,7 @@ vi.mock("@openchart/app/app/section-page", () => ({
 let client: QueryClient;
 beforeEach(() => {
   vi.spyOn(window, "open").mockReturnValue(null);
-  preference.openchart = true;
+  preference.yfinance = true;
   preference.tradingview = true;
   preference.isSaving = false;
   preference.configAvailable = true;
@@ -184,7 +183,7 @@ test("a completed run still describes its actual scope without exposing scope co
 test("header switches work without expanding rows; Index always requests the complete catalog", async () => {
   show();
   expect(await screen.findByText("1,250 listings indexed")).toBeInTheDocument();
-  expect(screen.getAllByText("0 listings indexed")).toHaveLength(3);
+  expect(screen.getAllByText("0 listings indexed")).toHaveLength(2);
   const disclosure = screen.getByRole("button", {
     name: /Binance.*listings indexed/,
   });
@@ -282,7 +281,7 @@ test.each([
   ["manage-subscription", "Manage subscription"],
 ])(
   "access requirement %s replaces the switch for any provider",
-  async (action, label) => {
+  async (action) => {
     rpc.providers.checkAccess.query.mockImplementation(
       async ({ providerId }) =>
         providerId === "binance"
@@ -290,13 +289,18 @@ test.each([
           : { status: "granted" },
     );
     show();
-    fireEvent.click(await screen.findByRole("button", { name: label }));
-    expect(navigate).toHaveBeenCalledWith("/app/settings/subscription");
+    expect(
+      await screen.findByText("Access to Binance is unavailable."),
+    ).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Subscribe" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("switch", { name: "Enable Binance" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("switch", { name: "Enable OpenChart Cloud" }),
+      screen.getByRole("switch", { name: "Enable Yahoo Finance" }),
     ).toBeVisible();
     expect(updateConfig).not.toHaveBeenCalled();
   },
@@ -304,7 +308,7 @@ test.each([
 
 test("sign-in opens Clerk's modal, and signing in rechecks access", async () => {
   rpc.providers.checkAccess.query.mockImplementation(async ({ providerId }) =>
-    providerId === "openchart"
+    providerId === "yfinance"
       ? { status: "required", action: "sign-in" }
       : { status: "granted" },
   );
@@ -313,7 +317,7 @@ test("sign-in opens Clerk's modal, and signing in rechecks access", async () => 
   expect(clerk.openSignIn).toHaveBeenCalledOnce();
   expect(navigate).not.toHaveBeenCalled();
   expect(
-    screen.queryByRole("switch", { name: "Enable OpenChart Cloud" }),
+    screen.queryByRole("switch", { name: "Enable Yahoo Finance" }),
   ).not.toBeInTheDocument();
 
   rpc.access.auth.getState.query.mockResolvedValue({
@@ -326,7 +330,7 @@ test("sign-in opens Clerk's modal, and signing in rechecks access", async () => 
       next({ kind: "event", event: { type: "integration.updated" } });
   });
   expect(
-    await screen.findByRole("switch", { name: "Enable OpenChart Cloud" }),
+    await screen.findByRole("switch", { name: "Enable Yahoo Finance" }),
   ).toBeChecked();
   expect(rpc.providers.refresh.mutate).not.toHaveBeenCalled();
   expect(updateConfig).not.toHaveBeenCalled();
@@ -334,41 +338,41 @@ test("sign-in opens Clerk's modal, and signing in rechecks access", async () => 
 
 test("access failures offer retry without inventing a subscription requirement", async () => {
   rpc.providers.checkAccess.query.mockImplementation(async ({ providerId }) => {
-    if (providerId === "openchart") throw new Error("Cannot check access");
+    if (providerId === "yfinance") throw new Error("Cannot check access");
     return { status: "granted" };
   });
   show();
   const retry = await screen.findByRole("button", {
-    name: "Retry OpenChart Cloud access",
+    name: "Retry Yahoo Finance access",
   });
   expect(
     screen.queryByRole("button", { name: "Subscribe" }),
   ).not.toBeInTheDocument();
   expect(
-    screen.queryByRole("switch", { name: "Enable OpenChart Cloud" }),
+    screen.queryByRole("switch", { name: "Enable Yahoo Finance" }),
   ).not.toBeInTheDocument();
   rpc.providers.checkAccess.query.mockResolvedValue({ status: "granted" });
   fireEvent.click(retry);
   expect(
-    await screen.findByRole("switch", { name: "Enable OpenChart Cloud" }),
+    await screen.findByRole("switch", { name: "Enable Yahoo Finance" }),
   ).toBeChecked();
   expect(rpc.providers.refresh.mutate).toHaveBeenCalledOnce();
   expect(updateConfig).not.toHaveBeenCalled();
 });
 
 test("recovering access preserves a disabled provider preference", async () => {
-  preference.openchart = false;
+  preference.yfinance = false;
   rpc.providers.checkAccess.query.mockImplementation(async ({ providerId }) =>
-    providerId === "openchart"
+    providerId === "yfinance"
       ? { status: "required", action: "subscribe" }
       : { status: "granted" },
   );
   show();
-  await screen.findByRole("button", { name: "Subscribe" });
+  await screen.findByText("Access to Yahoo Finance is unavailable.");
   rpc.providers.checkAccess.query.mockResolvedValue({ status: "granted" });
   await act(() => client.invalidateQueries({ queryKey: ["provider-access"] }));
   expect(
-    await screen.findByRole("switch", { name: "Enable OpenChart Cloud" }),
+    await screen.findByRole("switch", { name: "Enable Yahoo Finance" }),
   ).not.toBeChecked();
   expect(updateConfig).not.toHaveBeenCalled();
 });
@@ -682,4 +686,16 @@ test("failed Config reads retain the logo credit and settings retry", async () =
   );
   expect(refreshConfig).toHaveBeenCalledOnce();
   expect(updateConfig).not.toHaveBeenCalled();
+});
+
+test("retired OpenChart data is absent from provider controls", async () => {
+  show();
+  await screen.findByRole("switch", { name: "Enable Yahoo Finance" });
+  expect(
+    screen.queryByRole("switch", { name: "Enable OpenChart Cloud" }),
+  ).not.toBeInTheDocument();
+  expect(rpc.providers.checkAccess.query).not.toHaveBeenCalledWith(
+    { providerId: "openchart" },
+    expect.anything(),
+  );
 });

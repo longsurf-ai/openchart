@@ -50,8 +50,9 @@ Follow the [setup guide](https://openchart.co/docs/getting-started/)
 for your first chart and alert, or the [development guide](docs/development.md)
 for building and packaging the app.
 
-Desktop is free. AI usage follows your agent provider's plan; optional Cloud
-market data is priced separately.
+Desktop is free. Bring your own AI agents and market data through TradingView,
+Yahoo Finance, Binance or local datasets. Those providers keep their own terms
+and costs. OpenChart no longer offers its own market-data service.
 
 ## Key features
 

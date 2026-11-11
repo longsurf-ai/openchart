@@ -1,6 +1,6 @@
-// Purpose: Verify Subscription scopes billing to the signed-in local account, offers sign-in while signed out, and refreshes provider access on status.
+// Purpose: Verify Subscription scopes billing to the signed-in local account, offers sign-in while signed out, and preserves customer management without data admission.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PropsWithChildren } from "react";
 import { expect, test, vi } from "vitest";
@@ -56,10 +56,9 @@ test("a signed-out account is offered Clerk sign-in without reading billing", as
   expect(billing).not.toHaveBeenCalled();
 });
 
-test("signed-in billing loads once and refreshes provider access when status changes", async () => {
+test("signed-in billing refreshes facts without offers or provider activation", async () => {
   const billing = vi.fn(async (): Promise<object> => ({ status: "none" }));
   const refresh = vi.fn(async () => {});
-  let redeemedCode: string | null = null;
   context.transport = {
     rpc: {
       providers: { refresh: { mutate: refresh } },
@@ -72,55 +71,23 @@ test("signed-in billing loads once and refreshes provider access when status cha
             })),
           },
         },
-        billing: {
-          getSubscription: { query: billing },
-          getReferrals: {
-            query: vi.fn(async () => ({
-              canInvite: false,
-              codes: [],
-              redeemedCode,
-            })),
-          },
-          getAccess: {
-            query: vi.fn(async () => ({
-              canAccess: false,
-              complimentaryAccessUntil: null,
-            })),
-          },
-          redeemReferral: {
-            mutate: vi.fn(async ({ code }: { code: string }) => {
-              redeemedCode = code;
-              return {
-                canAccess: true,
-                complimentaryAccessUntil: "2099-11-03T12:00:00.000Z",
-              };
-            }),
-          },
-        },
+        billing: { getSubscription: { query: billing } },
       },
     },
     events: { subscribe: () => ({ unsubscribe() {} }) },
   } as unknown as AppTransport;
   const client = showSettings();
-  expect(
-    await screen.findByRole("button", { name: "Subscribe" }),
-  ).toBeVisible();
+  expect(await screen.findByText("No existing subscription.")).toBeVisible();
   expect(billing).toHaveBeenCalledOnce();
   expect(client.getQueryData(["billing", "user_1"])).toEqual({
     status: "none",
   });
-  expect(refresh).not.toHaveBeenCalled();
-  await userEvent.type(
-    screen.getByRole("textbox", { name: "Invitation code" }),
-    "ABCDEF",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "Redeem code" }));
-  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
-  expect(client.getQueryData(["billing", "user_1"])).toEqual({
-    status: "none",
-  });
-  expect(screen.getByRole("button", { name: "Subscribe" })).toBeVisible();
-  refresh.mockClear();
+  expect(
+    screen.queryByRole("button", { name: "Subscribe" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("textbox", { name: "Invitation code" }),
+  ).not.toBeInTheDocument();
   billing.mockResolvedValue({
     status: "trialing",
     planId: "openchart",
@@ -132,5 +99,8 @@ test("signed-in billing loads once and refreshes provider access when status cha
   });
   await act(() => window.dispatchEvent(new Event("focus")));
   expect(await screen.findByText("Free trial")).toBeVisible();
-  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  expect(
+    screen.getByRole("button", { name: "Manage subscription" }),
+  ).toBeVisible();
+  expect(refresh).not.toHaveBeenCalled();
 });

@@ -8,7 +8,8 @@ import {
   type ItemInstance,
 } from "@headless-tree/core";
 import { useTree } from "@headless-tree/react";
-import type { BarsRequest } from "@openchart/feed";
+import type { BarsRequest, ClientFailure, FeedError } from "@openchart/feed";
+import { offersRetry } from "@openchart/app/lib/feed/transport";
 import { providerListingKey } from "@openchart/market";
 import {
   ChevronRight,
@@ -413,6 +414,7 @@ function ItemRow({
   columns: readonly Column[];
   onRemove: () => void;
 }) {
+  const { replaceSymbol } = useWatchlistPlacement();
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -430,6 +432,11 @@ function ItemRow({
         }
       />
       <ContextMenuContent>
+        <ContextMenuItem
+          onClick={() => replaceSymbol(node.item.id, node.item.listing.symbol)}
+        >
+          <Pencil /> Change data provider or symbol
+        </ContextMenuItem>
         <ContextMenuItem onClick={onRemove}>
           <Trash2 /> Remove {node.item.listing.symbol}
         </ContextMenuItem>
@@ -502,7 +509,7 @@ function DailyQuoteCells({
       <MetricCells
         item={item}
         columns={columns}
-        quoteError={{ symbol: item.listing.symbol, retry }}
+        quoteError={{ symbol: item.listing.symbol, error, retry }}
       />
     );
   if (!request) return <MetricCells item={item} columns={columns} />;
@@ -534,7 +541,7 @@ function LiveQuoteCells({
       <MetricCells
         item={item}
         columns={columns}
-        quoteError={{ symbol: request.listing.symbol, retry }}
+        quoteError={{ symbol: request.listing.symbol, error, retry }}
       />
     );
   return <MetricCells item={item} columns={columns} quote={quote} />;
@@ -549,9 +556,17 @@ function MetricCells({
   item: Item;
   columns: readonly Column[];
   quote?: Quote;
-  quoteError?: { symbol: string; retry: () => void };
+  quoteError?: {
+    symbol: string;
+    error: FeedError | ClientFailure;
+    retry: () => void;
+  };
 }) {
+  const { replaceSymbol } = useWatchlistPlacement();
   const formulas = useFormulaCells(item.id);
+  const retired =
+    quoteError?.error._tag === "FeedError" &&
+    quoteError.error.reason._tag === "Feed.SourceRetired";
   // Crosshair quotes change built-ins; Formula values remain on their latest bar.
   const [hovered, setHovered] = useState<number>();
   const shown = quoteAt(quote, hovered);
@@ -569,6 +584,7 @@ function MetricCells({
           key={column.id}
           columnId={column.id}
           itemId={item.id}
+          market={item}
           title={columnTitle(column)}
         />
       );
@@ -641,13 +657,31 @@ function MetricCells({
           variant="ghost"
           size="sm"
           className="justify-self-end text-xs text-muted-foreground"
-          aria-label={`Retry quote for ${quoteError.symbol}`}
+          title={quoteError.error.message}
+          aria-label={
+            retired
+              ? `Change data provider for ${quoteError.symbol}`
+              : offersRetry(quoteError.error)
+                ? `Retry quote for ${quoteError.symbol}`
+                : `Quote unavailable for ${quoteError.symbol}`
+          }
+          disabled={!retired && !offersRetry(quoteError.error)}
           onClick={(event) => {
             event.stopPropagation();
-            quoteError.retry();
+            if (retired) {
+              replaceSymbol(item.id, quoteError.symbol);
+            } else quoteError.retry();
           }}
         >
-          <RefreshCw className="size-3" aria-hidden /> Retry
+          {retired ? (
+            "Choose provider"
+          ) : offersRetry(quoteError.error) ? (
+            <>
+              <RefreshCw className="size-3" aria-hidden /> Retry
+            </>
+          ) : (
+            "Unavailable"
+          )}
         </Button>
       );
     if (column.metric.kind === "priceHistory")

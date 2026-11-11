@@ -565,4 +565,12 @@ export const migrations = [
     checksum:
       "655e6705e8a20a480ec8895c0862a9561bb21add4fb0af1c57e8af2310260918",
   },
+  {
+    ...(
+      await import("./migration/20261110195621_watchlist-research-market-identity")
+    ).default,
+    filename: "20261110195621_watchlist-research-market-identity.ts",
+    checksum:
+      "f3badaa909c58d3341f0e91b31ffcaebacba3cb0411987fc546fe05ebf3525a8",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];

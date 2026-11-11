@@ -632,11 +632,11 @@ it("fills a selected preset in one save and preserves cells when shrinking and r
 });
 
 it.each([
-  { source: "a free source", provider: "yfinance", offers: true },
-  { source: "OpenChart Cloud", provider: "openchart", offers: false },
+  { source: "a free source", provider: "yfinance" },
+  { source: "OpenChart Cloud", provider: "openchart" },
 ] as const)(
-  "on $source, a missing interval raises the Cloud offer: $offers",
-  async ({ provider, offers }) => {
+  "on $source, unsupported intervals explain the limitation without an offer",
+  async ({ provider }) => {
     useUpsell.setState({
       pending: undefined,
       open: false,
@@ -677,25 +677,13 @@ it.each([
     await user.click(
       await screen.findByRole("button", { name: "Interval 1d" }),
     );
-    if (offers) {
-      // Locked, not disabled: choosing it raises the Cloud offer instead.
-      const item = screen.getByRole("menuitemradio", {
-        name: /^1m\s*, available with OpenChart Cloud$/,
-      });
-      expect(item).not.toHaveAttribute("aria-disabled", "true");
-      await user.hover(item);
-      expect(await screen.findByRole("tooltip")).toHaveTextContent(
-        "Yahoo Finance doesn't provide 1m bars",
-      );
-      await user.click(item);
-      expect(useUpsell.getState().pending).toBe("request");
-    } else {
-      expect(screen.getByRole("menuitemradio", { name: "1m" })).toHaveAttribute(
-        "aria-disabled",
-        "true",
-      );
-      expect(useUpsell.getState().pending).toBeUndefined();
-    }
+    const item = screen.getByRole("menuitemradio", { name: /^1m\b/ });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+    expect(item).toHaveAttribute(
+      "title",
+      expect.stringContaining("doesn't provide 1m bars"),
+    );
+    expect(useUpsell.getState().pending).toBeUndefined();
     expect(patch).not.toHaveBeenCalled();
   },
 );
