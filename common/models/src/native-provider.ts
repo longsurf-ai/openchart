@@ -59,7 +59,7 @@ export interface NativeProvider {
 
   /** Creates the lazy product binding; construction performs no I/O. */
   createModelProvider(
-    catalog: ReturnType<typeof ModelsDev.create>,
+    catalog: ModelsDev.Catalog,
     executable: string,
   ): ModelProvider;
 

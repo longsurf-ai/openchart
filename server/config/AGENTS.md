@@ -8,6 +8,7 @@ Owns settings.json read/merge/atomic replacement and polling. See
   injected native providers are read-only; they never write an unrelated file.
 - Domains own one Effect Schema and its defaults. `router.ts` is the static
   inventory of public domains; native Config.schema reuses those declarations.
+- Retired provider settings migrate before decode; reads stay valid and the next write persists cleanup.
 - Parse at boundaries. Merge-patch null deletes keys; persisted null is invalid.
   Patch schemas omit defaults and object-wide checks; validate merged domains
   before saving. Unknown file namespaces survive and remain private.

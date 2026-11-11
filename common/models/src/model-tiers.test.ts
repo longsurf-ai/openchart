@@ -7,6 +7,7 @@ import type { AvailableModel } from "./model-provider";
 import {
   CLAUDE_CODE,
   CODEX,
+  OPENAI_COMPATIBLE,
   TIER1,
   TIER2,
   TIER3,
@@ -179,6 +180,18 @@ describe("logical model tiers", () => {
     expect(choices[1]?.name).toBe("gpt-6-astra");
     expect(choices[3]?.name).toBe("gpt-5.6-luna");
     expect(choices[0]?.providerID).toBe(CODEX);
+  });
+
+  it("publishes discovered API models directly without tier mapping", () => {
+    const choices = modelChoices({
+      id: OPENAI_COMPATIBLE,
+      name: "OpenAI-compatible",
+      models: [
+        model("model-a", OPENAI_COMPATIBLE),
+        model("model-b", OPENAI_COMPATIBLE),
+      ],
+    })[0]!.models;
+    expect(choices.map(({ id }) => id)).toEqual(["model-a", "model-b"]);
   });
 
   it("omits unsupported providers and unclassified native models from prompt choices", () => {

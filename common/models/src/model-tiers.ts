@@ -11,6 +11,8 @@ export const CLAUDE_CODE = "claude-code" as const;
 export const ANTIGRAVITY = "antigravity" as const;
 /** Grok CLI provider identity. */
 export const GROK = "grok" as const;
+/** OpenAI-compatible HTTP API provider identity. */
+export const OPENAI_COMPATIBLE = "openai-compatible" as const;
 
 /** Providers accepted by product prompts and model selectors. */
 export const MODEL_PROVIDER_IDS = [
@@ -18,9 +20,15 @@ export const MODEL_PROVIDER_IDS = [
   CLAUDE_CODE,
   ANTIGRAVITY,
   GROK,
+  OPENAI_COMPATIBLE,
 ] as const;
 
-/** Supported native provider identity, independent of enablement and discovery. */
+/** Providers that speak the standard AI SDK instead of a native CLI. */
+export const API_PROVIDER_IDS = [OPENAI_COMPATIBLE] as const;
+/** Plain API provider identity, independent of enablement and discovery. */
+export type ApiProviderID = (typeof API_PROVIDER_IDS)[number];
+
+/** Supported provider identity, independent of enablement and discovery. */
 export type NativeProviderID = (typeof MODEL_PROVIDER_IDS)[number];
 
 /** Lowest model tier; never falls back upward. */
@@ -117,9 +125,9 @@ export function resolveModelTier(
 }
 
 /**
- * Projects supported providers into tier-only picker choices, including downward fallbacks.
- * Tier choices retain the resolved model's native name and metadata.
- * Execution resolves the ID again; menus can use the actual tier to hide absent tiers.
+ * Projects supported providers into picker choices. Native providers expose
+ * tier aliases with downward fallbacks; API providers expose their discovered
+ * model IDs directly. Execution resolves the ID again.
  * @example const choices = providers.flatMap(modelChoices);
  */
 export function modelChoices(provider: {
@@ -129,6 +137,14 @@ export function modelChoices(provider: {
 }) {
   const providerID = MODEL_PROVIDER_IDS.find((id) => id === provider.id);
   if (!providerID) return [];
+  if (API_PROVIDER_IDS.some((id) => id === providerID))
+    return [
+      {
+        id: providerID,
+        name: provider.name,
+        models: provider.models.map((model) => ({ ...model, providerID })),
+      },
+    ];
   return [
     {
       id: providerID,

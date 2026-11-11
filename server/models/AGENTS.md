@@ -3,8 +3,10 @@
 Owns provider composition, selection, settings, setup, and native lifetimes.
 See [model architecture](../../docs/architecture/models.md).
 
-- Models directly owns common bindings; no intermediate registry API.
+- Models directly owns common bindings; no intermediate registry API. API
+  providers use `API_PROVIDERS` and the ordinary AI SDK path.
   Discovery contracts and tier mappings remain in common/models.
+- `credentials.ts` stores API-provider keys through encrypted Credential; config never carries them.
 - `config.ts` owns the public Schema. Provider settings/refresh replace the
   ScopedRef state; defaults and permissions alone never rebuild it. One observer
   serializes replacement and publishes `models.changed`.

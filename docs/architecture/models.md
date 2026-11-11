@@ -242,17 +242,17 @@ independent provider adapters keep their native identity strings locally.
 Each provider maps a tier to one flat, ordered array of native aliases/versions.
 Discovery establishes availability; this table never manufactures available models.
 
-Product prompts, schedules, defaults, and profile selections accept only
-`codex`, `claude-code`, `antigravity` or `grok` plus `tier1` through `tier5`. `AgentPromptModel` derives
-these literal fields from the shared `MODEL_PROVIDER_IDS` and `MODEL_TIER_IDS`.
-Unknown providers and native model IDs fail boundary parsing before admission.
-The provider registry uses the same native provider list by default.
+Product prompts, schedules, defaults, and profile selections accept a supported
+provider plus a model reference: native providers use `tier1` through `tier5`,
+while `openai-compatible` uses a discovered model ID. `AgentPromptModel` derives
+the provider literals from `MODEL_PROVIDER_IDS` and requires a nonempty model
+ID. Unknown providers fail boundary parsing; unknown models fail resolution.
 
-The `models.list` endpoint exposes only supported provider/tier choices. Each
-choice retains the resolved model's native name and metadata, with its logical
-tier as the selection ID. Frontend menus show tiers actually present in discovery;
-saved higher-tier selections may display a provider-local downward fallback.
-Unavailable selections stay unresolved. No separate display name is persisted.
+The `models.list` endpoint exposes supported provider choices. Native providers
+expose tier aliases with downward fallbacks; `openai-compatible` exposes its
+discovered model IDs directly. Choices retain the resolved model's native name
+and metadata. Unavailable selections stay unresolved. No separate display name
+is persisted.
 
 Provider-level `getModel` still accepts exact native IDs for resolved execution
 and internal SDK use. Native discovery metadata and historical execution facts
@@ -337,8 +337,8 @@ remove them. Auto-review availability and model support remain provider-owned.
 `defaultModel` is optional; omitting it keeps the first-available picker behavior.
 It supplies the frontend selection until the user chooses a current model.
 Submission records the chosen provider/model reference/variant in immutable Run
-input. Model selection accepts only supported provider and tier IDs. Later default
-changes do not rewrite queued inputs or rebuild SDKs.
+input. Model selection accepts a supported provider plus a tier or API model ID.
+Later default changes do not rewrite queued inputs or rebuild SDKs.
 The shared Config mutation/SSE path is described in
 [configuration](configuration.md).
 
@@ -574,10 +574,10 @@ binding, then invalidates the list cache; other providers remain usable.
 `ModelsDev.create` still owns one lazy catalog snapshot and its parsed disk and
 network boundaries. Concurrent reads share one load; failures propagate and clear
 the memoized promise so the next read can retry. Successful snapshots remain cached.
-Parsing retains only capabilities, costs, and limits; provider
-and model record keys supply catalog lookup identity. Upstream display metadata,
-SDK package names, request settings, and variant definitions are discarded at
-the boundary. The cache remains a copy of upstream JSON and is projected on read.
+Parsing retains capabilities, costs, limits, and the provider API host; provider
+and model record keys supply catalog lookup identity. Other upstream display
+metadata, SDK package names, request settings, and variant definitions are
+discarded at the boundary. The cache remains a copy of upstream JSON and is projected on read.
 Bindings use `catalogModelMetadata()` to enrich only models
 found by native discovery. Native parameter translation remains internal.
 Existing native adapter implementations and their protocol ownership remain intact.
@@ -627,8 +627,10 @@ own resources without disposing shared providers; Models awaits shared cleanup.
 `server/agent/llm/llm.ts` keeps its existing request preparation and two execution
 paths internally: provider-managed MCP for the registered native providers, and
 ordinary AI SDK execution used by protocol tests. Both obtain their standard SDK
-model through the scoped Models service. No API provider is registered.
-There is no separate request abstraction or duplicate portable tool contract.
+model through the scoped Models service. `openai-compatible` is the plain API
+provider; it has no `NativeProvider` entry, so LLM uses this ordinary path and
+executes host tools itself. There is no separate request abstraction or
+duplicate portable tool contract.
 
 The request input keeps `user.model.selectedVariant`, agent options, and request
 headers, and requires a resolved `model` snapshot from Prompt. LLM uses that
@@ -687,6 +689,32 @@ Tests cover immediate registry disposal, configuration recovery, encrypted crede
 rotation (including during construction), and real compatible-adapter streaming
 with tool continuation and authentication failures against a local HTTP server.
 These tests do not establish live API-provider or native-account acceptance.
+
+## OpenAI-compatible API
+
+`openai-compatible` is a plain AI SDK provider rather than a native CLI. Its
+binding discovers models from the configured endpoint's `/models` response and
+enriches known identities from models.dev. Discovered models appear directly in
+the picker and are stored by their endpoint IDs; there is no tier mapping.
+Endpoint and catalog override start unset. Without an override, discovery infers
+the catalog bucket from the endpoint host, then from a model ID that exists in
+exactly one bucket. Colliding identities stay unenriched because providers
+publish different prices and limits for the same model ID.
+
+The API key is never stored in config. Settings saves it through Credential's
+encrypted storage; Models resolves it before registry creation. The input is
+masked and a saved key is never returned to the renderer. Discovery reports
+`configuration_required` with the missing endpoint instead of starting a login
+process. There is no runtime artifact or installation: `openai-compatible` has
+an empty manifest entry, and startup installation skips providers without a
+pinned artifact. The catalog-provider override is a dropdown of models.dev keys
+loaded by the same discovery action; Auto is the default.
+
+The binding returns a standard `ProviderV4`; it has no `NativeProvider` entry,
+so `nativeProvider()` is undefined and LLM uses ordinary SDK tool execution.
+Host tools, permissions, questions, structured output, and provider options all
+follow the ordinary path. Quota is `not_applicable`: API endpoints bill the
+user's own account, not an OpenChart plan.
 
 ## Plan quota
 

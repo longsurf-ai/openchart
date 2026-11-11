@@ -35,6 +35,8 @@ function discoveryDescription(
   switch (state.status) {
     case "not_installed":
       return "Download this provider to use it in OpenChart.";
+    case "configuration_required":
+      return state.message;
     case "authentication_required":
       return "Sign in with your provider account.";
     case "ready":
@@ -116,6 +118,7 @@ export function ProviderSetupAction({
             : "Sign in"}
         </Button>
       );
+    case "configuration_required":
     case "ready":
       return null;
   }
@@ -129,16 +132,23 @@ export function NativeProvider({
   transport,
   settings,
   enabled,
+  configurable = false,
+  children,
 }: {
   providerID: NativeProviderID;
   transport: AppTransport;
   settings: ReturnType<typeof useConfig>;
   enabled: boolean;
+  /** Show the enable switch and children even when setup is incomplete. */
+  configurable?: boolean;
+  children?: ReactNode;
 }) {
   const controls = useNativeProvider(providerID, transport);
   const { name, Logo } = NATIVE_PROVIDER_BRANDS[providerID];
   const { discovery, quota, running } = controls;
   const ready = !discovery.isError && discovery.data?.status === "ready";
+  const needsConfiguration =
+    !discovery.isError && discovery.data?.status === "configuration_required";
   return (
     <section aria-label={name}>
       <CardItem
@@ -148,7 +158,11 @@ export function NativeProvider({
             {name}
           </span>
         }
-        htmlFor={ready && !running ? `model-${providerID}` : undefined}
+        htmlFor={
+          (ready || needsConfiguration) && !running
+            ? `model-${providerID}`
+            : undefined
+        }
         description={
           discovery.isError
             ? "Couldn’t check this provider."
@@ -177,12 +191,24 @@ export function NativeProvider({
                 }
               />
             </div>
+          ) : needsConfiguration && !running ? (
+            <Switch
+              id={`model-${providerID}`}
+              checked={enabled}
+              disabled={settings.isSaving || !!settings.readError}
+              onCheckedChange={(value) =>
+                settings.update({
+                  models: { providers: { [providerID]: { enabled: value } } },
+                })
+              }
+            />
           ) : (
             <ProviderSetupAction controls={controls} />
           )
         }
       />
       <SetupProgress providerID={providerID} controls={controls} />
+      {enabled || configurable ? children : null}
     </section>
   );
 }

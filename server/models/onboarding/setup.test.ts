@@ -10,6 +10,7 @@ import {
   CODEX,
   GROK,
   MODEL_PROVIDER_IDS,
+  OPENAI_COMPATIBLE,
   type NativeProviderID,
 } from "@openchart/models/model-tiers";
 import { makeProviderSetup } from "./onboarding";
@@ -32,7 +33,9 @@ async function fixture(
       [CLAUDE_CODE]: "/managed/claude",
       [ANTIGRAVITY]: "/managed/antigravity",
       [GROK]: "/managed/grok",
+      [OPENAI_COMPATIBLE]: "",
     },
+    installable: vi.fn((id: NativeProviderID) => id !== OPENAI_COMPATIBLE),
     installed: vi.fn(async (id: NativeProviderID) => installed.has(id)),
     install: vi.fn(async (id: NativeProviderID) => {
       if (id === CODEX && failOnce) {

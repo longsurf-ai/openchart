@@ -558,4 +558,11 @@ export const migrations = [
     checksum:
       "42c2b525246188a9b34f4265928991edeb6e7962b59557ba3ed5c96d78c27371",
   },
+  {
+    ...(await import("./migration/20261108121000_retired-trigger-provider"))
+      .default,
+    filename: "20261108121000_retired-trigger-provider.ts",
+    checksum:
+      "655e6705e8a20a480ec8895c0862a9561bb21add4fb0af1c57e8af2310260918",
+  },
 ] satisfies DatabaseMigration.RegisteredMigration[];

@@ -22,6 +22,7 @@ import {
   ConfigWriteFailed,
 } from "./errors";
 import { ConfigChanged } from "./events";
+import { migrateSettings } from "./migrations";
 import { mergePatch } from "./merge-patch";
 
 /**
@@ -86,11 +87,12 @@ type Snapshot = {
 };
 
 function snapshot(document: Schema.JsonObject): Snapshot {
+  const migrated = migrateSettings(document);
   return {
-    provider: ConfigProvider.fromUnknown(document, {
+    provider: ConfigProvider.fromUnknown(migrated, {
       preserveEmptyStrings: true,
     }),
-    read: Effect.succeed(document),
+    read: Effect.succeed(migrated),
   };
 }
 
@@ -175,7 +177,7 @@ export function layerFromFile(filename: string) {
           mutex.withPermits(1)(
             Effect.gen(function* () {
               const text = yield* read;
-              const before = yield* decode(text);
+              const before = migrateSettings(yield* decode(text));
               const merged = mergePatch(before, patch);
               yield* validate(merged);
               if (JSON.stringify(before) === JSON.stringify(merged)) {

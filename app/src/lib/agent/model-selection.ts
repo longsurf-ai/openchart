@@ -1,12 +1,32 @@
 // Purpose: Derive model menu visibility and resolve supported tier selections.
-import { MODEL_TIER_IDS } from "@openchart/models/model-tiers";
+import {
+  API_PROVIDER_IDS,
+  MODEL_TIER_IDS,
+} from "@openchart/models/model-tiers";
 import type {
   AgentClient,
   ModelSelection,
 } from "@openchart/app/lib/agent/client";
 
-/** Offer tiers actually present while retaining fallback choices for saved selections. @example const options = models.filter(isModelMenuOption); */
-export function isModelMenuOption(model: { id: string; tier?: number }) {
+/** Orders picker choices by provider, then model name, then ID. @example choices.sort(compareModelChoices); */
+export function compareModelChoices(
+  left: { providerID: string; name: string; id: string },
+  right: { providerID: string; name: string; id: string },
+) {
+  return (
+    left.providerID.localeCompare(right.providerID) ||
+    left.name.localeCompare(right.name) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+/** Offer native tiers actually present and every discovered API model. @example const options = models.filter(isModelMenuOption); */
+export function isModelMenuOption(model: {
+  id: string;
+  providerID: string;
+  tier?: number;
+}) {
+  if (API_PROVIDER_IDS.some((id) => id === model.providerID)) return true;
   return (
     model.tier !== undefined && MODEL_TIER_IDS[model.tier - 1] === model.id
   );

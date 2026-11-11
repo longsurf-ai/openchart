@@ -87,27 +87,35 @@ export function ModelPicker({
   disabled?: boolean;
   settingUp?: boolean;
 }) {
-  const models = providers.flatMap((provider) => {
-    const Logo = nativeProviderBrand(provider.id)?.Logo;
-    return provider.models.map((entry) => ({
-      // Model IDs are unique within a provider, not across the whole catalog.
-      id: JSON.stringify([provider.id, entry.id]),
-      name: entry.name || entry.id,
-      description: provider.name,
-      icon: Logo ? <Logo /> : undefined,
-      visible: isModelMenuOption(entry),
-      selection: { providerID: provider.id, modelID: entry.id },
-      efforts: entry.availableVariants?.length
-        ? [
-            { id: "", name: "Default" },
-            ...entry.availableVariants.map((variant) => ({
-              id: variant,
-              name: variant,
-            })),
-          ]
-        : undefined,
-    }));
-  });
+  const models = [...providers]
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .flatMap((provider) => {
+      const Logo = nativeProviderBrand(provider.id)?.Logo;
+      return [...provider.models]
+        .sort(
+          (left, right) =>
+            (left.name || left.id).localeCompare(right.name || right.id) ||
+            left.id.localeCompare(right.id),
+        )
+        .map((entry) => ({
+          // Model IDs are unique within a provider, not across the whole catalog.
+          id: JSON.stringify([provider.id, entry.id]),
+          name: entry.name || entry.id,
+          description: provider.name,
+          icon: Logo ? <Logo /> : undefined,
+          visible: isModelMenuOption(entry),
+          selection: { providerID: provider.id, modelID: entry.id },
+          efforts: entry.availableVariants?.length
+            ? [
+                { id: "", name: "Default" },
+                ...entry.availableVariants.map((variant) => ({
+                  id: variant,
+                  name: variant,
+                })),
+              ]
+            : undefined,
+        }));
+    });
   return (
     <ModelSelectorRoot
       models={models}

@@ -531,6 +531,57 @@ function visualChart(id: string) {
   return { chart, contributions, setSeriesPrimitives };
 }
 
+it("reuses immutable Tea rows across price updates and presentation changes", () => {
+  const { chart } = visualChart("row-reuse");
+  const preferences = createChartPreferences("row-reuse");
+  const frame = fromPoints({}, [
+    { time: 1000, value: 7 },
+    { time: 1500, value: 8 },
+    { time: 2000, value: 9 },
+  ]);
+  const read = vi.spyOn(Object.getPrototypeOf(frame), "get");
+  const sourceReads = () =>
+    read.mock.contexts.filter((context) => context === frame).length;
+  const binding: TeaVisualBinding = {
+    id: "value",
+    output: "value",
+    pane: 1,
+    paneId: "study",
+    mainPane: false,
+  };
+  const view = render(
+    <ChartContext.Provider value={chart}>
+      <TeaVisuals
+        sourceId="study"
+        compiled={node}
+        frame={frame}
+        bindings={[binding]}
+        preferences={preferences}
+      />
+    </ChartContext.Provider>,
+  );
+  const initialReads = sourceReads();
+  expect(initialReads).toBeGreaterThan(0);
+  act(() => {
+    chart.mutate((state) => {
+      v2.ChartStateUtils.setSeriesData(state, "price", [
+        { time: 1, open: 40, high: 50, low: 35, close: 46 },
+        { time: 2, open: 45, high: 55, low: 40, close: 51 },
+      ]);
+    });
+    updateSeriesStyles(preferences, ["value"], { color: "#ff0000" });
+  });
+  expect(
+    v2.ChartStateUtils.getSeries(chart.store.getState(), "value")?.data,
+  ).toMatchObject([
+    { time: 1, value: 8 },
+    { time: 2, value: 9 },
+  ]);
+  expect(sourceReads()).toBe(initialReads);
+  view.unmount();
+  read.mockRestore();
+});
+
 it("projects mixed nominal visuals without creating scalar series for shapes or fills, and replaces their owned contributions", () => {
   const { chart, contributions, setSeriesPrimitives } = visualChart("mixed");
   const preferences = createChartPreferences("mixed");

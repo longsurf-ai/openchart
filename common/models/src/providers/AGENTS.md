@@ -1,6 +1,7 @@
 # providers
 
-One folder per native CLI provider, plus flat helpers only providers use.
+One folder per provider, plus flat helpers only providers use. CLI providers
+own a native adapter; API providers use the standard AI SDK.
 `index.ts` is the only module that names more than one. Root `common/models`
 modules never import from here; they take a `NativeProvider` (see
 `native-provider.ts` in the parent) as a parameter.

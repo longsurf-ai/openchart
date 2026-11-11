@@ -61,12 +61,18 @@ export namespace ModelsDev {
 
   /** Catalog provider bucket; outer record keys supply lookup identity. */
   export const Provider = z.object({
+    api: z.string().optional(),
     models: z.record(z.string(), Model),
   });
 
   export type Provider = z.infer<typeof Provider>;
 
-  const Catalog = z.record(z.string(), Provider);
+  const CatalogSchema = z.record(z.string(), Provider);
+
+  /** One lazy snapshot of models.dev metadata keyed by provider. */
+  export interface Catalog {
+    get(): Promise<Record<string, Provider>>;
+  }
 
   /** Storage and download options owned by the catalog's caller. */
   export interface Options {
@@ -87,7 +93,7 @@ export namespace ModelsDev {
    * });
    * const providers = await catalog.get();
    */
-  export function create(options: Options) {
+  export function create(options: Options): Catalog {
     const filepath = path.join(options.cacheDirectory, "models.json");
     const load = async (): Promise<Record<string, Provider>> => {
       const cached = await fs
@@ -96,7 +102,7 @@ export namespace ModelsDev {
           if (error.code === "ENOENT") return undefined;
           throw error;
         });
-      if (cached !== undefined) return Catalog.parse(JSON.parse(cached));
+      if (cached !== undefined) return CatalogSchema.parse(JSON.parse(cached));
       if (!options.fetchEnabled) return {};
 
       const response = await fetch(`${MODELS_DEV_URL}/api.json`, {
@@ -106,7 +112,7 @@ export namespace ModelsDev {
       if (!response.ok)
         throw new Error(`models.dev returned HTTP ${response.status}`);
       const content = await response.text();
-      const providers = Catalog.parse(JSON.parse(content));
+      const providers = CatalogSchema.parse(JSON.parse(content));
       await fs.mkdir(options.cacheDirectory, { recursive: true });
       await fs.writeFile(filepath, content, "utf8");
       return providers;

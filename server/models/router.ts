@@ -46,8 +46,34 @@ export const modelsRouter = trpc.router({
       { signal },
     ),
   ),
+  catalogProviders: trpc.procedure.query(({ ctx }) =>
+    ctx.runtime.runPromise(
+      Models.Service.use((models) => models.catalogProviders()),
+    ),
+  ),
   refresh: trpc.procedure.mutation(({ ctx }) =>
     ctx.runtime.runPromise(Models.Service.use((models) => models.refresh())),
+  ),
+  setApiKey: trpc.procedure
+    .input(
+      input(
+        Schema.Struct({
+          key: Schema.String.check(
+            Schema.isMinLength(1),
+            Schema.isMaxLength(8192),
+          ),
+        }),
+      ),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.runtime.runPromise(
+        Models.Service.use((models) => models.setApiKey(input.key)),
+      ),
+    ),
+  clearApiKey: trpc.procedure.mutation(({ ctx }) =>
+    ctx.runtime.runPromise(
+      Models.Service.use((models) => models.clearApiKey()),
+    ),
   ),
   setupState: trpc.procedure
     .input(input(provider))

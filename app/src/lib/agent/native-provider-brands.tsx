@@ -4,6 +4,7 @@ import {
   CLAUDE_CODE,
   CODEX,
   GROK,
+  OPENAI_COMPATIBLE,
   type NativeProviderID,
 } from "@openchart/models/model-tiers";
 import type { ComponentType } from "react";
@@ -44,6 +45,11 @@ export const NATIVE_PROVIDER_BRANDS: Readonly<
     Logo: AntigravityLogo,
   },
   [GROK]: { name: "Grok", agent: "Grok", Logo: GrokLogo },
+  [OPENAI_COMPATIBLE]: {
+    name: "OpenAI-compatible",
+    agent: "OpenAI-compatible",
+    Logo: OpenAILogo,
+  },
 };
 
 /**

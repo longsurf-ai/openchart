@@ -4,6 +4,7 @@ import {
   CLAUDE_CODE,
   CODEX,
   GROK,
+  OPENAI_COMPATIBLE,
 } from "@openchart/models/model-tiers";
 
 import { createServer, type AppRouter } from "@openchart/server";
@@ -45,6 +46,11 @@ const nativeDisabled = {
       [CLAUDE_CODE]: { enabled: false },
       [ANTIGRAVITY]: { enabled: false },
       [GROK]: { enabled: false },
+      [OPENAI_COMPATIBLE]: {
+        enabled: false,
+        baseURL: "",
+        catalogProvider: "",
+      },
     },
   },
 };
@@ -273,6 +279,52 @@ test("persists model permission modes independently of other settings and resets
   }
 });
 
+test("drops retired provider settings and their default model", async () => {
+  const initial = {
+    ...nativeDisabled,
+    models: {
+      ...nativeDisabled.models,
+      providers: {
+        ...nativeDisabled.models.providers,
+        omp: { enabled: true, tiers: { tier1: ["sushi/q"] } },
+        "openai-compatible": {
+          ...nativeDisabled.models.providers["openai-compatible"],
+          tiers: { tier1: ["model-a"] },
+          apiKeyEnv: "sk-old",
+        },
+      },
+      defaultModel: { providerID: "omp", modelID: "tier1" },
+    },
+  };
+  const fixture = await serve(initial);
+  try {
+    const config = await fixture.client.config.get.query();
+    expect(config.models.providers).not.toHaveProperty("omp");
+    expect(config.models.providers["openai-compatible"]).not.toHaveProperty(
+      "tiers",
+    );
+    expect(config.models.providers["openai-compatible"]).not.toHaveProperty(
+      "apiKeyEnv",
+    );
+    expect(config.models.defaultModel).toBeUndefined();
+
+    await fixture.client.config.update.mutate({
+      models: { permissionMode: "ask" },
+    });
+    const saved = JSON.parse(await readFile(fixture.filename, "utf8"));
+    expect(saved.models.providers).not.toHaveProperty("omp");
+    expect(saved.models.providers["openai-compatible"]).not.toHaveProperty(
+      "tiers",
+    );
+    expect(saved.models.providers["openai-compatible"]).not.toHaveProperty(
+      "apiKeyEnv",
+    );
+    expect(saved.models).not.toHaveProperty("defaultModel");
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("rejects malformed patches and invalid merged domains without any partial write", async () => {
   const fixture = await serve(nativeDisabled);
   try {
@@ -288,7 +340,7 @@ test("rejects malformed patches and invalid merged domains without any partial w
         appearance: { theme: "dark" },
         providers: { binance: { enabled: "yes" } },
       },
-      { models: { providers: { ["openai-compatible"]: { enabled: true } } } },
+      { models: { providers: { ["unknown-provider"]: { enabled: true } } } },
       { models: { defaultModel: { providerID: CODEX } } },
       { models: { permissionMode: "yolo" } },
       { models: { permissionMode: true } },

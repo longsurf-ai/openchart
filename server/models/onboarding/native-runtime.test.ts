@@ -63,20 +63,20 @@ test.skipIf(process.env.OPENCHART_VERIFY_PROVIDER_DOWNLOADS !== "1")(
         expect(await installations.installed(id)).toBe(true);
       }
       const catalog = { get: async () => ({}) };
-      const codex = NATIVE_PROVIDERS[CODEX].createModelProvider(
+      const codex = NATIVE_PROVIDERS[CODEX]!.createModelProvider(
         catalog,
         installations.executables[CODEX],
       );
-      const claude = NATIVE_PROVIDERS[CLAUDE_CODE].createModelProvider(
+      const claude = NATIVE_PROVIDERS[CLAUDE_CODE]!.createModelProvider(
         catalog,
         installations.executables[CLAUDE_CODE],
       );
-      const grok = NATIVE_PROVIDERS[GROK].createModelProvider(
+      const grok = NATIVE_PROVIDERS[GROK]!.createModelProvider(
         catalog,
         installations.executables[GROK],
       );
       const agy = antigravity
-        ? NATIVE_PROVIDERS[ANTIGRAVITY].createModelProvider(
+        ? NATIVE_PROVIDERS[ANTIGRAVITY]!.createModelProvider(
             catalog,
             installations.executables[ANTIGRAVITY],
           )

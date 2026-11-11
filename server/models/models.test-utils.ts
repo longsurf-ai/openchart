@@ -1,21 +1,60 @@
 // Purpose: Gives model tests their shared application event stream.
 import { Events } from "@openchart/server/events";
+import { Credential } from "@openchart/server/access/credential";
 import { Effect, Layer } from "effect";
 import { vi } from "vitest";
 import type { AvailableModel } from "@openchart/models/model-provider";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { Models } from "./models";
-/** Native model tests never access application credentials. */
-export const modelTestDependencies = Events.layer;
+/** In-memory provider keys; native model tests never touch encrypted storage. */
+export const modelKeys = new Map<string, string>();
+const credentials = {
+  list: (integrationID: string, active?: boolean) =>
+    Effect.succeed(
+      active && modelKeys.has(integrationID)
+        ? [
+            {
+              id: "cred_test",
+              integrationID,
+              label: "default",
+              active: true,
+              value: { type: "key", key: modelKeys.get(integrationID)! },
+            },
+          ]
+        : [],
+    ),
+  create: (input: { integrationID: string; value: { key: string } }) => {
+    modelKeys.set(input.integrationID, input.value.key);
+    return Effect.succeed({});
+  },
+  clear: (integrationID: string) => {
+    modelKeys.delete(integrationID);
+    return Effect.void;
+  },
+} as unknown as Credential.Interface;
+/** Native model tests share events and a tiny in-memory credential service. */
+export const modelTestDependencies = Layer.merge(
+  Events.layer,
+  Layer.succeed(Credential.Service, credentials),
+);
 
 /** Unused setup methods for consumers that only exercise inference. */
 export const unusedModelSetup: Pick<
   Models.Interface,
-  "discover" | "quota" | "refresh" | "setup"
+  | "discover"
+  | "quota"
+  | "refresh"
+  | "catalogProviders"
+  | "setup"
+  | "setApiKey"
+  | "clearApiKey"
 > = {
   discover: () => Effect.die("Unexpected discovery"),
   quota: () => Effect.die("Unexpected quota"),
   refresh: () => Effect.die("Unexpected refresh"),
+  catalogProviders: () => Effect.die("Unexpected catalog read"),
+  setApiKey: () => Effect.die("Unexpected key write"),
+  clearApiKey: () => Effect.die("Unexpected key clear"),
   setup: {
     state: () => Effect.die("Unexpected setup"),
     start: () => Effect.die("Unexpected setup"),

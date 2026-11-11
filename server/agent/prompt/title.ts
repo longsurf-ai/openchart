@@ -7,7 +7,7 @@ import { toModelMessages } from "@openchart/server/agent/session/message/to-mode
 import { AgentProfile } from "@openchart/server/agent/profiles/profile";
 import { Session } from "@openchart/server/agent/session";
 import { Models } from "@openchart/server/models";
-import { TIER1 } from "@openchart/models/model-tiers";
+import { API_PROVIDER_IDS, TIER1 } from "@openchart/models/model-tiers";
 import { assertExists } from "@openchart/utils/assert";
 import { Effect, Stream } from "effect";
 import type { PreparedTurn } from "./execute";
@@ -49,7 +49,9 @@ export const ensure = Effect.fn("SessionTitle.ensure")(
     const models = yield* Models.Service;
     const selection = agent.model ?? {
       providerID: input.model.providerID,
-      modelID: TIER1,
+      modelID: API_PROVIDER_IDS.some((id) => id === input.model.providerID)
+        ? input.model.id
+        : TIER1,
     };
     const model = yield* models.getModel(
       selection.providerID,

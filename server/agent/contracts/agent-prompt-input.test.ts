@@ -42,7 +42,7 @@ describe("AgentPromptInput", () => {
       MODEL_TIER_IDS.map((modelID) => ({ providerID, modelID })),
     ),
   )(
-    "preserves the supported provider and tier $providerID/$modelID",
+    "preserves the supported provider and model $providerID/$modelID",
     (model) => {
       const input = {
         agent: "analyst",
@@ -56,10 +56,7 @@ describe("AgentPromptInput", () => {
   it.each([
     { providerID: "unknown", modelID: "tier1" },
     { providerID: "codxe", modelID: "tier1" },
-    { providerID: "openai-compatible", modelID: "tier1" },
-    { providerID: CODEX, modelID: "tier0" },
-    { providerID: CODEX, modelID: "tier6" },
-    { providerID: CODEX, modelID: "gpt-6-astra" },
+    { providerID: "unknown-provider", modelID: "tier1" },
     { providerID: CODEX, modelID: "" },
   ])("rejects invalid model selection $providerID/$modelID", (model) => {
     expect(() =>
@@ -73,11 +70,9 @@ describe("AgentPromptInput", () => {
 
   it("derives closed provider and tier types from the prompt schema", () => {
     expectTypeOf<AgentPromptModel["providerID"]>().toEqualTypeOf<
-      "codex" | "claude-code" | "antigravity" | "grok"
+      "codex" | "claude-code" | "antigravity" | "grok" | "openai-compatible"
     >();
-    expectTypeOf<AgentPromptModel["modelID"]>().toEqualTypeOf<
-      "tier1" | "tier2" | "tier3" | "tier4" | "tier5"
-    >();
+    expectTypeOf<AgentPromptModel["modelID"]>().toEqualTypeOf<string>();
   });
 
   it("keeps caller-supplied Part IDs optional in the derived TypeScript type", () => {

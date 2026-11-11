@@ -1,5 +1,8 @@
 // Purpose: Application composition shares Events and applies Provider config changes through Catalog and Feed.
 import { temporaryHome } from "@openchart/server/home.test-utils";
+import { jweEncryption } from "@openchart/server/access/credential/encryption";
+import { Models } from "@openchart/server/models";
+import { randomBytes } from "node:crypto";
 import { Database } from "@openchart/server/db";
 import { PluginRegistry } from "@openchart/server/agent/plugin/registry";
 import {
@@ -217,6 +220,24 @@ test("publishes a committed cascade batch through the shared Events service", as
     ]);
   } finally {
     vi.restoreAllMocks();
+    await runtime.dispose();
+  }
+});
+
+test("composes encrypted API-key storage for Models", async () => {
+  const runtime = makeRuntime({
+    home: temporaryHome(),
+    databasePath: ":memory:",
+    credentialEncryption: jweEncryption(randomBytes(32)),
+    config: ConfigProvider.fromUnknown({}),
+    datasets: catalogLayer(Effect.succeed([])),
+    models: { fetchEnabled: false, userAgent: "OpenChart/KeyTest" },
+  });
+  try {
+    const models = await runtime.runPromise(Models.Service);
+    await runtime.runPromise(models.setApiKey("sk-test"));
+    await runtime.runPromise(models.clearApiKey());
+  } finally {
     await runtime.dispose();
   }
 });

@@ -105,7 +105,7 @@ describe("models architecture", () => {
     for (const filename of await productionSources(sourceDirectory, false)) {
       if (path.basename(filename) === "model-tiers.ts") continue;
       if (
-        /\b(?:CLAUDE_CODE|CODEX|ANTIGRAVITY|GROK)\b/.test(
+        /\b(?:CLAUDE_CODE|CODEX|ANTIGRAVITY|GROK|OPENAI_COMPATIBLE)\b/.test(
           await fs.readFile(filename, "utf8"),
         )
       )

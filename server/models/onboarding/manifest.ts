@@ -222,4 +222,6 @@ export const PROVIDER_MANIFEST: RuntimeManifest<NativeProviderID> = {
       compression: "brotli",
     },
   },
+  // OpenAI-compatible providers speak HTTP directly; no runtime is installed.
+  "openai-compatible": {},
 };
