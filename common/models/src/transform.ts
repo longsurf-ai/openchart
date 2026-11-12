@@ -20,8 +20,9 @@ function mimeToModality(mime: string): Modality | undefined {
 function sdkKey(
   model: AvailableModel,
   provider: NativeProvider | undefined,
+  override: string | undefined,
 ): string {
-  return provider?.sdkKey ?? model.providerID;
+  return override ?? provider?.sdkKey ?? model.providerID;
 }
 
 export namespace ProviderTransform {
@@ -81,6 +82,7 @@ export namespace ProviderTransform {
     msgs: ModelMessage[],
     model: AvailableModel,
     provider: NativeProvider | undefined,
+    sdkKeyOverride?: string,
   ) {
     // Clone messages and content parts before provider normalization so callers
     // can reuse their original transcript for another request or provider.
@@ -94,7 +96,7 @@ export namespace ProviderTransform {
     msgs = unsupportedParts(msgs, model);
     if (provider?.normalizeMessages) msgs = provider.normalizeMessages(msgs);
 
-    const key = sdkKey(model, provider);
+    const key = sdkKey(model, provider, sdkKeyOverride);
     if (key !== model.providerID) {
       const remap = (opts: Record<string, any> | undefined) => {
         if (!opts) return opts;
@@ -157,7 +159,8 @@ export namespace ProviderTransform {
     model: AvailableModel,
     provider: NativeProvider | undefined,
     options: { [x: string]: any },
+    sdkKeyOverride?: string,
   ) {
-    return { [sdkKey(model, provider)]: options };
+    return { [sdkKey(model, provider, sdkKeyOverride)]: options };
   }
 }

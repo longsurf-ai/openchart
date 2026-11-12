@@ -1,16 +1,24 @@
 // Purpose: Configure native agent enablement, permission preferences, and the default model.
-import { MODEL_PROVIDER_IDS } from "@openchart/models/model-tiers";
+import {
+  API_PROVIDER_IDS,
+  MODEL_PROVIDER_IDS,
+  OPENAI_COMPATIBLE,
+} from "@openchart/models/model-tiers";
 import { useOutletContext } from "react-router";
 
 import type { AppRouteContext } from "@openchart/app/app/route-context";
 import type { AppConfig } from "@openchart/app/lib/config/config";
 import { useAgentContext } from "@openchart/app/lib/agent/provider";
-import { isModelMenuOption } from "@openchart/app/lib/agent/model-selection";
+import {
+  compareModelChoices,
+  isModelMenuOption,
+} from "@openchart/app/lib/agent/model-selection";
 import { Card, CardItem } from "@openchart/app/components/ui/settings/card";
 import { DropdownControl } from "@openchart/app/components/ui/settings/dropdown-control";
 import { useConfig } from "@openchart/app/hooks/use-config";
 
 import { NativeProvider, RefreshProviders } from "./native-provider";
+import { OpenAiCompatibleSettings } from "./openai-compatible";
 import { SettingsPage } from "./settings-page";
 
 const permissionOptions = [
@@ -30,9 +38,9 @@ export default function ModelSettings() {
   const settings = useConfig(transport);
   const config = settings.config;
   const disabled = settings.isSaving || !!settings.readError;
-  const choices = (modelProviders.data ?? []).flatMap(
-    (provider) => provider.models,
-  );
+  const choices = (modelProviders.data ?? [])
+    .flatMap((provider) => provider.models)
+    .sort(compareModelChoices);
   const selected = config?.models.defaultModel;
   const selectedModel = choices.find(
     (choice) =>
@@ -42,6 +50,10 @@ export default function ModelSettings() {
   const value = selected
     ? JSON.stringify([selected.providerID, selected.modelID])
     : "";
+  const label = (model: (typeof choices)[number]) =>
+    API_PROVIDER_IDS.some((id) => id === model.providerID)
+      ? model.name
+      : `${model.providerID} / ${model.name}`;
   const options = [
     { value: "", name: "First available model" },
     ...(selected && !selectedModel
@@ -54,7 +66,7 @@ export default function ModelSettings() {
       : []),
     ...choices.filter(isModelMenuOption).map((model) => ({
       value: JSON.stringify([model.providerID, model.id]),
-      name: `${model.providerID} / ${model.name}`,
+      name: label(model),
     })),
   ];
   return (
@@ -74,9 +86,7 @@ export default function ModelSettings() {
                   aria-label="Default model"
                   value={value}
                   selectedLabel={
-                    selectedModel
-                      ? `${selectedModel.providerID} / ${selectedModel.name}`
-                      : undefined
+                    selectedModel ? label(selectedModel) : undefined
                   }
                   options={options}
                   disabled={
@@ -169,7 +179,15 @@ export default function ModelSettings() {
                   transport={transport}
                   settings={settings}
                   enabled={config.models.providers[id].enabled}
-                />
+                  configurable={id === OPENAI_COMPATIBLE}
+                >
+                  {id === OPENAI_COMPATIBLE ? (
+                    <OpenAiCompatibleSettings
+                      transport={transport}
+                      settings={settings}
+                    />
+                  ) : null}
+                </NativeProvider>
               ))}
             </div>
             <RefreshProviders transport={transport} />

@@ -166,6 +166,11 @@ export const ProviderDiscoveryResult = z
   .discriminatedUnion("status", [
     z.strictObject({ status: z.literal("not_installed") }),
     z.strictObject({
+      status: z.literal("configuration_required"),
+      /** Human-readable setting or environment requirement. */
+      message: z.string().min(1),
+    }),
+    z.strictObject({
       status: z.literal("authentication_required"),
       /**
        * Official login command for the detected CLI. The host runs it in an

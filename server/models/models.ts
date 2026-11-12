@@ -18,6 +18,7 @@ import {
   Effect,
   Exit,
   Layer,
+  Option,
   ScopedRef,
   Stream,
   Semaphore,
@@ -31,11 +32,16 @@ import {
   type QuotaUnavailable,
 } from "./errors";
 import { config } from "./config";
-import type { NativeProviderID } from "@openchart/models/model-tiers";
+import {
+  OPENAI_COMPATIBLE,
+  type NativeProviderID,
+} from "@openchart/models/model-tiers";
 import { NodeServices } from "@effect/platform-node";
 import { makeProviderSetup, type ProviderSetup } from "./onboarding/onboarding";
 import { Event } from "./events";
 import { createRegistry } from "./model-registry";
+import { clearModelKey, readModelKey, writeModelKey } from "./credentials";
+import { Credential } from "@openchart/server/access/credential";
 
 /** Model discovery and SDK lookup through the currently configured registry. */
 export interface Interface {
@@ -61,8 +67,16 @@ export interface Interface {
    */
   readonly refresh: () => Effect.Effect<void, ModelError>;
 
+  /** Lists models.dev provider keys available for catalog enrichment. */
+  readonly catalogProviders: () => Effect.Effect<readonly string[], ModelError>;
+
   /** Scope-owned, installation and login operations. */
   readonly setup: ProviderSetup;
+
+  /** Encrypts and installs the OpenAI-compatible API key, then refreshes discovery. */
+  readonly setApiKey: (key: string) => Effect.Effect<void, ModelError>;
+  /** Removes the stored OpenAI-compatible API key, then refreshes discovery. */
+  readonly clearApiKey: () => Effect.Effect<void, ModelError>;
 
   /**
    * Lists product-supported providers available in the current environment,
@@ -153,6 +167,7 @@ export function layer(options: Options) {
       const source = yield* ConfigProvider.ConfigProvider;
       const updates = (yield* ConfigProviderUpdates)(source);
       const events = yield* Events.Service;
+      const credentials = yield* Effect.serviceOption(Credential.Service);
       const catalog = ModelsDev.create(options);
       const installations = createInstallations(options.runtimeDirectory);
       const readProviderSettings = (provider: ConfigProvider.ConfigProvider) =>
@@ -164,7 +179,19 @@ export function layer(options: Options) {
       let currentSettings = yield* readProviderSettings(source);
       const acquireRegistry = Effect.suspend(() =>
         Effect.flatMap(currentSettings, (settings) =>
-          createRegistry(catalog, settings, installations.executables),
+          Effect.gen(function* () {
+            const key = Option.isSome(credentials)
+              ? yield* readModelKey(credentials.value, OPENAI_COMPATIBLE).pipe(
+                  Effect.catch(() => Effect.succeed(undefined)),
+                )
+              : undefined;
+            return yield* createRegistry(
+              catalog,
+              settings,
+              installations.executables,
+              key,
+            );
+          }),
         ),
       ).pipe(Effect.exit);
       const registryRef = yield* ScopedRef.fromAcquire(acquireRegistry);
@@ -233,10 +260,41 @@ export function layer(options: Options) {
       );
       return Service.of({
         discover,
+        catalogProviders: () =>
+          Effect.tryPromise({
+            try: () => catalog.get(),
+            catch: (cause) => new ConfigurationUnavailable({ cause }),
+          }).pipe(Effect.map(Object.keys)),
         quota: (providerID) =>
           inspectCurrent((current) => current.quota(providerID)),
         refresh: refreshAll,
         setup,
+        setApiKey: (key) =>
+          Option.isSome(credentials)
+            ? writeModelKey(credentials.value, OPENAI_COMPATIBLE, key).pipe(
+                Effect.mapError(
+                  (cause) => new ConfigurationUnavailable({ cause }),
+                ),
+                Effect.andThen(refreshAll()),
+              )
+            : Effect.fail(
+                new ConfigurationUnavailable({
+                  cause: new Error("Encrypted model keys are unavailable"),
+                }),
+              ),
+        clearApiKey: () =>
+          Option.isSome(credentials)
+            ? clearModelKey(credentials.value, OPENAI_COMPATIBLE).pipe(
+                Effect.mapError(
+                  (cause) => new ConfigurationUnavailable({ cause }),
+                ),
+                Effect.andThen(refreshAll()),
+              )
+            : Effect.fail(
+                new ConfigurationUnavailable({
+                  cause: new Error("Encrypted model keys are unavailable"),
+                }),
+              ),
         list: () => inspectCurrent((current) => current.list()),
         getModel: (providerID, modelID) =>
           Effect.flatMap(currentRegistry, (current) =>

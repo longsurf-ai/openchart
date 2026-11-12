@@ -32,6 +32,11 @@ the file restores reads. Storage failures never become empty settings. Scope
 disposal stops polling. External editors do not participate in the semaphore:
 concurrent external replacement remains last-writer-wins, not a file transaction.
 
+`server/config/migrations.ts` drops saved settings for retired model provider
+IDs before domain decoding, including a default model that points at one.
+Reads therefore stay valid after a provider is removed, and the next write
+persists the cleaned document. Unrelated namespaces and fields are preserved.
+
 `runtime.ts` installs this source before consuming services. Explicit native
 providers passed through `makeRuntime({config})` remain useful for tests and
 embedding: reads use that provider and config mutations fail as read-only.

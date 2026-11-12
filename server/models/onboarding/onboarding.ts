@@ -101,6 +101,11 @@ export const makeProviderSetup = Effect.fn("Models.onboarding")(function* (
     const job = yield* makeSetupJob(action);
     let operation: Effect.Effect<void, unknown, Scope.Scope>;
     if (action === "install") {
+      if (!installations.installable(providerID))
+        return yield* new SetupFailed({
+          message:
+            "This provider has no installable runtime. Configure it in Settings.",
+        });
       if (yield* installationTask(() => installations.installed(providerID)))
         return yield* new SetupFailed({
           message: "This provider is already installed. Check again.",
@@ -112,6 +117,8 @@ export const makeProviderSetup = Effect.fn("Models.onboarding")(function* (
       );
     } else {
       const result = yield* discover(providerID);
+      if (result.status === "configuration_required")
+        return yield* new SetupFailed({ message: result.message });
       if (result.status !== "authentication_required")
         return yield* new SetupFailed({
           message: "Sign-in is no longer required. Check the provider again.",
@@ -155,25 +162,27 @@ export const makeProviderSetup = Effect.fn("Models.onboarding")(function* (
     yield* Effect.forEach(
       MODEL_PROVIDER_IDS,
       (providerID) =>
-        installationTask(() => installations.installed(providerID)).pipe(
-          Effect.flatMap((installed) =>
-            installed ? Effect.void : start(providerID, "install"),
-          ),
-          Effect.catch((error) =>
-            Effect.gen(function* () {
-              if (jobs.has(providerID)) return;
-              const job = yield* makeSetupJob("install");
-              job.state = {
-                ...job.state,
-                status: "failed",
-                output: error.message,
-              };
-              yield* Queue.shutdown(job.input);
-              jobs.set(providerID, job);
-              yield* changed;
-            }),
-          ),
-        ),
+        installations.installable(providerID)
+          ? installationTask(() => installations.installed(providerID)).pipe(
+              Effect.flatMap((installed) =>
+                installed ? Effect.void : start(providerID, "install"),
+              ),
+              Effect.catch((error) =>
+                Effect.gen(function* () {
+                  if (jobs.has(providerID)) return;
+                  const job = yield* makeSetupJob("install");
+                  job.state = {
+                    ...job.state,
+                    status: "failed",
+                    output: error.message,
+                  };
+                  yield* Queue.shutdown(job.input);
+                  jobs.set(providerID, job);
+                  yield* changed;
+                }),
+              ),
+            )
+          : Effect.void,
       { concurrency: "unbounded", discard: true },
     ).pipe(Effect.forkScoped);
   return { state, start, write, cancel };

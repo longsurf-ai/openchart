@@ -88,11 +88,11 @@ test("menus offer only present tiers with native names, efforts, and saved tier 
   expect(
     screen.getAllByRole("option").map((option) => option.textContent),
   ).toEqual([
-    "gpt-6-astraCodex",
+    "fable[1m]Claude Code",
+    "gpt-5.6-lunaCodex",
     "gpt-5.6-solCodex",
     "gpt-5.6-terraCodex",
-    "gpt-5.6-lunaCodex",
-    "fable[1m]Claude Code",
+    "gpt-6-astraCodex",
   ]);
   expect(select).not.toHaveBeenCalled();
   await user.click(screen.getByRole("option", { name: "gpt-5.6-sol Codex" }));

@@ -1,16 +1,16 @@
 // Purpose: Owns the sole frontend Agent prompt input contract.
 
 import { Schema, Struct } from "effect";
-import {
-  MODEL_PROVIDER_IDS,
-  MODEL_TIER_IDS,
-} from "@openchart/models/model-tiers";
+import { MODEL_PROVIDER_IDS } from "@openchart/models/model-tiers";
 import * as Part from "./part";
 
-/** Supported provider and logical tier frozen into an accepted prompt. */
+/**
+ * Supported provider and model reference frozen into an accepted prompt.
+ * Native providers use logical tiers; API providers use discovered model IDs.
+ */
 export const AgentPromptModel = Schema.Struct({
   providerID: Schema.Literals(MODEL_PROVIDER_IDS),
-  modelID: Schema.Literals(MODEL_TIER_IDS),
+  modelID: Schema.String.check(Schema.isMinLength(1)),
   selectedVariant: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
 })
   .mapFields(Struct.map(Schema.mutableKey))

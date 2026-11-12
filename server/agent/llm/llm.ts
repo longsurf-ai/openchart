@@ -9,7 +9,8 @@ import type {
   User,
 } from "@openchart/server/agent/contracts/message";
 import { ToolInput } from "@openchart/server/agent/contracts/part";
-import { nativeProvider } from "@openchart/models/providers";
+import { API_PROVIDERS, nativeProvider } from "@openchart/models/providers";
+import type { ApiProviderID } from "@openchart/models/model-tiers";
 import type { AvailableModel } from "@openchart/models/model-provider";
 import { conformProviderStream } from "@openchart/models/stream";
 import {
@@ -248,6 +249,9 @@ const run = Effect.fn("LLM.prepare")(function* <E, R>(
   };
 
   const provider = nativeProvider(selectedModel.model.providerID);
+  const sdkKey =
+    provider?.sdkKey ??
+    API_PROVIDERS[selectedModel.model.providerID as ApiProviderID]?.sdkKey;
 
   const system = buildSystemPrompt(input);
 
@@ -313,6 +317,7 @@ const run = Effect.fn("LLM.prepare")(function* <E, R>(
       messages,
       selectedModel.model,
       provider,
+      sdkKey,
     ),
   };
   if (provider) {
@@ -373,6 +378,7 @@ const run = Effect.fn("LLM.prepare")(function* <E, R>(
             askQuestion,
           }),
         },
+        sdkKey,
       ),
     });
     return conformProviderStream<Tool.ExecuteResult>(result.stream);
@@ -426,6 +432,7 @@ const run = Effect.fn("LLM.prepare")(function* <E, R>(
       selectedModel.model,
       provider,
       options,
+      sdkKey,
     ),
   });
   return conformProviderStream<Tool.ExecuteResult>(result.stream);

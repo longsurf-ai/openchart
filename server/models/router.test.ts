@@ -7,7 +7,11 @@ import { expect, test, vi } from "vitest";
 import { createRequestHandler, type AppRouter } from "@openchart/server";
 import { makeRuntime } from "@openchart/server/runtime";
 import { temporaryHome } from "@openchart/server/home.test-utils";
-import { CODEX, CLAUDE_CODE } from "@openchart/models/model-tiers";
+import {
+  CODEX,
+  CLAUDE_CODE,
+  OPENAI_COMPATIBLE,
+} from "@openchart/models/model-tiers";
 import { AvailableModel } from "@openchart/models/model-provider";
 import { Models } from "./models";
 import { QuotaUnavailable } from "./errors";
@@ -29,6 +33,9 @@ async function serve() {
       Effect.succeed({ status: "not_applicable" }),
     ),
     refresh: vi.fn(() => Effect.void),
+    catalogProviders: vi.fn(() => Effect.succeed(["deepinfra"])),
+    setApiKey: vi.fn(() => Effect.void),
+    clearApiKey: vi.fn(() => Effect.void),
     list: vi.fn<Models.Interface["list"]>(() => Effect.succeed([])),
     getModel: () => Effect.die("Unexpected lookup"),
     getLanguage: () => Effect.die("Unexpected SDK"),
@@ -100,8 +107,43 @@ test("lists tier choices under models without the old Agent route", async () => 
         ],
       },
     ]);
+    const apiModel = AvailableModel.parse({
+      kind: "language",
+      providerID: OPENAI_COMPATIBLE,
+      id: "api-model",
+      name: "API model",
+      capabilities: { input: { text: true }, output: { text: true } },
+    });
+    f.service.list.mockReturnValueOnce(
+      Effect.succeed([
+        {
+          id: OPENAI_COMPATIBLE,
+          name: "OpenAI-compatible",
+          models: [apiModel],
+        },
+      ]),
+    );
+    expect(await f.client.models.list.query()).toEqual([
+      {
+        id: OPENAI_COMPATIBLE,
+        name: "OpenAI-compatible",
+        models: [apiModel],
+      },
+    ]);
     expect(await f.client.models.list.query()).toEqual([]);
     expect((await fetch(`${f.url}/agent.models`)).status).toBe(404);
+  } finally {
+    await f.close();
+  }
+});
+
+test("stores and clears the API key through models", async () => {
+  const f = await serve();
+  try {
+    await f.client.models.setApiKey.mutate({ key: "sk-secret" });
+    expect(f.service.setApiKey).toHaveBeenCalledExactlyOnceWith("sk-secret");
+    await f.client.models.clearApiKey.mutate();
+    expect(f.service.clearApiKey).toHaveBeenCalledOnce();
   } finally {
     await f.close();
   }
@@ -177,7 +219,7 @@ test("quota reads each provider through the service and reports failures separat
     });
     expect(
       await fetch(
-        `${f.url}/models.quota?input=${encodeURIComponent(JSON.stringify({ providerID: "openai-compatible" }))}`,
+        `${f.url}/models.quota?input=${encodeURIComponent(JSON.stringify({ providerID: "unknown-provider" }))}`,
       ),
     ).toHaveProperty("status", 400);
     expect(f.service.discover).not.toHaveBeenCalled();
@@ -197,7 +239,7 @@ test("rejects arbitrary executables, arguments, providers, and query-side mutati
         args: ["-c", "echo injected"],
       },
       { providerID: CODEX, action: "execute" },
-      { providerID: "openai-compatible", action: "login" },
+      { providerID: "unknown-provider", action: "login" },
       { providerID: CODEX, action: "login", env: { PATH: "/tmp" } },
     ]) {
       const response = await fetch(`${f.url}/models.startSetup`, {

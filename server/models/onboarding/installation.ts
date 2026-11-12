@@ -81,7 +81,7 @@ export function createInstallations<Id extends string = NativeProviderID>(
 ) {
   function target(providerID: Id) {
     const artifact: RuntimeArtifact | undefined =
-      manifest[providerID][platform];
+      manifest[providerID]?.[platform];
     const identity = createHash("sha256")
       .update(JSON.stringify(artifact ?? null))
       .digest("hex");
@@ -98,6 +98,9 @@ export function createInstallations<Id extends string = NativeProviderID>(
   const executables = Object.fromEntries(
     (Object.keys(manifest) as Id[]).map((id) => [id, target(id).executable]),
   ) as Record<Id, string>;
+  function installable(providerID: Id) {
+    return target(providerID).artifact !== undefined;
+  }
   async function installed(providerID: Id) {
     const selected = target(providerID);
     return (
@@ -235,7 +238,7 @@ export function createInstallations<Id extends string = NativeProviderID>(
       await rm(temporary, { recursive: true, force: true });
     }
   }
-  return { executables, installed, install };
+  return { executables, installable, installed, install };
 }
 
 /** Installation operations accepted by the onboarding lifecycle. */

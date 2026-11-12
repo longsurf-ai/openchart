@@ -1,6 +1,7 @@
 // Purpose: Project Tea series, decorations and vertical profiles through the same chart renderer in previews and installed studies.
 import { memo, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
+import { DataType } from "apache-arrow";
 import { Chart, v2 } from "@openchart/chart-core";
 import { Color } from "@openchart/chart-core/util";
 import {
@@ -20,7 +21,7 @@ import {
 } from "@openchart/app/lib/chart/tea-visual-value";
 import type { Primitive } from "@openchart/chart-core/primitive";
 import * as Tea from "@openchart/tea";
-import { joinByTime, type DataFrame } from "@openchart/timeseries";
+import type { DataFrame } from "@openchart/timeseries";
 import { useChart } from "@openchart/app/hooks/use-chart";
 import { useErrorToast } from "@openchart/app/hooks/use-error-toast";
 import { mainTimeline } from "@openchart/app/lib/chart/data";
@@ -156,6 +157,25 @@ export const TeaVisuals = memo(function TeaVisuals({
       })),
     [decoded, seriesPrefs, sourceVisible],
   );
+  // A frame is immutable. Decode its rows once, even when price ticks or style
+  // changes reproject the same study. Keep profile-only frames column-based.
+  const needsRows = Boolean(
+    compiled && bindings.length > decoded.profiles.length,
+  );
+  const { sourceRows, gaps } = useMemo(() => {
+    if (!frame || !needsRows) return { sourceRows: [], gaps: {} };
+    return {
+      sourceRows: [...frame],
+      gaps: Object.fromEntries(
+        frame.schema.fields
+          .filter((field) => field.name !== "time")
+          .map((field) => [
+            field.name,
+            DataType.isFloat(field.type) ? NaN : null,
+          ]),
+      ),
+    };
+  }, [frame, needsRows]);
   const projection = useMemo(() => {
     const series: ProjectedSeries[] = [];
     const decorations: Decoration[] = [];
@@ -174,23 +194,28 @@ export const TeaVisuals = memo(function TeaVisuals({
           );
         return output;
       };
-      // Lines and decorations follow the main timeline: each chart bar shows
-      // the last row that opened inside it, which keeps a script on finer
-      // bars (`timeframe = "auto"`) at one point per bar. Reading a row
-      // copies every output in it, so rows are read only when something
-      // here needs them.
+      // Each chart bar shows the last row that opened inside it. Align the
+      // already detached rows directly: rebuilding an Arrow table here would
+      // encode every nested visual, then detach them all again on iteration.
       const timeline = mainData ? mainTimeline(chart.store.getState()) : [];
-      const rows =
-        frame &&
-        bindings.some(
-          (binding) => outputOf(binding).kind !== "vertical-profile",
-        )
-          ? [
-              ...(timeline.length
-                ? joinByTime(timeline, frame, { fill: "last" })
-                : frame),
-            ]
-          : [];
+      let cursor = -1;
+      const rows: { time: number; [column: string]: unknown }[] =
+        !frame || !needsRows
+          ? []
+          : timeline.length
+            ? timeline.map((time, index) => {
+                const end = timeline[index + 1] ?? Infinity;
+                while (
+                  cursor + 1 < sourceRows.length &&
+                  sourceRows[cursor + 1]!.time < end
+                )
+                  cursor++;
+                const row = sourceRows[cursor];
+                return row && row.time >= time
+                  ? { ...row, time }
+                  : { ...gaps, time };
+              })
+            : sourceRows;
       for (const [index, binding] of bindings.entries()) {
         const output = outputOf(binding);
         const saved = prefs.series[binding.id];
@@ -336,6 +361,9 @@ export const TeaVisuals = memo(function TeaVisuals({
   }, [
     compiled,
     frame,
+    needsRows,
+    sourceRows,
+    gaps,
     bindings,
     mainData,
     chart,

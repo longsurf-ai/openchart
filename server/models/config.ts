@@ -5,10 +5,14 @@ import {
   CODEX,
   GROK,
   MODEL_PROVIDER_IDS,
+  OPENAI_COMPATIBLE,
 } from "@openchart/models/model-tiers";
 import { PROVIDER_PERMISSION_MODES } from "@openchart/models/provider-permission";
 import { Config, Effect, Schema } from "effect";
 import { AgentPromptModel } from "@openchart/server/agent/contracts/agent-prompt-input";
+
+/** Provider IDs removed from the product; config reads drop their saved fields. */
+export const RETIRED_MODEL_PROVIDER_IDS = ["omp"] as const;
 
 /** Native provider IDs accepted by setup actions and configuration. */
 export const NativeProviderID = Schema.Literals(MODEL_PROVIDER_IDS);
@@ -16,6 +20,23 @@ export const NativeProviderID = Schema.Literals(MODEL_PROVIDER_IDS);
 const NativeProviderSettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(
     Schema.withDecodingDefaultKey(Effect.succeed(true)),
+  ),
+});
+
+/**
+ * Generic OpenAI-compatible HTTP endpoint. Endpoint, key environment, and
+ * catalog enrichment all start unset; secrets never enter config. Discovered
+ * models are selectable directly by their endpoint IDs.
+ */
+const OpenAiCompatibleProviderSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(true)),
+  ),
+  baseURL: Schema.String.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed("")),
+  ),
+  catalogProvider: Schema.String.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed("")),
   ),
 });
 
@@ -36,6 +57,9 @@ export const ModelsSettings = Schema.Struct({
       Schema.withDecodingDefaultKey(Effect.succeed({})),
     ),
     [GROK]: NativeProviderSettings.pipe(
+      Schema.withDecodingDefaultKey(Effect.succeed({})),
+    ),
+    [OPENAI_COMPATIBLE]: OpenAiCompatibleProviderSettings.pipe(
       Schema.withDecodingDefaultKey(Effect.succeed({})),
     ),
   }).pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),

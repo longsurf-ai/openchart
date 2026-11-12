@@ -92,9 +92,8 @@ test("creates, reads, pages, patches, and deletes through the shared Resource AP
 
 test.each([
   ["providerID", "codxe"],
-  ["providerID", "openai-compatible"],
-  ["modelID", "tier6"],
-  ["modelID", "gpt-6-astra"],
+  ["providerID", "unknown-provider"],
+  ["modelID", ""],
 ])(
   "rejects an invalid schedule model patch %s=%s without persisting it",
   async (field, value) => {

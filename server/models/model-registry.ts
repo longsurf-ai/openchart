@@ -9,18 +9,20 @@ import {
   MODEL_PROVIDER_IDS,
   ModelTier,
   resolveModelTier,
+  type ApiProviderID,
   type NativeProviderID,
 } from "@openchart/models/model-tiers";
-import { NATIVE_PROVIDERS } from "@openchart/models/providers";
+import { API_PROVIDERS, NATIVE_PROVIDERS } from "@openchart/models/providers";
 import { assertTrue } from "@openchart/utils/assert";
 import { Cache, Effect, Exit, Option } from "effect";
 import { ModelsSettings } from "./config";
 import { ModelNotFound, ProviderInit, QuotaUnavailable } from "./errors";
 
 export const createRegistry = Effect.fn("Models.createRegistry")(function* (
-  catalog: ReturnType<typeof ModelsDev.create>,
+  catalog: ModelsDev.Catalog,
   settings: typeof ModelsSettings.Type.providers,
   executables: Readonly<Record<NativeProviderID, string>>,
+  apiKey?: string,
 ) {
   const scope = yield* Effect.scope;
   const assertActive = () =>
@@ -39,10 +41,13 @@ export const createRegistry = Effect.fn("Models.createRegistry")(function* (
     }),
   );
   const createBinding = (id: NativeProviderID) => {
-    const binding = NATIVE_PROVIDERS[id].createModelProvider(
-      catalog,
-      executables[id],
-    );
+    const native = NATIVE_PROVIDERS[id];
+    const binding = native
+      ? native.createModelProvider(catalog, executables[id])
+      : API_PROVIDERS[id as ApiProviderID].createModelProvider(catalog, {
+          ...settings[id],
+          ...(apiKey ? { apiKey } : {}),
+        });
     bindings.set(id, binding);
     assertTrue(binding.id === id, `Binding provider ID does not match: ${id}`);
   };

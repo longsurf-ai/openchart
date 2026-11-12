@@ -197,12 +197,16 @@ const completed = (mode = "streaming") =>
   message("series_completed", ["cs", "sds_1", mode, "s1", {}]);
 
 class FakeSocket extends EventEmitter {
-  readyState = 1;
+  readyState = 0;
   readonly sent: string[] = [];
   readonly commands: { method: string; parameters: readonly unknown[] }[] = [];
   readonly batches: Buffer[] = [];
   readonly heartbeats: string[] = [];
   terminated = false;
+  /** Chart session the test's fixed `cs` address is translated to. */
+  chartSession: string | undefined;
+  /** Session currently issuing a command; responses answer it. */
+  activeSession: string | undefined;
 
   constructor(
     private readonly respond: (
@@ -210,9 +214,22 @@ class FakeSocket extends EventEmitter {
       parameters: readonly unknown[],
       socket: FakeSocket,
     ) => void,
+    private readonly refuseStatus?: number,
   ) {
     super();
-    queueMicrotask(() => this.emit("open"));
+    queueMicrotask(() => {
+      if (this.refuseStatus === undefined) {
+        this.readyState = 1;
+        this.emit("open");
+      } else {
+        this.readyState = 3;
+        this.emit(
+          "unexpected-response",
+          {},
+          { statusCode: this.refuseStatus, resume() {} },
+        );
+      }
+    });
   }
 
   send(data: string) {
@@ -227,17 +244,47 @@ class FakeSocket extends EventEmitter {
       };
       this.sent.push(parsed.m);
       this.commands.push({ method: parsed.m, parameters: parsed.p });
-      this.respond(parsed.m, parsed.p, this);
+      if (parsed.m === "chart_create_session")
+        this.chartSession = String(parsed.p[0]);
+      this.activeSession =
+        typeof parsed.p[0] === "string" ? parsed.p[0] : this.activeSession;
+      try {
+        this.respond(parsed.m, parsed.p, this);
+      } finally {
+        this.activeSession = undefined;
+      }
     }
   }
 
   emitMessage(...frames: readonly Buffer[]) {
-    this.batches.push(...frames);
-    this.emit("message", Buffer.concat(frames));
+    this.emitFor(this.activeSession ?? this.chartSession, ...frames);
+  }
+
+  /** Emits frames addressed to a specific chart session, even outside a command. */
+  emitFor(session: string | undefined, ...frames: readonly Buffer[]) {
+    const translated = frames.map((frame) => {
+      const payloads = parseFrames(frame.toString()).map((payload) => {
+        if (payload.startsWith("~h~") || session === undefined) return payload;
+        const message = JSON.parse(payload) as {
+          m: string;
+          p: unknown[];
+        };
+        if (message.p[0] === "cs") message.p[0] = session;
+        return JSON.stringify(message);
+      });
+      return Buffer.from(
+        payloads.map((payload) => `~m~${payload.length}~m~${payload}`).join(""),
+      );
+    });
+    this.batches.push(...translated);
+    this.emit("message", Buffer.concat(translated));
   }
 
   terminate() {
+    if (this.terminated) return;
     this.terminated = true;
+    this.readyState = 3;
+    this.emit("close", 1006, Buffer.from(""));
   }
 }
 
@@ -317,6 +364,148 @@ test("a count-only read pages backwards until it has enough bars", async () => {
   );
   expect(rows.map(({ close }) => close)).toEqual([22, 21, 20]);
   expect(socket.sent).toContain("request_more_data");
+});
+
+test("history reads multiplex onto a live chart's physical socket", async () => {
+  const time = Date.UTC(2026, 0, 5, 15);
+  let connections = 0;
+  const socket = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series")
+      socket.emitMessage(
+        update(candle((time - 60_000) / 1000, 20)),
+        completed(),
+      );
+    if (method === "modify_series") socket.emitMessage(completed());
+  });
+  const rows = await Effect.runPromise(
+    Effect.gen(function* () {
+      const client = yield* makeClient({
+        websocket: () => {
+          connections++;
+          return asWebSocket(socket);
+        },
+      });
+      const updates = yield* client.live(
+        liveRequest,
+        yield* Deferred.make<void>(),
+      );
+      yield* updates.pipe(Stream.take(1), Stream.runDrain);
+      const first = yield* client.history({
+        ...liveRequest,
+        to: time,
+        count: 1,
+      });
+      const second = yield* client.history({
+        ...liveRequest,
+        to: time,
+        count: 1,
+      });
+      // Each finite read ends its upstream chart session while the live
+      // chart keeps the physical socket open.
+      expect(
+        socket.commands.filter(
+          (command) => command.method === "chart_delete_session",
+        ),
+      ).toHaveLength(2);
+      return [first, second];
+    }).pipe(Effect.scoped),
+  );
+  expect(rows.map((bars) => bars.map((bar) => bar.close))).toEqual([
+    [20],
+    [20],
+  ]);
+  expect(
+    socket.commands.filter(
+      (command) => command.method === "chart_delete_session",
+    ),
+  ).toHaveLength(3);
+  expect(connections).toBe(1);
+});
+
+test("an HTTP 429 upgrade is rate limiting and holds back new connections", async () => {
+  let connections = 0;
+  const results = await Effect.runPromise(
+    Effect.gen(function* () {
+      const client = yield* makeClient({
+        websocket: () => {
+          connections++;
+          return asWebSocket(new FakeSocket(() => {}, 429));
+        },
+      });
+      const first = yield* client
+        .history({ ...liveRequest, count: 1 })
+        .pipe(Effect.result);
+      const second = yield* client
+        .history({ ...liveRequest, count: 1 })
+        .pipe(Effect.result);
+      return [first, second];
+    }),
+  );
+  for (const result of results)
+    expect(result).toMatchObject({
+      _tag: "Failure",
+      failure: { reason: { _tag: "Dataset.RateLimited" } },
+    });
+  expect(connections).toBe(1);
+});
+
+test("an upgrade cooldown does not block sockets that still have room", async () => {
+  const time = Date.UTC(2026, 0, 5, 15);
+  let connections = 0;
+  const shared = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series")
+      socket.emitMessage(
+        update(candle((time - 60_000) / 1000, 20)),
+        completed(),
+      );
+    if (method === "modify_series") socket.emitMessage(completed());
+  });
+  const result = await Effect.runPromise(
+    Effect.gen(function* () {
+      const client = yield* makeClient({
+        sockets: 2,
+        sessions: 2,
+        websocket: () => {
+          connections++;
+          return asWebSocket(
+            connections === 1 ? shared : new FakeSocket(() => {}, 429),
+          );
+        },
+      });
+      const hold = () =>
+        Effect.gen(function* () {
+          const retired = yield* Deferred.make<void>();
+          const ready = yield* Deferred.make<void>();
+          const reader = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const updates = yield* client.live(liveRequest, retired);
+              yield* Deferred.succeed(ready, undefined);
+              yield* updates.pipe(Stream.runDrain);
+            }),
+          ).pipe(Effect.forkScoped);
+          yield* Deferred.await(ready);
+          return { retired, reader };
+        });
+      const first = yield* hold();
+      yield* hold();
+      // Both slots on the healthy socket are taken, so the next read needs a
+      // new socket, which TradingView refuses.
+      const blocked = yield* client
+        .history({ ...liveRequest, count: 1 })
+        .pipe(Effect.result);
+      // Retiring one chart frees a slot while the other keeps the socket open.
+      yield* Deferred.succeed(first.retired, undefined);
+      yield* Fiber.join(first.reader);
+      const rows = yield* client.history({ ...liveRequest, count: 1 });
+      return { blocked, rows };
+    }).pipe(Effect.scoped),
+  );
+  expect(result.blocked).toMatchObject({
+    _tag: "Failure",
+    failure: { reason: { _tag: "Dataset.RateLimited" } },
+  });
+  expect(result.rows.map((row) => row.close)).toEqual([20]);
+  expect(connections).toBe(2);
 });
 
 test("cancelling an unfinished history request immediately releases its socket", async () => {
@@ -528,6 +717,43 @@ test("equal sessions share one profile read until reset or a credential change",
   expect(reads).toBe(3);
 });
 
+test("reset closes authenticated sockets before the next anonymous read", async () => {
+  let session: { sessionid: string } | undefined = { sessionid: "session" };
+  let connections = 0;
+  const paid = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series") socket.emitMessage(completed());
+  });
+  const anonymous = new FakeSocket((method, _parameters, socket) => {
+    if (method === "create_series")
+      socket.emitMessage(update(candle(1_700_000_000, 12)), completed());
+    if (method === "modify_series") socket.emitMessage(completed());
+  });
+  const rows = await Effect.runPromise(
+    Effect.gen(function* () {
+      const client = yield* makeClient({
+        credential: () => Effect.succeed(session),
+        fetch: async () => new Response(paidHomepage),
+        websocket: () => {
+          connections++;
+          return asWebSocket(connections === 1 ? paid : anonymous);
+        },
+      });
+      yield* client.live(liveRequest, yield* Deferred.make<void>());
+      yield* client.reset();
+      session = undefined;
+      expect(paid.terminated).toBe(true);
+      return yield* client.history({ ...liveRequest, count: 1 });
+    }).pipe(Effect.scoped),
+  );
+  expect(rows.map((row) => row.close)).toEqual([12]);
+  const tokens = (socket: FakeSocket) =>
+    socket.commands
+      .filter((command) => command.method === "set_auth_token")
+      .map((command) => command.parameters[0]);
+  expect(tokens(paid)).toEqual(["test-auth-token"]);
+  expect(tokens(anonymous)).toEqual(["unauthorized_user_token"]);
+});
+
 test("a rejected session is not cached, so a later valid read succeeds", async () => {
   let accepted = false;
   const client = await Effect.runPromise(
@@ -704,11 +930,11 @@ test.each(["critical_error", "protocol_error"])(
   },
 );
 
-test("retirement stops the socket while accepted live candles drain", async () => {
+test("retirement ends its session while accepted live candles drain, closing the last socket", async () => {
   const socket = new FakeSocket((method, _parameters, socket) => {
     if (method === "create_series") socket.emitMessage(completed());
   });
-  await Effect.runPromise(
+  const drained = await Effect.runPromise(
     Effect.gen(function* () {
       const client = yield* makeClient({
         websocket: () => asWebSocket(socket),
@@ -718,16 +944,18 @@ test("retirement stops the socket while accepted live candles drain", async () =
       socket.emitMessage(update(candle(1_700_000_000, 12)));
       yield* Deferred.succeed(retired, undefined);
       yield* Effect.yieldNow;
-      expect(socket.terminated).toBe(true);
-      expect(
-        yield* updates.pipe(
-          Stream.filter((event) => event.type === "bars"),
-          Stream.map((event) => event.bars),
-          Stream.runCollect,
-        ),
-      ).toMatchObject([[{ time: 1_700_000_000_000, close: 12 }]]);
+      // Another chart could still be multiplexed here, so the physical
+      // socket stays open until the retiring session's Scope closes.
+      expect(socket.terminated).toBe(false);
+      return yield* updates.pipe(
+        Stream.filter((event) => event.type === "bars"),
+        Stream.map((event) => event.bars),
+        Stream.runCollect,
+      );
     }).pipe(Effect.scoped),
   );
+  expect(drained).toMatchObject([[{ time: 1_700_000_000_000, close: 12 }]]);
+  expect(socket.terminated).toBe(true);
 });
 
 test("candles sent before the live subscription completes reach the stream in order", async () => {
@@ -788,25 +1016,29 @@ test("live activity retains the source-reported delay and heartbeat separately f
   ]);
 });
 
-test("receipt sequences preserve socket order when buffered live bars drain after history", async () => {
+test("receipt sequences preserve arrival order across multiplexed live and history sessions", async () => {
   const time = Date.UTC(2026, 0, 5, 15);
   const receipts: string[] = [];
-  const liveSocket = new FakeSocket((method, _parameters, socket) => {
-    if (method === "create_series") {
+  const sessions: string[] = [];
+  const socket = new FakeSocket((method, parameters, socket) => {
+    const session = String(parameters[0]);
+    if (method === "chart_create_session") {
+      sessions.push(session);
+      return;
+    }
+    if (method === "create_series" && sessions.length === 1) {
       receipts.push("pre-ack live");
       socket.emitMessage(update(candle(time / 1000, 10)), completed());
     }
-  });
-  const historySocket = new FakeSocket((method, _parameters, socket) => {
-    if (method === "create_series") {
+    if (method === "create_series" && sessions.length === 2) {
       receipts.push("live before history data");
-      liveSocket.emitMessage(update(candle(time / 1000, 10.25)));
+      socket.emitFor(sessions[0], update(candle(time / 1000, 10.25)));
       receipts.push("history data");
       socket.emitMessage(update(candle(time / 1000, 10.5)), completed());
     }
     if (method === "modify_series") {
       receipts.push("live after history data");
-      liveSocket.emitMessage(update(candle(time / 1000, 10.75)));
+      socket.emitFor(sessions[0], update(candle(time / 1000, 10.75)));
       receipts.push("history completed");
       socket.emitMessage(completed());
     }
@@ -815,8 +1047,10 @@ test("receipt sequences preserve socket order when buffered live bars drain afte
   const { history, live } = await Effect.runPromise(
     Effect.gen(function* () {
       const client = yield* makeClient({
-        websocket: () =>
-          asWebSocket(connections++ === 0 ? liveSocket : historySocket),
+        websocket: () => {
+          connections++;
+          return asWebSocket(socket);
+        },
       });
       const updates = yield* client.live(
         liveRequest,
@@ -852,8 +1086,8 @@ test("receipt sequences preserve socket order when buffered live bars drain afte
   expect(live[2]!.receivedSequence).toBeGreaterThan(
     history[0]!.receivedSequence,
   );
-  expect(connections).toBe(2);
-  expect(liveSocket.terminated && historySocket.terminated).toBe(true);
+  expect(connections).toBe(1);
+  expect(socket.terminated).toBe(true);
 });
 
 test("receipt sequences are shared within a candle frame and increase for the next frame", async () => {
